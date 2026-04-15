@@ -1,0 +1,168 @@
+'use client'
+
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react'
+import { fetchClientData, ClientData } from '@/lib/data-service'
+import { createClient } from '@/utils/supabase/client'
+
+export interface Profile {
+    id: string
+    role: 'superadmin' | 'admin' | 'user'
+    company_name?: string | null
+    full_name?: string | null
+    google_sheet_url?: string | null
+    phone?: string | null
+    tenant_id?: string | null
+    ecommerce_integrations?: Record<string, unknown> | null
+    created_at?: string
+    updated_at?: string
+}
+
+interface ClientContextType {
+    clientName: string
+    sheetUrl: string
+    data: ClientData | null
+    loading: boolean
+    profile: Profile | null
+    allProfiles: Profile[]
+    switchClient: (profile: Profile | null) => void
+    isSimulating: boolean
+}
+
+const ClientContext = createContext<ClientContextType | undefined>(undefined)
+
+export function ClientProvider({ children }: { children: ReactNode }) {
+    const [myProfile, setMyProfile] = useState<Profile | null>(null)
+    const [simulatedProfile, setSimulatedProfile] = useState<Profile | null>(null)
+    const [allProfiles, setAllProfiles] = useState<Profile[]>([])
+    const [data, setData] = useState<ClientData | null>(null)
+    const [loading, setLoading] = useState(true)
+    const supabase = useMemo(() => createClient(), [])
+
+    const activeProfile = simulatedProfile || myProfile
+
+    const loadDataForProfile = async (profile: Profile) => {
+        if (!profile?.google_sheet_url) {
+            setData(null)
+            return
+        }
+        try {
+            const clientData = await fetchClientData(
+                profile.company_name || 'Mi Empresa',
+                profile.google_sheet_url
+            )
+            setData(clientData)
+        } catch (error) {
+            console.error("Error fetching sheet data:", error)
+        }
+    }
+
+    const switchClient = (profile: Profile | null) => {
+        setSimulatedProfile(profile)
+    }
+
+    useEffect(() => {
+        async function loadInitialData() {
+            setLoading(true)
+            try {
+                const { data: authData, error: authError } = await supabase.auth.getUser()
+
+                if (authError) {
+                    console.warn("Error al obtener el usuario de Auth:", authError)
+                    setLoading(false)
+                    return
+                }
+
+                const user = authData?.user
+                if (!user) {
+                    setLoading(false)
+                    return
+                }
+
+                // 1. Cargar perfil propio
+                const { data: profileData, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .maybeSingle()
+
+                if (profileError) {
+                    console.error("Error al cargar perfil:", profileError)
+                    // Fallback: usar perfil mínimo para no romper el dashboard
+                    setMyProfile({ id: user.id, company_name: 'Mi Empresa', role: 'user' })
+                    setLoading(false)
+                    return
+                }
+
+                const finalProfile = profileData || { id: user.id, company_name: 'Configuración pendiente', role: 'user' }
+                setMyProfile(finalProfile)
+
+                // 2. Si es superadmin, cargar todos los perfiles para el selector
+                if (finalProfile.role === 'superadmin') {
+                    const { data: allData } = await supabase
+                        .from('profiles')
+                        .select('*')
+                    setAllProfiles((allData as Profile[]) || [])
+                }
+
+                // 3. Cargar datos iniciales
+                await loadDataForProfile(finalProfile)
+
+            } catch (error: unknown) {
+                // Capturar todos los detalles posibles del error
+                const errRecord = error as Record<string, unknown>
+                const errorDetails = {
+                    message: error instanceof Error ? error.message : "Error desconocido",
+                    code: errRecord?.code,
+                    details: errRecord?.details,
+                    hint: errRecord?.hint,
+                    stack: errRecord?.stack,
+                    name: errRecord?.name,
+                    fullError: error
+                }
+
+                console.error("Error crítico detallado en ClientContext:", JSON.stringify(errorDetails, Object.getOwnPropertyNames(errorDetails), 2))
+
+                // Inspección profunda si el error parece vacío
+                if (error && typeof error === 'object' && Object.keys(error).length === 0) {
+                    console.error("Error detectado con propiedades no enumerables:", error);
+                    console.error("Verifique: 1. Conectividad con Supabase, 2. Políticas RLS en 'profiles', 3. Sesión del usuario");
+                }
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        loadInitialData()
+    }, [supabase])
+
+    // Efecto para recargar datos cuando cambie el perfil simulado
+    useEffect(() => {
+        if (simulatedProfile) {
+            setLoading(true)
+            loadDataForProfile(simulatedProfile).finally(() => setLoading(false))
+        }
+    }, [simulatedProfile])
+
+    return (
+        <ClientContext.Provider value={{
+            clientName: activeProfile?.company_name || '',
+            sheetUrl: activeProfile?.google_sheet_url || '',
+            data,
+            loading,
+            profile: myProfile,
+            allProfiles,
+            switchClient,
+            isSimulating: !!simulatedProfile
+        }}>
+            {children}
+        </ClientContext.Provider>
+    )
+}
+
+export function useClient() {
+    const context = useContext(ClientContext)
+    if (context === undefined) {
+        throw new Error('useClient must be used within a ClientProvider')
+    }
+    return context
+}

@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECOMFIN | Data & BI para e-commerce</title>
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="https://ecomfinsas.com/wp-content/uploads/2026/02/favicon-32x32-1.png">
+    <link rel="shortcut icon" href="https://ecomfinsas.com/wp-content/uploads/2026/02/favicon-32x32-1.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #020617;
+            --border: #1e293b;
+            --primary: #38bdf8;
+            --secondary: #22c55e;
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        html {
+            scroll-behavior: smooth
+        }
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at 30% 10%, #020617, #000);
+            color: var(--text);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* NAVBAR ESTILO APPLE */
+        .top-nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            background: rgba(2, 6, 23, .92);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+        }
+
+        .nav-container {
+            max-width: 1440px;
+            margin: auto;
+            padding: 0 6%;
+            height: 72px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+            z-index: 1001;
+        }
+
+        .nav-brand img {
+            height: 90px;
+            width: auto;
+            display: block;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 48px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text);
+            text-decoration: none;
+            font-size: .98rem;
+            font-weight: 400;
+            position: relative;
+            transition: .2s;
+            opacity: .85;
+            white-space: nowrap;
+        }
+
+        .nav-links a:hover {
+            opacity: 1;
+            color: var(--primary);
+        }
+
+        /* MENU HAMBURGUESA */
+        .menu-toggle {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+            z-index: 1001;
+            padding: 8px;
+            background: none;
+            border: none;
+        }
+
+        .menu-toggle span {
+            width: 28px;
+            height: 3px;
+            background: var(--text);
+            border-radius: 3px;
+            transition: .3s ease;
+        }
+
+        .menu-toggle.active span:nth-child(1) {
+            transform: rotate(45deg) translate(8px, 8px);
+        }
+
+        .menu-toggle.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .menu-toggle.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(8px, -8px);
+        }
+
+        /* SECTIONS */
+        section {
+            padding: 100px 6%;
+            max-width: 1440px;
+            margin: auto;
+        }
+
+        /* HERO SECTION */
+        .hero {
+            min-height: 88vh;
+            display: grid;
+            grid-template-columns: 1.15fr 1fr;
+            gap: 80px;
+            align-items: center;
+            padding-top: 110px;
+            padding-bottom: 80px;
+        }
+
+        .hero-content {
+            max-width: 100%;
+        }
+
+        .hero-content h1 {
+            font-size: 4.2rem;
+            margin: 0 0 24px 0;
+            line-height: 1.08;
+            font-weight: 700;
+            letter-spacing: -0.015em;
+            background: linear-gradient(135deg, var(--text), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-sub {
+            color: var(--muted);
+            font-size: 1.25rem;
+            line-height: 1.6;
+            font-weight: 400;
+            max-width: 100%;
+            margin: 0 0 40px 0;
+        }
+
+        .hero-sub strong {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .cta {
+            margin-top: 20px;
+            display: inline-flex;
+            padding: 18px 42px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: #020617;
+            font-weight: 600;
+            font-size: 1.05rem;
+            border-radius: 980px;
+            text-decoration: none;
+            transition: .3s ease;
+            box-shadow: 0 10px 30px rgba(56, 189, 248, .25);
+        }
+
+        .cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(56, 189, 248, .35);
+        }
+
+        /* DASHBOARD */
+        .dashboard {
+            max-width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 48px 40px;
+            background: rgba(2, 6, 23, .3);
+            backdrop-filter: blur(10px);
+        }
+
+        .bar-label {
+            font-size: .8rem;
+            color: var(--muted);
+            margin-bottom: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+        }
+
+        .bar {
+            height: 12px;
+            background: rgba(255, 255, 255, .05);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+
+        .bar span {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            animation: growBar 1.4s ease forwards;
+            position: relative;
+        }
+
+        .bar span::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -30%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(120deg, transparent, rgba(255, 255, 255, .35), transparent);
+            animation: dataFlow 3.5s linear infinite;
+        }
+
+        @keyframes dataFlow {
+            from {
+                left: -30%
+            }
+
+            to {
+                left: 130%
+            }
+        }
+
+        @keyframes growBar {
+            to {
+                width: var(--w)
+            }
+        }
+
+        /* KPIS */
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .kpi {
+            text-align: center;
+            padding: 28px 16px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: rgba(2, 6, 23, .4);
+        }
+
+        .kpi strong {
+            display: block;
+            font-size: 2.4rem;
+            color: var(--primary);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .kpi span {
+            font-size: .88rem;
+            color: var(--muted);
+            margin-top: 8px;
+            display: block;
+            font-weight: 400;
+        }
+
+        /* FEATURE SECTION CON IMAGEN */
+        .feature-section {
+            padding: 100px 6%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+            max-width: 1440px;
+            margin: auto;
+        }
+
+        .feature-section.reverse {
+            direction: rtl;
+        }
+
+        .feature-section.reverse>* {
+            direction: ltr;
+        }
+
+        .feature-content h2 {
+            font-size: 3rem;
+            margin-bottom: 24px;
+            color: var(--text);
+            font-weight: 700;
+            letter-spacing: -0.015em;
+            line-height: 1.1;
+        }
+
+        .feature-content p {
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 1.15rem;
+            font-weight: 400;
+            margin-bottom: 20px;
+        }
+
+        .feature-image {
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+        }
+
+        .feature-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: .4s ease;
+        }
+
+        .feature-image:hover img {
+            transform: scale(1.02);
+        }
+
+        /* TEXT SECTION */
+        .text-section {
+            text-align: center;
+            padding: 80px 6%;
+            max-width: 1000px;
+            margin: auto;
+        }
+
+        .text-section h2 {
+            font-size: 3rem;
+            margin-bottom: 28px;
+            color: var(--text);
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+
+        .text-section p {
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 1.15rem;
+            font-weight: 400;
+        }
+
+        /* SERVICES GRID */
+        #servicios {
+            padding: 100px 6%;
+            text-align: center;
+        }
+
+        #servicios h2 {
+            font-size: 3rem;
+            margin-bottom: 50px;
+            color: var(--text);
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 1340px;
+            margin: auto;
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            transition: all .5s ease;
+            background: rgba(2, 6, 23, .2);
+            text-align: left;
+        }
+
+        .card.animate {
+            animation: fadeInUp .5s ease forwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(56, 189, 248, .4);
+            background: rgba(2, 6, 23, .4);
+        }
+
+        .card h3 {
+            color: var(--text);
+            font-size: 1.3rem;
+            margin-bottom: 14px;
+            font-weight: 600;
+        }
+
+        .card p {
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 1rem;
+            font-weight: 400;
+        }
+
+        /* CONTACT */
+        .contact-section {
+            text-align: center;
+            padding: 80px 6%;
+        }
+
+        .contact-section h2 {
+            font-size: 3rem;
+            margin-bottom: 48px;
+            color: var(--text);
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+
+        .contact-items {
+            margin-top: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .contact-item {
+            font-size: 1.15rem;
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        .contact-item a {
+            color: var(--muted);
+            text-decoration: none;
+            transition: .2s;
+        }
+
+        .contact-item a:hover {
+            color: var(--primary);
+        }
+
+        /* FOOTER */
+        .footer {
+            text-align: center;
+            padding: 60px 20px;
+            border-top: 1px solid rgba(255, 255, 255, .08);
+            color: var(--muted);
+            font-size: .9rem;
+            font-weight: 400;
+        }
+
+        /* WHATSAPP */
+        .whatsapp {
+            position: fixed;
+            right: 28px;
+            bottom: 28px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #22c55e;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            text-decoration: none;
+            box-shadow: 0 10px 30px rgba(34, 197, 94, .3);
+            transition: .3s ease;
+            z-index: 999;
+        }
+
+        .whatsapp:hover {
+            transform: scale(1.08);
+            box-shadow: 0 15px 40px rgba(34, 197, 94, .4);
+        }
+
+        /* RESPONSIVE MEJORADO */
+        @media(max-width:1200px) {
+            .nav-links {
+                gap: 36px;
+            }
+
+            .nav-links a {
+                font-size: .92rem;
+            }
+
+            .hero {
+                gap: 60px;
+            }
+
+            .hero-content h1 {
+                font-size: 3.5rem;
+            }
+
+            .feature-section {
+                gap: 60px;
+            }
+        }
+
+        @media(max-width:992px) {
+            .nav-container {
+                padding: 0 5%;
+            }
+
+            /* Mostrar menú hamburguesa */
+            .menu-toggle {
+                display: flex;
+            }
+
+            /* Menú móvil */
+            .nav-links {
+                position: fixed;
+                top: 0;
+                right: -100%;
+                width: 280px;
+                height: 100vh;
+                background: rgba(2, 6, 23, .98);
+                backdrop-filter: saturate(180%) blur(20px);
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: 32px;
+                transition: right .4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                border-left: 1px solid rgba(255, 255, 255, .08);
+            }
+
+            .nav-links.active {
+                right: 0;
+            }
+
+            .nav-links a {
+                font-size: 1.1rem;
+                padding: 12px 24px;
+                width: 100%;
+                text-align: center;
+            }
+
+            .nav-brand img {
+                height: 75px;
+            }
+
+            .hero {
+                grid-template-columns: 1fr;
+                gap: 50px;
+                padding-top: 110px;
+                min-height: auto;
+            }
+
+            .hero-content {
+                text-align: center;
+            }
+
+            .hero-content h1 {
+                font-size: 3rem;
+                line-height: 1.1;
+            }
+
+            .hero-sub {
+                font-size: 1.1rem;
+            }
+
+            .dashboard {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+
+            .feature-section {
+                grid-template-columns: 1fr;
+                gap: 50px;
+                padding: 80px 5%;
+            }
+
+            .feature-section.reverse {
+                direction: ltr;
+            }
+
+            .feature-content h2 {
+                font-size: 2.5rem;
+            }
+
+            section {
+                padding: 80px 5%;
+            }
+
+            #servicios {
+                padding: 80px 5%;
+            }
+        }
+
+        @media(max-width:768px) {
+            .nav-container {
+                height: 64px;
+                padding: 0 5%;
+            }
+
+            .nav-brand img {
+                height: 68px;
+            }
+
+            .nav-links {
+                width: 260px;
+            }
+
+            .hero {
+                padding-top: 100px;
+                padding-bottom: 60px;
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .hero-content {
+                text-align: center;
+            }
+
+            .hero-content h1 {
+                font-size: 2.5rem;
+                line-height: 1.15;
+                margin-bottom: 20px;
+            }
+
+            .hero-sub {
+                font-size: 1.08rem;
+                line-height: 1.65;
+                margin-bottom: 32px;
+            }
+
+            .cta {
+                padding: 16px 36px;
+                font-size: 1rem;
+            }
+
+            .dashboard {
+                padding: 36px 28px;
+                max-width: 100%;
+            }
+
+            .bar {
+                height: 14px;
+                margin-bottom: 24px;
+            }
+
+            .kpis {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 14px;
+            }
+
+            .kpi {
+                padding: 22px 14px;
+            }
+
+            .kpi strong {
+                font-size: 2rem;
+            }
+
+            .kpi span {
+                font-size: .82rem;
+            }
+
+            .feature-section {
+                padding: 60px 5%;
+                gap: 40px;
+            }
+
+            .feature-content h2,
+            .text-section h2,
+            #servicios h2,
+            .contact-section h2 {
+                font-size: 2.2rem;
+                margin-bottom: 20px;
+            }
+
+            .feature-content p,
+            .text-section p {
+                font-size: 1.05rem;
+                line-height: 1.7;
+            }
+
+            .services {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .card {
+                padding: 32px;
+            }
+
+            section {
+                padding: 60px 5%;
+            }
+
+            #servicios {
+                padding: 60px 5%;
+            }
+
+            .contact-section {
+                padding: 60px 5%;
+            }
+        }
+
+        @media(max-width:480px) {
+            .nav-container {
+                padding: 0 4.5%;
+                height: 60px;
+            }
+
+            .nav-brand img {
+                height: 60px;
+            }
+
+            .nav-links {
+                width: 100%;
+            }
+
+            .menu-toggle span {
+                width: 26px;
+                height: 2.5px;
+            }
+
+            .hero {
+                padding-top: 85px;
+                padding-bottom: 50px;
+                gap: 35px;
+            }
+
+            .hero-content {
+                text-align: center;
+            }
+
+            .hero-content h1 {
+                font-size: 2rem;
+                line-height: 1.2;
+                margin-bottom: 18px;
+            }
+
+            .hero-sub {
+                font-size: 1rem;
+                line-height: 1.6;
+                margin-bottom: 28px;
+            }
+
+            .cta {
+                padding: 14px 32px;
+                font-size: .95rem;
+            }
+
+            .dashboard {
+                padding: 28px 22px;
+                border-radius: 16px;
+            }
+
+            .bar {
+                height: 11px;
+                margin-bottom: 20px;
+            }
+
+            .bar-label {
+                font-size: .75rem;
+                margin-bottom: 8px;
+            }
+
+            .kpis {
+                grid-template-columns: 1fr;
+                gap: 12px;
+                margin-top: 20px;
+            }
+
+            .kpi {
+                padding: 20px 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                text-align: left;
+            }
+
+            .kpi strong {
+                font-size: 2.2rem;
+            }
+
+            .kpi span {
+                font-size: .85rem;
+                margin-top: 0;
+                text-align: right;
+            }
+
+            .feature-section {
+                padding: 50px 4.5%;
+                gap: 35px;
+            }
+
+            .feature-content h2,
+            .text-section h2,
+            #servicios h2,
+            .contact-section h2 {
+                font-size: 1.85rem;
+                line-height: 1.2;
+                margin-bottom: 18px;
+            }
+
+            .feature-content p,
+            .text-section p {
+                font-size: .98rem;
+                line-height: 1.65;
+                margin-bottom: 16px;
+            }
+
+            .feature-image {
+                border-radius: 16px;
+            }
+
+            .card {
+                padding: 28px;
+                border-radius: 16px;
+            }
+
+            .card h3 {
+                font-size: 1.18rem;
+                margin-bottom: 12px;
+            }
+
+            .card p {
+                font-size: .95rem;
+                line-height: 1.6;
+            }
+
+            .contact-item {
+                font-size: 1.05rem;
+            }
+
+            .whatsapp {
+                width: 56px;
+                height: 56px;
+                font-size: 24px;
+                right: 20px;
+                bottom: 20px;
+            }
+
+            section {
+                padding: 50px 4.5%;
+            }
+
+            #servicios {
+                padding: 50px 4.5%;
+            }
+
+            .contact-section {
+                padding: 50px 4.5%;
+            }
+
+            .text-section {
+                padding: 50px 4.5%;
+            }
+        }
+
+        @media(max-width:360px) {
+            .hero-content h1 {
+                font-size: 1.75rem;
+            }
+
+            .hero-sub {
+                font-size: .95rem;
+            }
+
+            .cta {
+                padding: 13px 28px;
+                font-size: .9rem;
+            }
+
+            .dashboard {
+                padding: 24px 18px;
+            }
+
+            .kpi strong {
+                font-size: 2rem;
+            }
+
+            .feature-content h2,
+            .text-section h2,
+            #servicios h2,
+            .contact-section h2 {
+                font-size: 1.65rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="top-nav">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <img src="https://ecomfinsas.com/wp-content/uploads/2026/02/logo_0257.png" alt="ECOMFIN">
+            </div>
+
+            <button class="menu-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <nav class="nav-links">
+                <a href="#inicio">Inicio</a>
+                <a href="#sobre">Sobre nosotros</a>
+                <a href="#analisis">Análisis avanzado</a>
+                <a href="#cumplimiento">Cumplimiento</a>
+                <a href="#servicios">Servicios</a>
+                <a href="#contacto">Contacto</a>
+            </nav>
+        </div>
+    </header>
+
+    <section id="inicio" class="hero">
+        <div class="hero-content">
+            <h1>Contabilidad, Data & BI para e-commerce</h1>
+
+            <p class="hero-sub">
+                Control financiero real, cumplimiento DIAN y decisiones basadas en datos. Diseñado para operaciones de
+                e-commerce en <strong>Shopify</strong>, <strong>Mercado Libre</strong> y <strong>dropshipping con
+                    Dropi</strong>, con reconocimiento de ingresos por canal, conciliación de pasarelas, control de
+                inventarios y aplicación de <strong>NIIF para PYMES</strong> en Colombia.
+            </p>
+
+            <a class="cta" href="https://wa.me/573234350383">Hablar con un especialista</a>
+        </div>
+
+        <div class="dashboard">
+            <div class="bar-label">Margen operativo</div>
+            <div class="bar"><span style="--w:82%"></span></div>
+
+            <div class="bar-label">Eficiencia tributaria</div>
+            <div class="bar"><span style="--w:64%"></span></div>
+
+            <div class="bar-label">Control financiero</div>
+            <div class="bar"><span style="--w:91%"></span></div>
+
+            <div class="kpis">
+                <div class="kpi"><strong>+23%</strong><span>Margen neto</span></div>
+                <div class="kpi"><strong>98%</strong><span>Cumplimiento DIAN</span></div>
+                <div class="kpi"><strong>24/7</strong><span>Visibilidad</span></div>
+            </div>
+        </div>
+    </section>
+
+    <div id="sobre" class="feature-section">
+        <div class="feature-content">
+            <h2>Sobre nosotros</h2>
+            <p>Nacimos con el propósito de transformar la contabilidad tradicional en una herramienta de control y
+                análisis para los emprendedores digitales.</p>
+            <p>En ECOMFIN somos un equipo interdisciplinario de contadores e ingenieros especializados en comercio
+                electrónico.</p>
+        </div>
+        <div class="feature-image">
+            <img src="https://ecomfinsas.com/wp-content/uploads/2026/02/c9dc72ee-fe17-43da-8024-4b7030a317c9.jpg"
+                alt="Equipo ECOMFIN">
+        </div>
+    </div>
+
+    <div id="analisis" class="feature-section reverse">
+        <div class="feature-content">
+            <h2>Análisis avanzado</h2>
+            <p>Integramos contabilidad estructurada, análisis financiero avanzado y visualización de datos para
+                decisiones precisas y confiables.</p>
+            <p>Nuestro enfoque en Data & Business Intelligence te permite tomar decisiones estratégicas basadas en
+                información en tiempo real.</p>
+        </div>
+        <div class="feature-image">
+            <img src="https://ecomfinsas.com/wp-content/uploads/2026/02/346f50d7-9b2f-4d46-8844-ccd2fcb223b1.jpg"
+                alt="Análisis de datos">
+        </div>
+    </div>
+
+    <div id="cumplimiento" class="feature-section">
+        <div class="feature-content">
+            <h2>Cumplimiento normativo</h2>
+            <p>Garantizamos el cumplimiento total de las obligaciones tributarias y normativas en Colombia, con atención
+                especializada en DIAN.</p>
+            <p>Mantenemos tu negocio al día con todas las regulaciones mientras optimizamos tu carga tributaria de
+                manera legal y eficiente.</p>
+        </div>
+        <div class="feature-image">
+            <img src="https://ecomfinsas.com/wp-content/uploads/2026/02/3e5eae3e-b5b8-400b-8259-79d8a22c9af6.jpg"
+                alt="Cumplimiento DIAN">
+        </div>
+    </div>
+
+    <section id="servicios">
+        <h2>Servicios especializados</h2>
+        <div class="services">
+            <div class="card">
+                <h3>Contabilidad e-commerce & dropshipping</h3>
+                <p>NIIF PYMES, control por canal, inventarios y márgenes.</p>
+            </div>
+
+            <div class="card">
+                <h3>Impuestos y cumplimiento DIAN</h3>
+                <p>IVA, renta, ICA, retenciones y fiscalizaciones.</p>
+            </div>
+
+            <div class="card">
+                <h3>Facturación electrónica y nómina</h3>
+                <p>Procesos electrónicos autorizados e integrados.</p>
+            </div>
+
+            <div class="card">
+                <h3>Análisis financiero y dashboards</h3>
+                <p>KPIs y visibilidad en tiempo real.</p>
+            </div>
+
+            <div class="card">
+                <h3>Planeación financiera</h3>
+                <p>Flujo de caja, escenarios y proyecciones.</p>
+            </div>
+
+            <div class="card">
+                <h3>Data & analítica avanzada</h3>
+                <p>BI, integración de fuentes y análisis predictivo.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="contacto" class="contact-section">
+        <h2>Contacto</h2>
+        <div class="contact-items">
+            <div class="contact-item">📱 +57 323 435 0383</div>
+            <div class="contact-item">
+                📧 <a href="mailto:contacto@ecomfin.com">contacto@ecomfin.com</a>
+            </div>
+
+
+            <div class="contact-item">📍 Barranquilla, Colombia</div>
+        </div>
+    </section>
+
+    <div class="footer">© 2026 ECOMFIN. Todos los derechos reservados.</div>
+
+    <a class="whatsapp" href="https://wa.me/573234350383" aria-label="Contactar por WhatsApp">💬</a>
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+    <script>
+        // Animación de tarjetas
+        const cards = document.querySelectorAll(".card");
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach((entry, index) => {
+                if (entry.isIntersecting) {
+                    setTimeout(() => {
+                        entry.target.classList.add("animate");
+                    }, index * 100);
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+        cards.forEach(card => observer.observe(card));
+
+        // Menú hamburguesa
+        const menuToggle = document.querySelector('.menu-toggle');
+        const navLinks = document.querySelector('.nav-links');
+        const links = document.querySelectorAll('.nav-links a');
+
+        menuToggle.addEventListener('click', () => {
+            menuToggle.classList.toggle('active');
+            navLinks.classList.toggle('active');
+            document.body.style.overflow = navLinks.classList.contains('active') ? 'hidden' : '';
+        });
+
+        // Cerrar menú al hacer click en un enlace
+        links.forEach(link => {
+            link.addEventListener('click', () => {
+                menuToggle.classList.remove('active');
+                navLinks.classList.remove('active');
+                document.body.style.overflow = '';
+            });
+        });
+
+        // Cerrar menú al hacer click fuera
+        document.addEventListener('click', (e) => {
+            if (!navLinks.contains(e.target) && !menuToggle.contains(e.target) && navLinks.classList.contains('active')) {
+                menuToggle.classList.remove('active');
+                navLinks.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    </script>
+</body>
+
+</html>

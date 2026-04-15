@@ -1,0 +1,381 @@
+@import "tailwindcss";
+
+@plugin "../node_modules/tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * ============================================================
+ *   J&A Contadores — Sistema de Diseño Corporativo v2.0
+ *   Paleta extraída de jacontadores.com
+ *
+ *   NAVY:    #13213C  (Azul marino profundo — fondo hero)
+ *   GOLD:    #B8960C  (Dorado corporativo — acentos, CTAs)
+ *   GOLD-LT: #D4A843  (Dorado suave — texto dorado)
+ *   CREAM:   #F4F4F0  (Fondo crema/beige — fondo general)
+ *   WHITE:   #FFFFFF  (Tarjetas)
+ *   TEXT:    #1C2B45  (Texto principal oscuro)
+ *   GREY:    #6B7A8D  (Texto secundario)
+ * ============================================================
+ */
+
+
+
+@theme {
+  --font-sans:    var(--font-inter);
+  --font-display: var(--font-outfit);
+  --font-mono:    ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  /* ── Colores base (modo claro — paleta jacontadores.com) ── */
+  --ja-navy:       #13213C;
+  --ja-navy-mid:   #1C3460;
+  --ja-gold:       #B8960C;
+  --ja-gold-lt:    #D4A843;
+  --ja-gold-pale:  #F5E9C0;
+  --ja-cream:      #F4F4F0;
+  --ja-cream-dark: #E8E8E2;
+  --ja-white:      #FFFFFF;
+  --ja-text:       #1C2B45;
+  --ja-text-mid:   #3D4F66;
+  --ja-grey:       #6B7A8D;
+  --ja-grey-lt:    #A0AEBF;
+  --ja-teal:       #0F7B71;       /* acento teal profesional */
+  --ja-teal-lt:    #14B8A6;
+  --ja-green:      #10B981;
+  --ja-red:        #DC2626;
+  --ja-blue:       #3B82F6;
+  --ja-purple:     #7C3AED;
+
+  /* ── Semánticos ─────────────────────────────────────────── */
+  --background:         var(--ja-cream);
+  --foreground:         var(--ja-text);
+  --card:               var(--ja-white);
+  --card-foreground:    var(--ja-text);
+  --popover:            var(--ja-white);
+  --popover-foreground: var(--ja-text);
+  --primary:            var(--ja-navy);
+  --primary-foreground: var(--ja-white);
+  --secondary:          var(--ja-navy-mid);
+  --secondary-foreground: var(--ja-white);
+  --muted:              var(--ja-cream-dark);
+  --muted-foreground:   var(--ja-grey);
+  --accent:             var(--ja-gold);
+  --accent-foreground:  var(--ja-navy);
+  --destructive:        var(--ja-red);
+  --destructive-foreground: var(--ja-white);
+  --border:             #D8D8D2;
+  --input:              #E0E0DA;
+  --ring:               var(--ja-gold);
+  --radius:             0.75rem;
+
+  /* Charts — paleta armónica J&A */
+  --chart-1:  #13213C;   /* navy  */
+  --chart-2:  #B8960C;   /* gold  */
+  --chart-3:  #0F7B71;   /* teal  */
+  --chart-4:  #10B981;   /* green */
+  --chart-5:  #7C3AED;   /* purple */
+
+  /* Sidebar */
+  --sidebar:                     var(--ja-navy);
+  --sidebar-foreground:          rgba(255,255,255,0.85);
+  --sidebar-primary:             var(--ja-gold-lt);
+  --sidebar-primary-foreground:  var(--ja-navy);
+  --sidebar-accent:              rgba(212,168,67,0.12);
+  --sidebar-accent-foreground:   var(--ja-gold-lt);
+  --sidebar-border:              rgba(255,255,255,0.08);
+  --sidebar-ring:                var(--ja-gold);
+}
+
+@theme inline {
+  --color-background:  var(--background);
+  --color-foreground:  var(--foreground);
+  --color-card:        var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover:     var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary:     var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:   var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:       var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent:      var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:      var(--border);
+  --color-input:       var(--input);
+  --color-ring:        var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
+  --color-sidebar:                     var(--sidebar);
+  --color-sidebar-foreground:          var(--sidebar-foreground);
+  --color-sidebar-primary:             var(--sidebar-primary);
+  --color-sidebar-primary-foreground:  var(--sidebar-primary-foreground);
+  --color-sidebar-accent:              var(--sidebar-accent);
+  --color-sidebar-accent-foreground:   var(--sidebar-accent-foreground);
+  --color-sidebar-border:              var(--sidebar-border);
+  --color-sidebar-ring:                var(--sidebar-ring);
+}
+
+/* ── Base ────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: var(--ja-cream);
+    color: var(--ja-text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    font-family: 'Inter', 'Montserrat', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Montserrat', var(--font-outfit), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    color: var(--ja-text);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  /* Scrollbar — dorado J&A */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--ja-cream-dark); }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(184, 150, 12, 0.4);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(184, 150, 12, 0.65);
+  }
+}
+
+/* ── Utilities ────────────────────────────────────────────────── */
+@layer utilities {
+
+  /* ── Glassmorphism ──────────────────────────────────────────── */
+  .glass {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(184, 150, 12, 0.18);
+  }
+
+  .glass-navy {
+    background: rgba(19, 33, 60, 0.88);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(212, 168, 67, 0.2);
+  }
+
+  /* ── Gradient text — dorado J&A ─────────────────────────────── */
+  .gradient-text {
+    background: linear-gradient(135deg, #B8960C 0%, #E5C040 50%, #9A7D0A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-navy {
+    background: linear-gradient(135deg, #13213C 0%, #1C3460 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Glow ───────────────────────────────────────────────────── */
+  .glow-gold {
+    box-shadow: 0 0 24px rgba(184, 150, 12, 0.3);
+  }
+
+  .glow-gold-strong {
+    box-shadow: 0 0 36px rgba(184, 150, 12, 0.5), 0 0 72px rgba(184, 150, 12, 0.18);
+  }
+
+  .glow-teal {
+    box-shadow: 0 0 20px rgba(15, 123, 113, 0.3);
+  }
+
+  /* ── Animated background ────────────────────────────────────── */
+  .animated-gradient {
+    background: linear-gradient(-45deg, #13213C, #1C3460, #0F3A58, #1C3460);
+    background-size: 400% 400%;
+    animation: grad-move 18s ease infinite;
+  }
+
+  @keyframes grad-move {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* ── Shimmer dorado ─────────────────────────────────────────── */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(184, 150, 12, 0.1), transparent);
+    animation: shimmer 2.8s infinite;
+  }
+  @keyframes shimmer { 100% { left: 100%; } }
+
+  /* ── Pulse glow ─────────────────────────────────────────────── */
+  .pulse-glow {
+    animation: pulse-glow 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 10px rgba(184, 150, 12, 0.2); }
+    50%       { box-shadow: 0 0 30px rgba(184, 150, 12, 0.5); }
+  }
+
+  /* ── Float ──────────────────────────────────────────────────── */
+  .float { animation: float 3.5s ease-in-out infinite; }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+
+  /* ── Fade animations ────────────────────────────────────────── */
+  .fade-in { animation: fadeIn 0.45s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .slide-in-bottom { animation: slideInBottom 0.4s ease-out; }
+  @keyframes slideInBottom {
+    from { transform: translateY(18px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ── Card hover ─────────────────────────────────────────────── */
+  .card-hover {
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 48px rgba(19, 33, 60, 0.1), 0 4px 16px rgba(184, 150, 12, 0.08);
+    border-color: rgba(184, 150, 12, 0.3) !important;
+  }
+
+  /* ── Línea decorativa dorada ────────────────────────────────── */
+  .gold-line {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #B8960C, transparent);
+  }
+  .gold-line-left {
+    height: 3px;
+    width: 36px;
+    background: linear-gradient(90deg, #B8960C, #D4A843);
+    border-radius: 2px;
+  }
+
+  /* ── Badges ─────────────────────────────────────────────────── */
+  .badge-gold {
+    background: rgba(184, 150, 12, 0.12);
+    border: 1px solid rgba(184, 150, 12, 0.32);
+    color: #9A7D0A;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .badge-teal {
+    background: rgba(15,123,113,0.1);
+    border: 1px solid rgba(15,123,113,0.25);
+    color: #0F7B71;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .badge-success {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    color: #059669;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* ── Botón primario J&A ─────────────────────────────────────── */
+  .btn-ja-primary {
+    background: linear-gradient(135deg, #13213C 0%, #1C3460 100%);
+    color: white;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(19, 33, 60, 0.3);
+    border: none;
+    cursor: pointer;
+  }
+  .btn-ja-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(19, 33, 60, 0.4);
+    background: linear-gradient(135deg, #1C3460 0%, #243E72 100%);
+  }
+  .btn-ja-primary:active { transform: translateY(0); }
+
+  .btn-ja-gold {
+    background: linear-gradient(135deg, #B8960C 0%, #D4A843 100%);
+    color: #13213C;
+    font-weight: 800;
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(184, 150, 12, 0.35);
+    border: none;
+    cursor: pointer;
+  }
+  .btn-ja-gold:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 22px rgba(184, 150, 12, 0.5);
+  }
+
+  /* ── Tarjeta estándar J&A ───────────────────────────────────── */
+  .ja-card {
+    background: #FFFFFF;
+    border: 1.5px solid #E0DDD8;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(19, 33, 60, 0.05);
+    transition: all 0.25s ease;
+  }
+  .ja-card:hover {
+    box-shadow: 0 6px 24px rgba(19, 33, 60, 0.09), 0 2px 8px rgba(184, 150, 12, 0.07);
+    border-color: rgba(184, 150, 12, 0.28);
+  }
+
+  /* ── Separador sección ──────────────────────────────────────── */
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #D8D4CC, transparent);
+    margin: 24px 0;
+  }
+}

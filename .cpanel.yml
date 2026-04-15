@@ -1,0 +1,20 @@
+---
+deployment:
+  tasks:
+    # 1. Encontrar y cargar Node.js compatible dentro de cPanel Namecheap
+    - export PATH=$(dirname $(find /opt/alt/alt-nodejs*/root/usr/bin/node -type f | sort -r | head -n 1)):$PATH
+    
+    # 2. Compilar con un incremento de memoria forzado 
+    - export NODE_ENV=production
+    - export NODE_OPTIONS="--max-old-space-size=2048"
+    - npm ci --prefer-offline --no-audit
+    - npm run build
+    
+    # 3. Empaquetar la versión standalone generada directo en tu public_html 
+    - /bin/cp -rf .next/standalone/* $HOME/public_html/app.jacontadores.com/
+    - /bin/cp -rf public $HOME/public_html/app.jacontadores.com/
+    - /bin/cp -rf .next/static $HOME/public_html/app.jacontadores.com/.next/
+    
+    # 4. Reiniciar la aplicación de Node.js (Passenger) automáticamente
+    - mkdir -p $HOME/public_html/app.jacontadores.com/tmp
+    - touch $HOME/public_html/app.jacontadores.com/tmp/restart.txt

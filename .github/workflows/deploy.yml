@@ -26,17 +26,20 @@ jobs:
       - name: Build Next.js (standalone)
         run: npm run build
         env:
+          # Supabase (sensibles - deben estar en GitHub Secrets)
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_COMPANY_WHATSAPP: ${{ secrets.NEXT_PUBLIC_COMPANY_WHATSAPP }}
-          NEXT_PUBLIC_COMPANY_EMAIL: ${{ secrets.NEXT_PUBLIC_COMPANY_EMAIL }}
-          NEXT_PUBLIC_COMPANY_PHONE: ${{ secrets.NEXT_PUBLIC_COMPANY_PHONE }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Mercado Libre (sensibles - deben estar en GitHub Secrets)
           ML_APP_ID: ${{ secrets.ML_APP_ID }}
           ML_SECRET_KEY: ${{ secrets.ML_SECRET_KEY }}
-          ML_REDIRECT_URI: ${{ secrets.ML_REDIRECT_URI }}
+          ML_REDIRECT_URI: https://app.jacontadores.com/api/ml/callback
+          # Valores publicos (hardcoded - no sensibles)
+          NEXT_PUBLIC_APP_NAME: 'J&A Contadores - Asesores'
+          NEXT_PUBLIC_APP_URL: https://app.jacontadores.com
+          NEXT_PUBLIC_COMPANY_WHATSAPP: '573138385201'
+          NEXT_PUBLIC_COMPANY_EMAIL: info@jacontadores.com
+          NEXT_PUBLIC_COMPANY_PHONE: '+57 313 8385201'
 
       - name: Prepare standalone for FTP sync
         run: |

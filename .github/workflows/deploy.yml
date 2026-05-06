@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Permite ejecutar manualmente desde GitHub Actions
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -38,35 +38,51 @@ jobs:
           ML_SECRET_KEY: ${{ secrets.ML_SECRET_KEY }}
           ML_REDIRECT_URI: ${{ secrets.ML_REDIRECT_URI }}
 
-      - name: Prepare standalone package
+      - name: Prepare deployment package
         run: |
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
-          tar -czf ./deploy.tar.gz -C .next/standalone .
-          echo "Package size: $(du -sh ./deploy.tar.gz | cut -f1)"
+          cd .next/standalone
+          zip -r ../../deploy.zip .
+          cd ../..
+          echo "Package size: $(du -sh deploy.zip | cut -f1)"
 
-      - name: Upload package to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "deploy.tar.gz"
-          target: "/home/${{ secrets.SSH_USERNAME }}/"
+      - name: Upload package via cPanel API
+        run: |
+          echo "Subiendo deploy.zip al servidor..."
+          RESPONSE=$(curl -ks \
+            -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
+            "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/upload_files" \
+            -F "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com" \
+            -F "file=@deploy.zip" \
+            -w "\nHTTP_CODE:%{http_code}")
+          HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_CODE:")
+          echo "Respuesta HTTP: $HTTP_CODE"
+          echo "Cuerpo: $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Fallo la subida (HTTP $HTTP_CODE)"
+            exit 1
+          fi
 
-      - name: Extract and restart app
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT }}
-          script: |
-            set -e
-            echo "Desplegando en ~/app.jacontadores.com/ ..."
-            tar -xzf ~/deploy.tar.gz -C ~/app.jacontadores.com/
-            mkdir -p ~/app.jacontadores.com/tmp
-            touch ~/app.jacontadores.com/tmp/restart.txt
-            rm -f ~/deploy.tar.gz
-            echo "Deploy completado OK - $(date)"
+      - name: Extract package via cPanel API
+        run: |
+          echo "Extrayendo archivos en el servidor..."
+          curl -ks \
+            -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
+            "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/extract_archive" \
+            -d "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com" \
+            -d "file=deploy.zip" \
+            -d "type=zip"
+          echo "Extraccion completada"
+
+      - name: Restart app via cPanel API
+        run: |
+          echo "Reiniciando la aplicacion Node.js..."
+          curl -ks \
+            -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
+            "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/save_file_content" \
+            -d "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com/tmp" \
+            -d "file=restart.txt" \
+            -d "content=restart"
+          echo "Deploy completado: $(date)"

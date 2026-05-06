@@ -87,7 +87,6 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
                 if (profileError) {
                     console.error("Error al cargar perfil:", profileError)
-                    // Fallback: usar perfil mínimo para no romper el dashboard
                     setMyProfile({ id: user.id, company_name: 'Mi Empresa', role: 'user' })
                     setLoading(false)
                     return
@@ -96,16 +95,32 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                 const finalProfile = profileData || { id: user.id, company_name: 'Configuración pendiente', role: 'user' }
                 setMyProfile(finalProfile)
 
+                let profileToLoad = finalProfile
+
                 // 2. Si es superadmin, cargar todos los perfiles para el selector
                 if (finalProfile.role === 'superadmin') {
                     const { data: allData } = await supabase
                         .from('profiles')
                         .select('*')
-                    setAllProfiles((allData as Profile[]) || [])
+                    
+                    const profiles = (allData as Profile[]) || []
+                    setAllProfiles(profiles)
+
+                    // Revisar si viene ?clientId=... por la URL (ej: desde el Panel Maestro)
+                    const searchParams = new URLSearchParams(window.location.search)
+                    const clientId = searchParams.get('clientId')
+                    
+                    if (clientId) {
+                        const clientProf = profiles.find(p => p.id === clientId)
+                        if (clientProf) {
+                            setSimulatedProfile(clientProf)
+                            profileToLoad = clientProf
+                        }
+                    }
                 }
 
                 // 3. Cargar datos iniciales
-                await loadDataForProfile(finalProfile)
+                await loadDataForProfile(profileToLoad)
 
             } catch (error: unknown) {
                 // Capturar todos los detalles posibles del error

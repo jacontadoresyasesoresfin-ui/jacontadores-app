@@ -42,17 +42,18 @@ export default function MetricCard({
 
     return (
         <div
-            className="relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1"
+            className="relative overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5"
             style={{
                 background: '#FFFFFF',
-                border: '1.5px solid #E2E8F0',
-                boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+                boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
             }}
             onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 30px rgba(15,23,42,0.12), 0 0 0 1.5px ${color}40`
+                (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 12px rgba(15,23,42,0.08), 0 0 0 1px ${color}40`
             }}
             onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(15,23,42,0.06)'
+                (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(15,23,42,0.04)'
             }}
         >
             {/* Fondo decorativo */}

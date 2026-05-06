@@ -50,297 +50,215 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
+        <div className="min-h-screen flex bg-slate-50" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
 
             {/* ── Panel Izquierdo — Branding ── */}
-            <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col justify-between p-12"
-                style={{ background: 'linear-gradient(145deg, #0B2447 0%, #144272 40%, #205295 80%, #0B2447 100%)' }}>
+            <div className="hidden lg:flex lg:w-[45%] relative flex-col justify-between p-14 bg-slate-900 border-r border-slate-800">
+                {/* Fondo sutil (Dot pattern) */}
+                <div className="absolute inset-0 opacity-[0.03]"
+                    style={{ backgroundImage: 'radial-gradient(#ffffff 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }} />
 
-                {/* Decoración de fondo */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-10"
-                        style={{ background: 'radial-gradient(circle, #14B8A6, transparent)' }} />
-                    <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full opacity-10"
-                        style={{ background: 'radial-gradient(circle, #D4A843, transparent)' }} />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full opacity-5"
-                        style={{ background: 'radial-gradient(circle, #fff, transparent)' }} />
-                    {/* Grid pattern */}
-                    <div className="absolute inset-0 opacity-5"
-                        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-                </div>
-
-                {/* Logo */}
                 <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center bg-white/10 backdrop-blur-sm border border-white/20">
-                            <Image src="/logo-ja.jpeg" alt="J&A Logo" width={56} height={56} className="object-contain" />
-                        </div>
+                    <div className="flex flex-col items-start gap-5 mb-4">
+                        <Image src="/logo-ja.jpeg" alt="J&A Logo" width={110} height={110} className="object-contain" />
                         <div>
-                            <p className="text-white/60 text-xs font-semibold tracking-[0.2em] uppercase">Portal Empresarial</p>
-                            <h1 className="text-white font-black text-2xl leading-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
-                                J<span style={{ color: '#D4A843' }}>&</span>A Contadores
-                            </h1>
+                            <h1 className="text-white font-bold text-3xl" style={{ fontFamily: 'Montserrat, sans-serif' }}>J&A Contadores</h1>
+                            <p className="text-slate-400 text-sm font-semibold tracking-widest uppercase mt-1">Portal Financiero</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Contenido central */}
-                <div className="relative z-10 space-y-8">
-                    <div>
-                        <h2 className="text-white font-black text-4xl leading-tight mb-4" style={{ fontFamily: 'var(--font-outfit)' }}>
-                            Gestión Financiera<br />
-                            <span style={{ color: '#14B8A6' }}>Inteligente</span>
-                        </h2>
-                        <p className="text-white/60 text-base leading-relaxed max-w-md">
-                            Plataforma de Business Intelligence para visualizar y controlar las finanzas de tu empresa en tiempo real, desde cualquier lugar.
-                        </p>
-                    </div>
-
-                    {/* Features */}
-                    <div className="space-y-3">
+                <div className="relative z-10 max-w-sm">
+                    <h2 className="text-white font-bold text-3xl leading-snug mb-5">
+                        Inteligencia y control para el futuro de su empresa.
+                    </h2>
+                    <p className="text-slate-400 text-sm leading-relaxed mb-10">
+                        Acceda al ecosistema centralizado de reportes tributarios, conciliación DIAN y analítica financiera corporativa.
+                    </p>
+                    <div className="space-y-4">
                         {[
-                            { icon: '📊', text: 'Analytics financiero con datos reales de Google Sheets' },
-                            { icon: '🛡️', text: 'Seguridad multi-empresa con roles diferenciados' },
-                            { icon: '📋', text: 'Reportes tributarios automáticos — Ley Colombiana' },
-                            { icon: '🔗', text: 'Integración con Mercado Libre y Siigo' },
+                            { icon: <ShieldCheck className="w-5 h-5 text-slate-300"/>, text: 'Seguridad e integridad de datos empresariales' },
+                            { icon: <Lock className="w-5 h-5 text-slate-300"/>, text: 'Acceso corporativo y gestión de roles' },
                         ].map((f, i) => (
-                            <div key={i} className="flex items-center gap-3 p-3 rounded-xl"
-                                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
-                                <span className="text-xl">{f.icon}</span>
-                                <span className="text-white/80 text-sm font-medium">{f.text}</span>
+                            <div key={i} className="flex items-center gap-3">
+                                {f.icon}
+                                <span className="text-slate-300 text-sm">{f.text}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Footer branding */}
                 <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-2">
-                        <ShieldCheck className="w-4 h-4" style={{ color: '#14B8A6' }} />
-                        <span className="text-white/50 text-xs">Protegido con Supabase Auth · SSL/TLS Cifrado</span>
-                    </div>
-                    <p className="text-white/30 text-xs">
-                        © {new Date().getFullYear()} J&A Contadores - Consultores · Tunja, Boyacá, Colombia
+                    <p className="text-slate-500 text-xs">
+                        © {new Date().getFullYear()} J&A Contadores - Asesores · Colombia
                     </p>
                 </div>
             </div>
 
             {/* ── Panel Derecho — Formulario ── */}
-            <div className="flex-1 flex items-center justify-center p-8"
-                style={{ background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' }}>
+            <div className="flex-1 flex flex-col justify-center items-center p-6 sm:p-12">
+                
+                <div className="w-full max-w-[400px]">
+                    {/* Header móvil */}
+                    <div className="lg:hidden flex flex-col items-center gap-3 mb-10 text-center">
+                        <Image src="/logo-ja.jpeg" alt="J&A Logo" width={70} height={70} className="object-contain" />
+                        <div>
+                            <h1 className="font-bold text-2xl text-slate-900" style={{ fontFamily: 'Montserrat, sans-serif' }}>J&A Contadores</h1>
+                            <p className="text-xs text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Portal Financiero</p>
+                        </div>
+                    </div>
 
-                <div className="w-full max-w-md">
+                    <div className="mb-8">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                            {tab === 'login' ? 'Iniciar Sesión' : 'Solicitar Acceso'}
+                        </h2>
+                        <p className="text-slate-500 text-sm">
+                            {tab === 'login'
+                                ? 'Ingrese sus credenciales corporativas para acceder.'
+                                : 'Complete sus datos para registrar un usuario.'}
+                        </p>
+                    </div>
 
-                    {/* Mobile logo */}
-                    <div className="flex lg:hidden justify-center mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg bg-white flex items-center justify-center border border-gray-200">
-                                <Image src="/logo-ja.jpeg" alt="J&A Logo" width={48} height={48} className="object-contain" />
+                    <div className="flex mb-8 border-b border-slate-200">
+                        {(['login', 'register'] as const).map(t => (
+                            <button
+                                key={t}
+                                onClick={() => { setTab(t); setMessage(null) }}
+                                className={`pb-3 text-sm font-semibold transition-colors relative mr-6 ${
+                                    tab === t ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+                                }`}
+                            >
+                                {t === 'login' ? 'Acceso' : 'Registro'}
+                                {tab === t && (
+                                    <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-slate-900" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* LOGIN FORM */}
+                    {tab === 'login' && (
+                        <form onSubmit={handleLogin} className="space-y-5">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Correo Corporativo</label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input
+                                        name="email" type="email" required
+                                        placeholder="usuario@empresa.com"
+                                        className="w-full pl-10 pr-4 py-2.5 rounded border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-all bg-white"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Contraseña</label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input
+                                        name="password" type={showPassword ? 'text' : 'password'} required
+                                        placeholder="••••••••"
+                                        className="w-full pl-10 pr-11 py-2.5 rounded border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-all bg-white"
+                                    />
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {message && (
+                                <div className={`text-sm px-4 py-3 rounded border font-medium ${isError
+                                    ? 'text-red-800 bg-red-50 border-red-200'
+                                    : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
+                                    {message}
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={loading}
+                                className="w-full py-2.5 rounded font-semibold text-white text-sm flex items-center justify-center gap-2 transition-colors bg-slate-900 hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 mt-2">
+                                {loading ? (
+                                    <span className="flex items-center gap-2">
+                                        <span className="w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                                        Validando...
+                                    </span>
+                                ) : (
+                                    <>Ingresar al Sistema <ArrowRight className="w-4 h-4" /></>
+                                )}
+                            </button>
+                        </form>
+                    )}
+
+                    {/* REGISTER FORM */}
+                    {tab === 'register' && (
+                        <form onSubmit={handleSignup} className="space-y-5">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Nombre Completo</label>
+                                <div className="relative">
+                                    <input
+                                        name="fullName" type="text" required
+                                        placeholder="Ej. María García"
+                                        className="w-full px-4 py-2.5 rounded border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-all bg-white"
+                                    />
+                                </div>
                             </div>
                             <div>
-                                <h1 className="font-black text-xl text-slate-800" style={{ fontFamily: 'var(--font-outfit)' }}>
-                                    J<span style={{ color: '#D4A843' }}>&</span>A Contadores
-                                </h1>
-                                <p className="text-xs text-slate-500 font-semibold tracking-widest uppercase">Portal</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Card principal */}
-                    <div className="bg-white rounded-3xl shadow-2xl overflow-hidden"
-                        style={{ boxShadow: '0 25px 60px rgba(11,36,71,0.12), 0 8px 24px rgba(11,36,71,0.08)' }}>
-
-                        {/* Tab Header */}
-                        <div className="flex" style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                            {(['login', 'register'] as const).map(t => (
-                                <button
-                                    key={t}
-                                    onClick={() => { setTab(t); setMessage(null) }}
-                                    className="flex-1 py-4 text-sm font-bold transition-all duration-200 relative"
-                                    style={{
-                                        color: tab === t ? '#0B2447' : '#94A3B8',
-                                        background: tab === t ? 'white' : 'transparent',
-                                    }}
-                                >
-                                    {t === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
-                                    {tab === t && (
-                                        <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
-                                            style={{ background: 'linear-gradient(90deg, #14B8A6, #0EA5E9)' }} />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="p-8">
-                            <div className="mb-6">
-                                <h2 className="text-2xl font-black text-slate-800 mb-1" style={{ fontFamily: 'var(--font-outfit)' }}>
-                                    {tab === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta'}
-                                </h2>
-                                <p className="text-slate-500 text-sm">
-                                    {tab === 'login'
-                                        ? 'Accede al portal de gestión financiera de J&A'
-                                        : 'Regístrate para acceder a la plataforma'}
-                                </p>
-                            </div>
-
-                            {/* LOGIN FORM */}
-                            {tab === 'login' && (
-                                <form onSubmit={handleLogin} className="space-y-5">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Correo electrónico</label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                name="email" type="email" required
-                                                placeholder="tu@empresa.com"
-                                                className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none transition-all duration-200"
-                                                style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}
-                                                onFocus={e => e.target.style.borderColor = '#14B8A6'}
-                                                onBlur={e => e.target.style.borderColor = '#E2E8F0'}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Contraseña</label>
-                                        <div className="relative">
-                                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                name="password" type={showPassword ? 'text' : 'password'} required
-                                                placeholder="••••••••"
-                                                className="w-full pl-10 pr-11 py-3 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none transition-all duration-200"
-                                                style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}
-                                                onFocus={e => e.target.style.borderColor = '#14B8A6'}
-                                                onBlur={e => e.target.style.borderColor = '#E2E8F0'}
-                                            />
-                                            <button type="button" onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {message && (
-                                        <div className={`text-sm px-4 py-3 rounded-xl font-medium ${isError
-                                            ? 'text-red-700 bg-red-50 border border-red-200'
-                                            : 'text-emerald-700 bg-emerald-50 border border-emerald-200'}`}>
-                                            {message}
-                                        </div>
-                                    )}
-
-                                    <button type="submit" disabled={loading}
-                                        className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all duration-200 hover:opacity-90 hover:shadow-lg active:scale-[0.99] disabled:opacity-60"
-                                        style={{ background: 'linear-gradient(135deg, #0B2447 0%, #144272 50%, #205295 100%)', boxShadow: '0 4px 20px rgba(11,36,71,0.3)' }}>
-                                        {loading ? (
-                                            <span className="flex items-center gap-2">
-                                                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                                                Verificando...
-                                            </span>
-                                        ) : (
-                                            <>Entrar al Portal <ArrowRight className="w-4 h-4" /></>
-                                        )}
-                                    </button>
-                                </form>
-                            )}
-
-                            {/* REGISTER FORM */}
-                            {tab === 'register' && (
-                                <form onSubmit={handleSignup} className="space-y-5">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nombre completo</label>
-                                        <div className="relative">
-                                            <input
-                                                name="fullName" type="text" required
-                                                placeholder="María García"
-                                                className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none transition-all duration-200"
-                                                style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}
-                                                onFocus={e => e.target.style.borderColor = '#14B8A6'}
-                                                onBlur={e => e.target.style.borderColor = '#E2E8F0'}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Correo electrónico</label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                name="email" type="email" required
-                                                placeholder="tu@empresa.com"
-                                                className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none transition-all duration-200"
-                                                style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}
-                                                onFocus={e => e.target.style.borderColor = '#14B8A6'}
-                                                onBlur={e => e.target.style.borderColor = '#E2E8F0'}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Contraseña</label>
-                                        <div className="relative">
-                                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                name="password" type={showPassword ? 'text' : 'password'} required
-                                                placeholder="••••••••"
-                                                className="w-full pl-10 pr-11 py-3 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none transition-all duration-200"
-                                                style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}
-                                                onFocus={e => e.target.style.borderColor = '#14B8A6'}
-                                                onBlur={e => e.target.style.borderColor = '#E2E8F0'}
-                                            />
-                                            <button type="button" onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {message && (
-                                        <div className={`text-sm px-4 py-3 rounded-xl font-medium ${isError
-                                            ? 'text-red-700 bg-red-50 border border-red-200'
-                                            : 'text-emerald-700 bg-emerald-50 border border-emerald-200'}`}>
-                                            {message}
-                                        </div>
-                                    )}
-
-                                    <button type="submit" disabled={loading}
-                                        className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all duration-200 hover:opacity-90 hover:shadow-lg active:scale-[0.99] disabled:opacity-60"
-                                        style={{ background: 'linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)', boxShadow: '0 4px 20px rgba(20,184,166,0.3)' }}>
-                                        {loading ? (
-                                            <span className="flex items-center gap-2">
-                                                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                                                Creando cuenta...
-                                            </span>
-                                        ) : (
-                                            <>Crear Cuenta <ArrowRight className="w-4 h-4" /></>
-                                        )}
-                                    </button>
-                                </form>
-                            )}
-
-                            {/* Footer card */}
-                            <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                                <div className="flex items-center gap-1.5">
-                                    <ShieldCheck className="w-3.5 h-3.5 text-teal-500" />
-                                    <span>Supabase Auth · Cifrado SSL</span>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Correo Corporativo</label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input
+                                        name="email" type="email" required
+                                        placeholder="usuario@empresa.com"
+                                        className="w-full pl-10 pr-4 py-2.5 rounded border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-all bg-white"
+                                    />
                                 </div>
-                                <a href="https://jacontadores.com" target="_blank" rel="noopener noreferrer"
-                                    className="font-bold hover:text-teal-600 transition-colors"
-                                    style={{ color: '#D4A843' }}>
-                                    jacontadores.com
-                                </a>
                             </div>
-                        </div>
-                    </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Contraseña</label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input
+                                        name="password" type={showPassword ? 'text' : 'password'} required
+                                        placeholder="••••••••"
+                                        className="w-full pl-10 pr-11 py-2.5 rounded border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-all bg-white"
+                                    />
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
 
-                    {/* Contacto */}
-                    <p className="text-center text-xs text-slate-400 mt-6">
-                        ¿Necesitas acceso?{' '}
-                        <a href="tel:+573138385201" className="font-semibold hover:underline" style={{ color: '#0B2447' }}>
-                            +57 313 838 5201
-                        </a>
-                        {' · '}
-                        <a href="mailto:info@jacontadores.com" className="font-semibold hover:underline" style={{ color: '#0B2447' }}>
-                            info@jacontadores.com
-                        </a>
-                    </p>
+                            {message && (
+                                <div className={`text-sm px-4 py-3 rounded border font-medium ${isError
+                                    ? 'text-red-800 bg-red-50 border-red-200'
+                                    : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
+                                    {message}
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={loading}
+                                className="w-full py-2.5 rounded font-semibold text-white text-sm flex items-center justify-center gap-2 transition-colors bg-slate-900 hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 mt-2">
+                                {loading ? (
+                                    <span className="flex items-center gap-2">
+                                        <span className="w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                                        Procesando...
+                                    </span>
+                                ) : (
+                                    <>Solicitar Registro <ArrowRight className="w-4 h-4" /></>
+                                )}
+                            </button>
+                        </form>
+                    )}
+
+                    <div className="mt-12 pt-6 border-t border-slate-200">
+                        <p className="text-xs text-slate-400 mb-1">Contacto de soporte:</p>
+                        <p className="text-sm text-slate-600">
+                            <a href="mailto:info@jacontadores.com" className="font-semibold hover:text-slate-900 transition-colors">info@jacontadores.com</a>
+                            {' · '}
+                            <span className="font-semibold">+57 313 838 5201</span>
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

@@ -5,18 +5,23 @@ import { Download, FileText, TrendingUp, DollarSign, ShoppingCart, Users, Eye, L
 import { useClient } from '../ClientContext'
 import { printSalesReport, printFinancialReport, printClientsReport, printTaxReport } from '@/lib/report-generator'
 
-const TEAL = '#14B8A6'
-const NAVY = '#0B2447'
-const GOLD = '#D4A843'
-const GREEN = '#10B981'
-const RED = '#EF4444'
+const PRIMARY = '#0F172A'    // Deep Slate / Navy
+const SECONDARY = '#334155'  // Slate
+const ACCENT = '#3B82F6'     // Professional Blue
+const GREEN = '#059669'      // Muted Emerald
+const RED = '#DC2626'        // Muted Red
+
+// Mapeo retrocompatible
+const TEAL = PRIMARY
+const NAVY = SECONDARY
+const GOLD = ACCENT
 
 const card = {
     background: '#FFFFFF',
-    border: '1.5px solid #E2E8F0',
-    borderRadius: '16px',
-    boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
-    padding: '20px',
+    border: '1px solid #E2E8F0',
+    borderRadius: '8px',
+    boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+    padding: '24px',
 }
 
 export default function ReportsPage() {

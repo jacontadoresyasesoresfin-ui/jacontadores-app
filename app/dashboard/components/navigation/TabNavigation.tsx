@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
     LayoutDashboard, TrendingUp, ShoppingCart, Wallet, Package, FileText,
     Users, Receipt, Store, CreditCard, Percent, RotateCcw, DollarSign,
-    Bell, Settings, FileSpreadsheet
+    Bell, Settings, FileSpreadsheet, FileCheck
 } from 'lucide-react'
 
 /*
@@ -20,6 +20,7 @@ const tabs = [
     { name: 'Resumen', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Analytics', href: '/dashboard/analytics', icon: TrendingUp },
     { name: 'Siigo BI', href: '/dashboard/siigo', icon: FileSpreadsheet, badge: 'NEW' },
+    { name: 'Conciliación', href: '/dashboard/reconciliation', icon: FileCheck, badge: 'DIAN' },
     { name: 'Ventas', href: '/dashboard/sales', icon: ShoppingCart },
     { name: 'Ecommerce', href: '/dashboard/ecommerce', icon: Store },
     { name: 'Cartera', href: '/dashboard/portfolio', icon: Wallet },

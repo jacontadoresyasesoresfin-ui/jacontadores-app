@@ -9,19 +9,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AuthGuard>
             {/* Fondo crema — idéntico a jacontadores.com */}
             <div style={{ minHeight: '100vh', background: '#F4F4F0', display: 'flex', flexDirection: 'column' }}>
+                {/* Contenido principal envuelto con ClientProvider para que TopBar y Tabs tengan acceso */}
+                <ClientProvider>
+                    {/* Top Bar — Navy J&A */}
+                    <TopBar />
 
-                {/* Top Bar — Navy J&A */}
-                <TopBar />
+                    {/* Navegación de Tabs */}
+                    <TabNavigation />
 
-                {/* Navegación de Tabs */}
-                <TabNavigation />
-
-                {/* Contenido principal envuelto con ClientProvider */}
-                <main style={{ flex: 1, padding: '24px 20px 40px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-                    <ClientProvider>
+                    <main style={{ flex: 1, padding: '24px 20px 40px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
                         {children}
-                    </ClientProvider>
-                </main>
+                    </main>
+                </ClientProvider>
 
                 {/* Footer — idéntico al estilo de jacontadores.com */}
                 <footer style={{

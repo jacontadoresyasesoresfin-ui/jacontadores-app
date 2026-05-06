@@ -5,12 +5,15 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { LogOut, User, ChevronDown, ExternalLink, Settings } from 'lucide-react'
+import { LogOut, User, ChevronDown, ExternalLink, Settings, Building2 } from 'lucide-react'
+import { useClient, Profile } from '../../ClientContext'
 
 export default function TopBar() {
     const [menuOpen, setMenuOpen] = useState(false)
+    const [clientSelectorOpen, setClientSelectorOpen] = useState(false)
     const router = useRouter()
     const supabase = createClient()
+    const { profile, allProfiles, switchClient, clientName, isSimulating } = useClient()
 
     const handleLogout = async () => {
         await supabase.auth.signOut()
@@ -112,6 +115,87 @@ export default function TopBar() {
 
                 {/* Derecha — Links + Usuario */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                    {/* Selector de Cliente para Superadmins */}
+                    {profile?.role === 'superadmin' && (
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setClientSelectorOpen(v => !v)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '5px 10px',
+                                    borderRadius: '8px',
+                                    background: isSimulating ? 'rgba(5, 150, 105, 0.15)' : 'rgba(255,255,255,0.07)',
+                                    border: `1px solid ${isSimulating ? 'rgba(5, 150, 105, 0.4)' : 'rgba(184,150,12,0.25)'}`,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                }}>
+                                <Building2 style={{ width: '13px', height: '13px', color: isSimulating ? '#10B981' : '#B8960C' }} />
+                                <span style={{ fontSize: '11px', fontWeight: 600, color: isSimulating ? '#10B981' : 'rgba(255,255,255,0.8)', fontFamily: 'Inter, sans-serif' }}>
+                                    {clientName || 'Seleccionar Empresa'}
+                                </span>
+                                <ChevronDown style={{ width: '12px', height: '12px', color: 'rgba(255,255,255,0.4)', transform: clientSelectorOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            </button>
+
+                            {clientSelectorOpen && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 8px)',
+                                    right: 0,
+                                    background: '#FFFFFF',
+                                    border: '1.5px solid #E0DDD8',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 12px 40px rgba(19,33,60,0.15)',
+                                    minWidth: '220px',
+                                    maxHeight: '300px',
+                                    overflowY: 'auto',
+                                    zIndex: 100,
+                                }}>
+                                    <div style={{ padding: '10px 14px', borderBottom: '1px solid #F0EDE8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <p style={{ fontSize: '10px', color: '#6B7A8D', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                            Empresas Clientes
+                                        </p>
+                                        {isSimulating && (
+                                            <button 
+                                                onClick={() => { switchClient(null); setClientSelectorOpen(false); }}
+                                                style={{ fontSize: '9px', background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontWeight: 600 }}
+                                            >
+                                                Quitar Filtro
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div style={{ padding: '4px' }}>
+                                        {allProfiles.filter(p => p.company_name).map(p => (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => { switchClient(p); setClientSelectorOpen(false); }}
+                                                style={{
+                                                    width: '100%',
+                                                    display: 'block',
+                                                    textAlign: 'left',
+                                                    padding: '8px 10px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 600,
+                                                    color: '#13213C',
+                                                    background: clientName === p.company_name ? '#F4F4F0' : 'none',
+                                                    border: 'none',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    fontFamily: 'Inter, sans-serif',
+                                                }}
+                                                onMouseEnter={e => { if(clientName !== p.company_name) e.currentTarget.style.background = '#F9F7F2' }}
+                                                onMouseLeave={e => { if(clientName !== p.company_name) e.currentTarget.style.background = 'none' }}
+                                            >
+                                                {p.company_name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Link al sitio principal */}
                     <Link href="https://jacontadores.com" target="_blank"

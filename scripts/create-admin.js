@@ -36,7 +36,7 @@ async function createAdmin() {
         console.error('❌ Error:', createRes.status, JSON.stringify(cu))
     }
 
-    // Paso 2: Buscar ID si aún no lo tenemos
+    // Paso 2: Buscar ID y actualizar contraseña si ya existe
     if (!userId) {
         const listRes = await fetch(authUrl, { headers })
         const listData = await listRes.json()
@@ -44,6 +44,18 @@ async function createAdmin() {
         if (found) {
             userId = found.id
             console.log('✅ ID encontrado:', userId)
+            
+            // Forzar actualización de contraseña
+            const updateRes = await fetch(`${authUrl}/${userId}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ password: ADMIN_PASSWORD, email_confirm: true })
+            })
+            if (updateRes.ok) {
+                console.log('✅ Contraseña actualizada exitosamente')
+            } else {
+                console.error('❌ Error actualizando contraseña:', await updateRes.text())
+            }
         }
     }
 

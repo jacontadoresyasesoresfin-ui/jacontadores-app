@@ -91,23 +91,28 @@ export interface ClientData {
 }
 
 export const fetchClientData = async (clientName: string, googleSheetUrl: string): Promise<ClientData> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         if (!googleSheetUrl) {
             reject(new Error("No Google Sheet URL provided"))
             return
         }
 
-        Papa.parse(googleSheetUrl, {
-            download: true,
-            header: true,
-            dynamicTyping: true,
-            skipEmptyLines: true,
-            transformHeader: (header) => header.trim(),
-            complete: (results) => {
-                const rows = results.data as Record<string, unknown>[]
+        try {
+            // Utilizamos el proxy interno para saltar bloqueos de CORS del navegador
+            const res = await fetch(`/api/sheets-proxy?url=${encodeURIComponent(googleSheetUrl)}`)
+            if (!res.ok) throw new Error(`Proxy error: ${res.status} ${res.statusText}`)
+            const csvText = await res.text()
 
-                // Filtrar por empresa (Emisor o Receptor)
-                const normalizedSearch = clientName.toLowerCase().trim()
+            Papa.parse(csvText, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                transformHeader: (header) => header.trim(),
+                complete: (results) => {
+                    const rows = results.data as Record<string, unknown>[]
+
+                    // Filtrar por empresa (Emisor o Receptor)
+                    const normalizedSearch = clientName.toLowerCase().trim()
                 const filteredRows = (normalizedSearch === 'empresa demo' || normalizedSearch === '')
                     ? rows
                     : rows.filter(row =>
@@ -132,9 +137,9 @@ export const fetchClientData = async (clientName: string, googleSheetUrl: string
                     if (val > 0) {
                         totalSales += val
 
-                        // Identificación y Nombre del Receptor
-                        const receptorId = String(row['NIT'] || row['Identificación'] || row['Cédula'] || row['Nombre Receptor'] || 'Otros').trim()
-                        const receptorName = String(row['Nombre Receptor'] || receptorId)
+                        // Identificación y Nombre del Receptor/Emisor
+                        const receptorId = String(row['NIT Receptor'] || row['NIT Emisor'] || row['NIT'] || row['Identificación'] || row['Cédula'] || row['Nombre Receptor'] || 'Otros').trim()
+                        const receptorName = String(row['Nombre Receptor'] || row['Nombre Emisor'] || receptorId)
                         uniqueClients.add(receptorName)
 
                         // Recurrencia de Clientes (Agrupar por ID para mayor precisión)
@@ -143,13 +148,13 @@ export const fetchClientData = async (clientName: string, googleSheetUrl: string
                         clientRecurrence[receptorId].total += val
 
                         // Productos (Búsqueda dinámica de columna)
-                        const productName = String(row['Descripción'] || row['Nombre Producto'] || row['Detalle'] || 'Servicio/Varios').trim()
+                        const productName = String(row['Descripción'] || row['Nombre Producto'] || row['Detalle'] || 'Factura/Servicio').trim()
                         if (!productAggregation[productName]) productAggregation[productName] = { count: 0, total: 0 }
                         productAggregation[productName].count++
                         productAggregation[productName].total += val
 
-                        const fullDate = String(row['Fecha Recepción'] || '')
-                        const shortDate = fullDate.split(' ')[0] // DD-MM-YYYY
+                        const fullDate = String(row['Fecha Recepción'] || row['Fecha Recepción'] || row['Fecha Emisión'] || row['Fecha'] || row['fecha emisi'] || '')
+                        const shortDate = fullDate.split(' ')[0] // DD-MM-YYYY or YYYY-MM-DD
                         if (shortDate) {
                             dateAggregation[shortDate] = (dateAggregation[shortDate] || 0) + val
                         }
@@ -253,14 +258,15 @@ export const fetchClientData = async (clientName: string, googleSheetUrl: string
                         .map(([name, stats]) => ({ name, ...stats }))
                         .sort((a, b) => b.count - a.count)
                         .slice(0, 8),
-                    prediction: calculatePrediction(salesHistory.map(h => h.amount)),
-                    taxData: calculateTaxData(filteredRows, totalSales)
-                })
-            },
-            error: (err) => {
-                reject(err)
-            }
-        })
+                        prediction: calculatePrediction(salesHistory.map(h => h.amount)),
+                        taxData: calculateTaxData(filteredRows, totalSales)
+                    })
+                },
+                error: (err: any) => reject(err)
+            })
+        } catch (err) {
+            reject(err)
+        }
     })
 }
 

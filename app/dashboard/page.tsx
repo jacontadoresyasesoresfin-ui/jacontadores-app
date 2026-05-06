@@ -8,32 +8,37 @@ import {
     CartesianGrid, BarChart, Bar, Cell
 } from 'recharts'
 
-const TEAL = '#14B8A6'
-const NAVY = '#0B2447'
-const GOLD = '#D4A843'
-const GREEN = '#10B981'
-const RED = '#EF4444'
+const PRIMARY = '#0F172A'    // Deep Slate / Navy
+const SECONDARY = '#334155'  // Slate
+const ACCENT = '#3B82F6'     // Professional Blue
+const GREEN = '#059669'      // Muted Emerald
+const RED = '#DC2626'        // Muted Red
+
+// Mapeo retrocompatible para evitar errores en el archivo
+const TEAL = PRIMARY
+const NAVY = SECONDARY
+const GOLD = ACCENT
 
 const TOOLTIP_STYLE = {
     contentStyle: {
         backgroundColor: '#FFFFFF',
         border: '1px solid #E2E8F0',
-        borderRadius: '12px',
-        color: '#1E293B',
+        borderRadius: '8px',
+        color: '#0F172A',
         fontSize: '12px',
-        boxShadow: '0 8px 32px rgba(15,23,42,0.12)',
+        boxShadow: '0 4px 16px rgba(15,23,42,0.08)',
     },
-    cursor: { fill: 'rgba(20,184,166,0.04)' }
+    cursor: { fill: 'rgba(15,23,42,0.03)' }
 }
 
-const AXIS_STYLE = { fill: '#94A3B8', fontSize: 11, fontFamily: 'var(--font-inter)' }
+const AXIS_STYLE = { fill: '#64748B', fontSize: 11, fontFamily: 'var(--font-inter)' }
 
 const cardStyle = {
     background: '#FFFFFF',
-    border: '1.5px solid #E2E8F0',
-    borderRadius: '16px',
-    boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
-    padding: '20px',
+    border: '1px solid #E2E8F0',
+    borderRadius: '8px',
+    boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+    padding: '24px',
 }
 
 export default function DashboardPage() {

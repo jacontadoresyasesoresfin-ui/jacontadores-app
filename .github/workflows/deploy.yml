@@ -42,8 +42,8 @@ jobs:
         run: |
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
-          tar -czf /tmp/deploy.tar.gz -C .next/standalone .
-          echo "Package size: $(du -sh /tmp/deploy.tar.gz | cut -f1)"
+          tar -czf ./deploy.tar.gz -C .next/standalone .
+          echo "Package size: $(du -sh ./deploy.tar.gz | cut -f1)"
 
       - name: Upload package to server
         uses: appleboy/scp-action@v0.1.7
@@ -52,9 +52,8 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT }}
-          source: "/tmp/deploy.tar.gz"
+          source: "deploy.tar.gz"
           target: "/home/${{ secrets.SSH_USERNAME }}/"
-          strip_components: 2
 
       - name: Extract and restart app
         uses: appleboy/ssh-action@v1.0.3

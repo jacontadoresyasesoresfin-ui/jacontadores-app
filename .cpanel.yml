@@ -1,21 +1,7 @@
 ---
 deployment:
   tasks:
-    # 1. Encontrar y cargar Node.js compatible dentro de cPanel Namecheap
-    - export PATH=$(dirname $(find /opt/alt/alt-nodejs*/root/usr/bin/node -type f | sort -r | head -n 1)):$PATH
-    
-    # 2. Compilar con un incremento de memoria forzado 
-    - export NODE_ENV=production
-    - export NODE_OPTIONS="--max-old-space-size=2048"
-    - npm ci --prefer-offline --no-audit
-    - npm run build
-    
-    # 3. Empaquetar la version standalone generada en la raiz del app de Node.js
-    - /bin/cp -rf .next/standalone/* $HOME/app.jacontadores.com/
-    - /bin/cp -rf public $HOME/app.jacontadores.com/public
-    - mkdir -p $HOME/app.jacontadores.com/.next
-    - /bin/cp -rf .next/static $HOME/app.jacontadores.com/.next/
-    
-    # 4. Reiniciar la aplicacion de Node.js (Passenger) automaticamente
-    - mkdir -p $HOME/app.jacontadores.com/tmp
-    - touch $HOME/app.jacontadores.com/tmp/restart.txt
+    # El despliegue se realiza automaticamente via GitHub Actions (.github/workflows/deploy.yml)
+    # Este archivo se mantiene como placeholder para que cPanel no de error.
+    # GitHub Actions construye con Node.js 20 y sube el build compilado via SSH.
+    - echo "Deployment is handled by GitHub Actions CI/CD pipeline"

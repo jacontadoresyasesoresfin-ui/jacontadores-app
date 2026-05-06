@@ -1,9 +1,10 @@
-name: Deploy to Shared Hosting
+name: Build and Deploy to cPanel
 
 on:
   push:
     branches:
-      - main  # Cambia esto si tu rama principal tiene otro nombre
+      - main
+  workflow_dispatch: # Permite ejecutar manualmente desde GitHub Actions
 
 jobs:
   build-and-deploy:
@@ -13,26 +14,60 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Ajusta a tu versión de Node.js si es necesario
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build project
+      - name: Build Next.js (standalone)
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_COMPANY_WHATSAPP: ${{ secrets.NEXT_PUBLIC_COMPANY_WHATSAPP }}
+          NEXT_PUBLIC_COMPANY_EMAIL: ${{ secrets.NEXT_PUBLIC_COMPANY_EMAIL }}
+          NEXT_PUBLIC_COMPANY_PHONE: ${{ secrets.NEXT_PUBLIC_COMPANY_PHONE }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ML_APP_ID: ${{ secrets.ML_APP_ID }}
+          ML_SECRET_KEY: ${{ secrets.ML_SECRET_KEY }}
+          ML_REDIRECT_URI: ${{ secrets.ML_REDIRECT_URI }}
 
-      - name: Deploy to FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Prepare standalone package
+        run: |
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
+          tar -czf /tmp/deploy.tar.gz -C .next/standalone .
+          echo "Package size: $(du -sh /tmp/deploy.tar.gz | cut -f1)"
+
+      - name: Upload package to server
+        uses: appleboy/scp-action@v0.1.7
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./out/
-          server-dir: ./public_html/ # Cambia esto si tu carpeta raíz es diferente
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "/tmp/deploy.tar.gz"
+          target: "/home/${{ secrets.SSH_USERNAME }}/"
+          strip_components: 2
+
+      - name: Extract and restart app
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -e
+            echo "Desplegando en ~/app.jacontadores.com/ ..."
+            tar -xzf ~/deploy.tar.gz -C ~/app.jacontadores.com/
+            mkdir -p ~/app.jacontadores.com/tmp
+            touch ~/app.jacontadores.com/tmp/restart.txt
+            rm -f ~/deploy.tar.gz
+            echo "Deploy completado OK - $(date)"

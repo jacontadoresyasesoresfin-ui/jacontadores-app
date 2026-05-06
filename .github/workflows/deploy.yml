@@ -38,43 +38,27 @@ jobs:
           ML_SECRET_KEY: ${{ secrets.ML_SECRET_KEY }}
           ML_REDIRECT_URI: ${{ secrets.ML_REDIRECT_URI }}
 
-      - name: Prepare deployment package
+      - name: Prepare standalone for FTP sync
         run: |
+          # Mover archivos estaticos y publicos dentro del standalone
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
-          cd .next/standalone
-          zip -r ../../deploy.zip .
-          cd ../..
-          echo "Package size: $(du -sh deploy.zip | cut -f1)"
+          echo "Contenido a desplegar:"
+          ls -la .next/standalone/
 
-      - name: Upload package via cPanel API
-        run: |
-          echo "Subiendo deploy.zip al servidor..."
-          RESPONSE=$(curl -ks \
-            -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
-            "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/upload_files" \
-            -F "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com" \
-            -F "file=@deploy.zip" \
-            -w "\nHTTP_CODE:%{http_code}")
-          HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
-          BODY=$(echo "$RESPONSE" | grep -v "HTTP_CODE:")
-          echo "Respuesta HTTP: $HTTP_CODE"
-          echo "Cuerpo: $BODY"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "ERROR: Fallo la subida (HTTP $HTTP_CODE)"
-            exit 1
-          fi
-
-      - name: Extract package via cPanel API
-        run: |
-          echo "Extrayendo archivos en el servidor..."
-          curl -ks \
-            -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
-            "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/extract_archive" \
-            -d "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com" \
-            -d "file=deploy.zip" \
-            -d "type=zip"
-          echo "Extraccion completada"
+      - name: Deploy via FTP to app.jacontadores.com
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.CPANEL_PASSWORD }}
+          local-dir: .next/standalone/
+          server-dir: /app.jacontadores.com/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/.cache/**
 
       - name: Restart app via cPanel API
         run: |
@@ -84,5 +68,5 @@ jobs:
             "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/save_file_content" \
             -d "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com/tmp" \
             -d "file=restart.txt" \
-            -d "content=restart"
+            -d "content=restarted"
           echo "Deploy completado: $(date)"

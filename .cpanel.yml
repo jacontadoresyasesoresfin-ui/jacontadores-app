@@ -10,11 +10,12 @@ deployment:
     - npm ci --prefer-offline --no-audit
     - npm run build
     
-    # 3. Empaquetar la versión standalone generada directo en tu public_html 
-    - /bin/cp -rf .next/standalone/* $HOME/public_html/app.jacontadores.com/
-    - /bin/cp -rf public $HOME/public_html/app.jacontadores.com/
-    - /bin/cp -rf .next/static $HOME/public_html/app.jacontadores.com/.next/
+    # 3. Empaquetar la version standalone generada en la raiz del app de Node.js
+    - /bin/cp -rf .next/standalone/* $HOME/app.jacontadores.com/
+    - /bin/cp -rf public $HOME/app.jacontadores.com/public
+    - mkdir -p $HOME/app.jacontadores.com/.next
+    - /bin/cp -rf .next/static $HOME/app.jacontadores.com/.next/
     
-    # 4. Reiniciar la aplicación de Node.js (Passenger) automáticamente
-    - mkdir -p $HOME/public_html/app.jacontadores.com/tmp
-    - touch $HOME/public_html/app.jacontadores.com/tmp/restart.txt
+    # 4. Reiniciar la aplicacion de Node.js (Passenger) automaticamente
+    - mkdir -p $HOME/app.jacontadores.com/tmp
+    - touch $HOME/app.jacontadores.com/tmp/restart.txt

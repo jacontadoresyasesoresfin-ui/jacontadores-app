@@ -7,6 +7,7 @@ import {
     Users, Receipt, Store, CreditCard, Percent, RotateCcw, DollarSign,
     Bell, Settings, FileSpreadsheet, FileCheck
 } from 'lucide-react'
+import { useClient } from '@/app/dashboard/ClientContext'
 
 /*
  * Paleta exacta de jacontadores.com
@@ -16,31 +17,38 @@ const NAVY = '#13213C'
 const GOLD = '#B8960C'
 const GOLD_LT = '#D4A843'
 
+// moduleKey debe coincidir con las keys en modules_enabled (DB)
 const tabs = [
-    { name: 'Resumen', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Analytics', href: '/dashboard/analytics', icon: TrendingUp },
-    { name: 'Siigo BI', href: '/dashboard/siigo', icon: FileSpreadsheet, badge: 'NEW' },
-    { name: 'Conciliación', href: '/dashboard/reconciliation', icon: FileCheck, badge: 'DIAN' },
-    { name: 'Ventas', href: '/dashboard/sales', icon: ShoppingCart },
-    { name: 'Ecommerce', href: '/dashboard/ecommerce', icon: Store },
-    { name: 'Cartera', href: '/dashboard/portfolio', icon: Wallet },
-    { name: 'Inventario', href: '/dashboard/inventory', icon: Package },
-    { name: 'Reportes', href: '/dashboard/reports', icon: FileText },
-    { name: 'Equipo', href: '/dashboard/team', icon: Users },
-    { name: 'Impuestos', href: '/dashboard/taxes', icon: Receipt },
-    { name: 'Configuración', href: '/dashboard/configuracion', icon: Settings },
+    { name: 'Resumen',      href: '/dashboard',                 icon: LayoutDashboard, moduleKey: null        }, // siempre visible
+    { name: 'Analytics',    href: '/dashboard/analytics',       icon: TrendingUp,      moduleKey: 'analytics' },
+    { name: 'Siigo BI',     href: '/dashboard/siigo',           icon: FileSpreadsheet, moduleKey: 'siigo_bi',        badge: 'NEW'  },
+    { name: 'Conciliación', href: '/dashboard/reconciliation',  icon: FileCheck,       moduleKey: 'reconciliation',  badge: 'DIAN' },
+    { name: 'Ventas',       href: '/dashboard/sales',           icon: ShoppingCart,    moduleKey: 'sales'     },
+    { name: 'Ecommerce',    href: '/dashboard/ecommerce',       icon: Store,           moduleKey: 'ecommerce' },
+    { name: 'Cartera',      href: '/dashboard/portfolio',       icon: Wallet,          moduleKey: 'portfolio' },
+    { name: 'Inventario',   href: '/dashboard/inventory',       icon: Package,         moduleKey: 'inventory' },
+    { name: 'Reportes',     href: '/dashboard/reports',         icon: FileText,        moduleKey: 'reports'   },
+    { name: 'Equipo',       href: '/dashboard/team',            icon: Users,           moduleKey: 'team'      },
+    { name: 'Impuestos',    href: '/dashboard/taxes',           icon: Receipt,         moduleKey: 'taxes'     },
+    { name: 'Configuración',href: '/dashboard/configuracion',   icon: Settings,        moduleKey: 'configuracion' },
 ]
 
 const mlTabs = [
-    { name: 'Pagos ML', href: '/dashboard/ml-pagos', icon: CreditCard, color: '#0F7B71' },
-    { name: 'Comisiones', href: '/dashboard/ml-comisiones', icon: Percent, color: NAVY },
-    { name: 'Devoluciones', href: '/dashboard/ml-devoluciones', icon: RotateCcw, color: '#DC2626', badge: '7' },
-    { name: 'Costos', href: '/dashboard/ml-costos', icon: DollarSign, color: '#059669' },
-    { name: 'Alertas', href: '/dashboard/ml-alertas', icon: Bell, color: '#DC2626', badge: '3' },
+    { name: 'Pagos ML',     href: '/dashboard/ml-pagos',        icon: CreditCard,  color: '#0F7B71',  moduleKey: 'ml_pagos'        },
+    { name: 'Comisiones',   href: '/dashboard/ml-comisiones',   icon: Percent,     color: NAVY,       moduleKey: 'ml_comisiones'   },
+    { name: 'Devoluciones', href: '/dashboard/ml-devoluciones', icon: RotateCcw,   color: '#DC2626',  moduleKey: 'ml_devoluciones', badge: '7' },
+    { name: 'Costos',       href: '/dashboard/ml-costos',       icon: DollarSign,  color: '#059669',  moduleKey: 'ml_costos'       },
+    { name: 'Alertas',      href: '/dashboard/ml-alertas',      icon: Bell,        color: '#DC2626',  moduleKey: 'ml_alertas',      badge: '3' },
 ]
 
 export default function TabNavigation() {
     const pathname = usePathname()
+    const { modules } = useClient()
+
+    // Filtrar tabs: siempre mostrar los de moduleKey=null (Resumen)
+    const visibleTabs  = tabs.filter(t => t.moduleKey === null || modules[t.moduleKey])
+    const visibleMlTabs = mlTabs.filter(t => modules[t.moduleKey])
+    const hasMlVisible = visibleMlTabs.length > 0
 
     return (
         <nav style={{
@@ -59,10 +67,10 @@ export default function TabNavigation() {
                     alignItems: 'stretch',
                     gap: '2px',
                     overflowX: 'auto',
-                    borderBottom: '1px solid #F0EDE8',
+                    borderBottom: hasMlVisible ? '1px solid #F0EDE8' : 'none',
                     scrollbarWidth: 'none',
                 }}>
-                    {tabs.map((tab) => {
+                    {visibleTabs.map((tab) => {
                         const isActive = pathname === tab.href
                         const Icon = tab.icon
                         return (
@@ -117,84 +125,86 @@ export default function TabNavigation() {
                     })}
                 </div>
 
-                {/* Fila 2 — Mercado Libre */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '4px 0',
-                    overflowX: 'auto',
-                    scrollbarWidth: 'none',
-                }}>
-                    <span style={{
-                        fontSize: '8px',
-                        fontWeight: 800,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        color: GOLD,
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        background: 'rgba(184,150,12,0.08)',
-                        border: `1px solid rgba(184,150,12,0.2)`,
-                        flexShrink: 0,
-                        fontFamily: 'Montserrat, Inter, sans-serif',
+                {/* Fila 2 — Mercado Libre (solo si hay módulos ML visibles) */}
+                {hasMlVisible && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 0',
+                        overflowX: 'auto',
+                        scrollbarWidth: 'none',
                     }}>
-                        Mercado Libre
-                    </span>
-                    {mlTabs.map((tab) => {
-                        const isActive = pathname === tab.href
-                        const Icon = tab.icon
-                        return (
-                            <Link key={tab.href} href={tab.href}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    padding: '4px 10px',
-                                    fontSize: '11px',
-                                    fontWeight: isActive ? 700 : 500,
-                                    fontFamily: 'Inter, sans-serif',
-                                    borderRadius: '8px',
-                                    whiteSpace: 'nowrap',
-                                    textDecoration: 'none',
-                                    flexShrink: 0,
-                                    transition: 'all 0.15s ease',
-                                    color: isActive ? '#FFFFFF' : '#6B7A8D',
-                                    background: isActive ? tab.color : 'transparent',
-                                    marginLeft: '1px',
-                                }}
-                                onMouseEnter={e => {
-                                    if (!isActive) {
-                                        const el = e.currentTarget as HTMLAnchorElement
-                                        el.style.background = '#F4F4F0'
-                                        el.style.color = NAVY
-                                    }
-                                }}
-                                onMouseLeave={e => {
-                                    if (!isActive) {
-                                        const el = e.currentTarget as HTMLAnchorElement
-                                        el.style.background = 'transparent'
-                                        el.style.color = '#6B7A8D'
-                                    }
-                                }}>
-                                <Icon style={{ width: '12px', height: '12px', color: isActive ? 'white' : tab.color, flexShrink: 0 }} />
-                                <span>{tab.name}</span>
-                                {'badge' in tab && tab.badge && (
-                                    <span style={{
-                                        padding: '1px 5px',
-                                        fontSize: '8px',
-                                        fontWeight: 800,
-                                        borderRadius: '10px',
-                                        background: isActive ? 'rgba(255,255,255,0.25)' : '#FEE2E2',
-                                        color: isActive ? 'white' : '#DC2626',
+                        <span style={{
+                            fontSize: '8px',
+                            fontWeight: 800,
+                            letterSpacing: '0.1em',
+                            textTransform: 'uppercase',
+                            color: GOLD,
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            background: 'rgba(184,150,12,0.08)',
+                            border: `1px solid rgba(184,150,12,0.2)`,
+                            flexShrink: 0,
+                            fontFamily: 'Montserrat, Inter, sans-serif',
+                        }}>
+                            Mercado Libre
+                        </span>
+                        {visibleMlTabs.map((tab) => {
+                            const isActive = pathname === tab.href
+                            const Icon = tab.icon
+                            return (
+                                <Link key={tab.href} href={tab.href}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        padding: '4px 10px',
+                                        fontSize: '11px',
+                                        fontWeight: isActive ? 700 : 500,
+                                        fontFamily: 'Inter, sans-serif',
+                                        borderRadius: '8px',
+                                        whiteSpace: 'nowrap',
+                                        textDecoration: 'none',
+                                        flexShrink: 0,
+                                        transition: 'all 0.15s ease',
+                                        color: isActive ? '#FFFFFF' : '#6B7A8D',
+                                        background: isActive ? tab.color : 'transparent',
+                                        marginLeft: '1px',
+                                    }}
+                                    onMouseEnter={e => {
+                                        if (!isActive) {
+                                            const el = e.currentTarget as HTMLAnchorElement
+                                            el.style.background = '#F4F4F0'
+                                            el.style.color = NAVY
+                                        }
+                                    }}
+                                    onMouseLeave={e => {
+                                        if (!isActive) {
+                                            const el = e.currentTarget as HTMLAnchorElement
+                                            el.style.background = 'transparent'
+                                            el.style.color = '#6B7A8D'
+                                        }
                                     }}>
-                                        {tab.badge}
-                                    </span>
-                                )}
-                            </Link>
-                        )
-                    })}
-                </div>
+                                    <Icon style={{ width: '12px', height: '12px', color: isActive ? 'white' : tab.color, flexShrink: 0 }} />
+                                    <span>{tab.name}</span>
+                                    {'badge' in tab && tab.badge && (
+                                        <span style={{
+                                            padding: '1px 5px',
+                                            fontSize: '8px',
+                                            fontWeight: 800,
+                                            borderRadius: '10px',
+                                            background: isActive ? 'rgba(255,255,255,0.25)' : '#FEE2E2',
+                                            color: isActive ? 'white' : '#DC2626',
+                                        }}>
+                                            {tab.badge}
+                                        </span>
+                                    )}
+                                </Link>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
         </nav>
     )

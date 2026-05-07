@@ -58,7 +58,7 @@ interface Profile {
     id: string; role: string; full_name?: string | null;
     company_name?: string | null; google_sheet_url?: string | null;
     phone?: string | null; tenant_id?: string | null; created_at?: string;
-    email?: string
+    email?: string; app_modules?: string[] | null;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ComponentType<{ style?: React.CSSProperties }> }> = {
@@ -557,7 +557,13 @@ function CreateCollabModal({ onClose, onCreated, onError, supabase }: {
 function EditClientModal({ client, onClose, onSaved, onError, supabase }: {
     client: Profile; onClose: () => void; onSaved: () => void; onError: (msg: string) => void; supabase: ReturnType<typeof createClient>
 }) {
-    const [form, setForm] = useState({ company_name: client.company_name || '', sheet_url: client.google_sheet_url || '', phone: client.phone || '' })
+    const defaultModules = ['dashboard', 'portfolio', 'reconciliation', 'taxes', 'reports', 'ecommerce', 'inventory', 'sales', 'siigo'];
+    const [form, setForm] = useState({ 
+        company_name: client.company_name || '', 
+        sheet_url: client.google_sheet_url || '', 
+        phone: client.phone || '',
+        app_modules: client.app_modules || defaultModules
+    })
     const [saving, setSaving] = useState(false)
     const [focused, setFocused] = useState<string | null>(null)
     const [testing, setTesting] = useState(false)
@@ -585,7 +591,13 @@ function EditClientModal({ client, onClose, onSaved, onError, supabase }: {
     const handleSave = async () => {
         setSaving(true)
         try {
-            const { error } = await supabase.from('profiles').update({ company_name: form.company_name, google_sheet_url: form.sheet_url, phone: form.phone, updated_at: new Date().toISOString() }).eq('id', client.id)
+            const { error } = await supabase.from('profiles').update({ 
+                company_name: form.company_name, 
+                google_sheet_url: form.sheet_url, 
+                phone: form.phone, 
+                app_modules: form.app_modules,
+                updated_at: new Date().toISOString() 
+            }).eq('id', client.id)
             if (error) throw error
             onSaved()
         } catch (e) {
@@ -616,7 +628,41 @@ function EditClientModal({ client, onClose, onSaved, onError, supabase }: {
                     </div>
                     {testResult && <p style={{ fontSize: 11, marginTop: 4, color: testResult.ok ? JA.GREEN : JA.RED, fontWeight: 600 }}>{testResult.msg}</p>}
                 </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div>
+                    <span style={label}>Módulos Activos</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 8 }}>
+                        {[
+                            { id: 'dashboard', name: 'Dashboard' },
+                            { id: 'portfolio', name: 'Portafolio' },
+                            { id: 'reconciliation', name: 'Conciliación' },
+                            { id: 'taxes', name: 'Impuestos' },
+                            { id: 'reports', name: 'Reportes' },
+                            { id: 'ecommerce', name: 'E-commerce' },
+                            { id: 'inventory', name: 'Inventario' },
+                            { id: 'sales', name: 'Ventas' },
+                            { id: 'siigo', name: 'Siigo Sync' },
+                        ].map(mod => (
+                            <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: JA.TEXT, cursor: 'pointer', background: '#F9F7F2', padding: '6px 8px', borderRadius: 6, border: '1px solid #E0DDD8' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={form.app_modules.includes(mod.id)} 
+                                    onChange={(e) => {
+                                        const active = e.target.checked;
+                                        setForm(prev => ({
+                                            ...prev,
+                                            app_modules: active 
+                                                ? [...prev.app_modules, mod.id] 
+                                                : prev.app_modules.filter(m => m !== mod.id)
+                                        }));
+                                    }}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                {mod.name}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
                     <button onClick={onClose} style={{ padding: '9px 18px', fontSize: 12, fontWeight: 600, borderRadius: 9, border: '1.5px solid #E0DDD8', background: '#FFF', color: JA.GREY, cursor: 'pointer' }}>Cancelar</button>
                     <button onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', fontSize: 12, fontWeight: 800, borderRadius: 9, border: 'none', background: `linear-gradient(135deg, ${JA.TEAL}, #14B8A6)`, color: '#FFF', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
                         {saving ? <Loader2 style={{ width: 13, height: 13, animation: 'spin 1s linear infinite' }} /> : <Save style={{ width: 13, height: 13 }} />}

@@ -13,8 +13,42 @@ export interface Profile {
     phone?: string | null
     tenant_id?: string | null
     ecommerce_integrations?: Record<string, unknown> | null
+    modules_enabled?: Record<string, boolean> | null
+    reconciliation_sheet_url?: string | null
+    app_modules?: string[] | null
     created_at?: string
     updated_at?: string
+}
+
+// Default: if modules_enabled is null/empty, all modules are visible
+export const DEFAULT_MODULES: Record<string, boolean> = {
+    analytics: true, siigo_bi: true, reconciliation: true,
+    sales: true, ecommerce: true, portfolio: true,
+    inventory: true, reports: true, team: true,
+    taxes: true, configuracion: true, ml_pagos: true,
+    ml_comisiones: true, ml_devoluciones: true, ml_costos: true, ml_alertas: true,
+}
+
+export function getModules(profile: Profile | null): Record<string, boolean> {
+    if (!profile) return DEFAULT_MODULES
+    // Superadmin sees everything always
+    if (profile.role === 'superadmin') return DEFAULT_MODULES
+    
+    // Check if app_modules array exists
+    if (profile.app_modules && Array.isArray(profile.app_modules)) {
+        const mods: Record<string, boolean> = {};
+        for (const key of Object.keys(DEFAULT_MODULES)) {
+            mods[key] = false;
+        }
+        for (const mod of profile.app_modules) {
+            mods[mod] = true;
+        }
+        return mods;
+    }
+    
+    // Fallback to older modules_enabled map
+    if (!profile.modules_enabled || Object.keys(profile.modules_enabled).length === 0) return DEFAULT_MODULES
+    return { ...DEFAULT_MODULES, ...profile.modules_enabled }
 }
 
 interface ClientContextType {
@@ -23,9 +57,11 @@ interface ClientContextType {
     data: ClientData | null
     loading: boolean
     profile: Profile | null
+    activeProfile: Profile | null
     allProfiles: Profile[]
     switchClient: (profile: Profile | null) => void
     isSimulating: boolean
+    modules: Record<string, boolean>
 }
 
 const ClientContext = createContext<ClientContextType | undefined>(undefined)
@@ -165,9 +201,11 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             data,
             loading,
             profile: myProfile,
+            activeProfile: activeProfile as Profile | null,
             allProfiles,
             switchClient,
-            isSimulating: !!simulatedProfile
+            isSimulating: !!simulatedProfile,
+            modules: getModules(activeProfile as Profile | null),
         }}>
             {children}
         </ClientContext.Provider>

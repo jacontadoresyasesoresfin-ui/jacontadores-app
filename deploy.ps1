@@ -1,7 +1,7 @@
 # deploy.ps1
 # Script ultra-confiable para construir y subir a la rama 'production'
 
-$repoUrl = "https://github.com/ECOMFINSAS/ecomfin-saas.git"
+$repoUrl = "https://github.com/jacontadoresyasesoresfin-ui/jacontadores-app.git"
 
 Write-Host "Realizando build del proyecto..." -ForegroundColor Cyan
 npm run build

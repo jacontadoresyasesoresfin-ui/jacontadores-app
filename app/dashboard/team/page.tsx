@@ -180,7 +180,7 @@ export default function TeamPage() {
                                                 {member.full_name || 'Sin nombre'}
                                             </p>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                                <span style={{ fontSize: '8px', fontWeight: 900, px: '6px', py: '2px', borderRadius: '1px', background: rc.bg, color: rc.color, border: `1px solid ${rc.color}30`, padding: '1px 5px' }}>
+                                                <span style={{ fontSize: '8px', fontWeight: 900, borderRadius: '1px', background: rc.bg, color: rc.color, border: `1px solid ${rc.color}30`, padding: '1px 5px' }}>
                                                     {rc.label}
                                                 </span>
                                             </div>

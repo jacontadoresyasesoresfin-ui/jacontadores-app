@@ -140,7 +140,7 @@ export default function TeamPage() {
                     {['all', 'admin', 'user'].map(rol => (
                         <button key={rol} onClick={() => setSelectedRole(rol)}
                             style={{ 
-                                padding: '6px 12px', fontSize: '10px', fontWeight: 800, borderRadius: '1px', border: 'none',
+                                padding: '6px 12px', fontSize: '10px', fontWeight: 800, borderRadius: '1px',
                                 cursor: 'pointer', transition: 'all 0.15s',
                                 background: selectedRole === rol ? JA.NAVY : JA.BG,
                                 color: selectedRole === rol ? '#FFFFFF' : JA.GREY,

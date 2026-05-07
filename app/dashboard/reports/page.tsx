@@ -10,6 +10,7 @@ const JA = {
     GOLD:    '#B8960C',
     TEXT:    '#1C2B45',
     GREY:    '#4B5563',
+    GREY_LT: '#9CA3AF',
     BORDER:  '#E5E7EB',
     BG:      '#F8FAFC',
     GREEN:   '#10B981',

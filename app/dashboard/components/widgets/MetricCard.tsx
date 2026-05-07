@@ -19,6 +19,7 @@ const JA = {
     BORDER: '#E5E7EB',
     TEXT: '#1C2B45',
     GREY: '#4B5563',
+    GREY_LT: '#9CA3AF',
     GREEN: '#10B981',
     RED: '#EF4444',
 }

@@ -52,7 +52,7 @@ const TOOLTIP_STYLE = {
     contentStyle: {
         backgroundColor: '#FFFFFF',
         border: '1.5px solid #E0DDD8',
-        borderRadius: '10px',
+        borderRadius: '2px',
         color: JA.TEXT,
         fontSize: '12px',
         fontFamily: 'Inter, sans-serif',
@@ -65,7 +65,7 @@ const AXIS_STYLE = { fill: JA.GREY_LT, fontSize: 10, fontFamily: 'Inter, sans-se
 const CARD: React.CSSProperties = {
     background: '#FFFFFF',
     border: '1.5px solid #E0DDD8',
-    borderRadius: '16px',
+    borderRadius: '2px',
     boxShadow: '0 2px 12px rgba(19,33,60,0.06)',
     padding: '22px',
 }

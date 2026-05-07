@@ -1,90 +1,103 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, TrendingDown, AlertTriangle, Archive } from 'lucide-react'
+import { Package, TrendingDown, AlertTriangle, Archive, Info } from 'lucide-react'
 import { useClient } from '../ClientContext'
+
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444'
+}
+
+const cardStyle = {
+    background: '#FFFFFF',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    padding: '20px',
+}
 
 export default function InventoryPage() {
     const { data: clientData, loading } = useClient()
 
     if (loading || !clientData) {
-        return <div className="p-8 text-[#EAECEF] flex items-center gap-3 font-sans">
-            <div className="w-5 h-5 border-2 border-[#F0B90B] border-t-transparent rounded-full animate-spin"></div>
-            Cargando Inventario...
-        </div>
+        return (
+            <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: '12px', color: JA.GREY, fontSize: '14px' }}>
+                <div style={{ width: '16px', height: '16px', border: `2px solid ${JA.BORDER}`, borderTopColor: JA.NAVY, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                Calculando proyecciones de inventario...
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+        )
     }
 
+    const stats = [
+        { label: 'Items Procesados', value: clientData.metrics.productsSold.value, sub: 'Basado en facturación', icon: Package, color: JA.NAVY },
+        { label: 'Valor Operativo', value: clientData.metrics.sales.value, sub: 'Flujo transaccionado', icon: Archive, color: JA.GREEN },
+        { label: 'Reposición Est.', value: '12', sub: 'Baja rotación detectada', icon: TrendingDown, color: JA.GOLD },
+        { label: 'Agotados (Riesgo)', value: '3', sub: 'Alerta de quiebre', icon: AlertTriangle, color: JA.RED },
+    ]
+
     return (
-        <div className="space-y-6 animate-in fade-in duration-700 font-sans">
-            <div>
-                <h1 className="text-3xl font-bold text-[#EAECEF]">Inventario (Proyección)</h1>
-                <p className="text-[#848E9C] mt-2">
-                    Análisis de stock basado en flujo de facturación histórica
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
+            {/* Header */}
+            <div style={{ borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '20px' }}>
+                <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Gestión de Inventario <span style={{ color: JA.GOLD }}>ERP</span></h1>
+                <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Análisis predictivo de stock basado en flujo de facturación histórica y rotación de activos.</p>
+            </div>
+
+            {/* KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                {stats.map((s, i) => (
+                    <div key={i} style={{ ...cardStyle, borderTop: `3px solid ${s.color}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                            <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', margin: 0 }}>{s.label}</p>
+                            <s.icon style={{ width: '14px', height: '14px', color: s.color }} />
+                        </div>
+                        <p style={{ fontSize: '18px', fontWeight: 700, color: JA.TEXT, margin: 0, fontFamily: 'monospace' }}>{s.value}</p>
+                        <p style={{ fontSize: '10px', color: JA.GREY, marginTop: '4px', margin: 0 }}>{s.sub}</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Main Analysis Area */}
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
+                    <Info style={{ width: '16px', height: '16px', color: JA.NAVY }} />
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>Estado de Sincronización de Activos</h3>
+                </div>
+
+                <div style={{ padding: '48px', border: `1px dashed ${JA.BORDER}`, background: JA.BG, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'white', border: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Archive style={{ width: '20px', height: '20px', color: JA.BORDER }} />
+                    </div>
+                    <div style={{ maxWidth: '400px' }}>
+                        <h4 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '8px' }}>Módulo en Fase de Sincronización Automatizada</h4>
+                        <p style={{ fontSize: '12px', color: JA.GREY, lineHeight: 1.6, margin: 0 }}>
+                            Estamos procesando las descripciones de ítems en tus facturas para generar un catálogo de inventario dinámico. 
+                            Este proceso permitirá calcular automáticamente el stock restante y las necesidades de reposición según tu velocidad de venta.
+                        </p>
+                    </div>
+                    <div style={{ marginTop: '12px' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '4px 12px', background: JA.NAVY, color: 'white', borderRadius: '1px' }}>
+                            PROCESANDO DATOS HISTÓRICOS...
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Additional Info */}
+            <div style={{ ...cardStyle, background: JA.BG, border: `1px solid ${JA.BORDER}` }}>
+                <p style={{ fontSize: '11px', color: JA.GREY, margin: 0, fontStyle: 'italic' }}>
+                    * El valor operativo se deriva directamente de los registros de facturación electrónica procesados en el sistema central. 
+                    Cualquier discrepancia debe ser conciliada con el módulo de compras.
                 </p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="bg-[#1E2329] border-[#2B3139] hover:border-[#F0B90B] transition-colors shadow-lg">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-[#848E9C]">Items Procesados</CardTitle>
-                        <Package className="w-4 h-4 text-[#848E9C]" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-[#EAECEF]">{clientData.metrics.productsSold.value}</div>
-                        <p className="text-xs text-[#848E9C]">Basado en facturas</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-[#1E2329] border-[#2B3139] hover:border-[#0ECB81] transition-colors shadow-lg">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-[#848E9C]">Valor Operativo</CardTitle>
-                        <Archive className="w-4 h-4 text-[#0ECB81]" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-[#EAECEF]">{clientData.metrics.sales.value}</div>
-                        <p className="text-xs text-[#0ECB81]">Volumen transaccionado</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-[#1E2329] border-[#2B3139] hover:border-[#F0B90B] transition-colors shadow-lg">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-[#848E9C]">Reposición Est.</CardTitle>
-                        <TrendingDown className="w-4 h-4 text-[#F0B90B]" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-[#F0B90B]">12</div>
-                        <p className="text-xs text-[#848E9C]">Detección de baja rotación</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-[#1E2329] border-[#2B3139] hover:border-[#F6465D] transition-colors shadow-lg">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-[#848E9C]">Agotados</CardTitle>
-                        <AlertTriangle className="w-4 h-4 text-[#F6465D]" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-[#F6465D]">3</div>
-                        <p className="text-xs text-[#848E9C]">Alerta de quiebre</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <Card className="bg-[#1E2329] border-[#2B3139] shadow-xl">
-                <CardHeader>
-                    <CardTitle className="text-[#EAECEF]">Inteligencia de Inventario</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <div className="p-6 border-2 border-dashed border-[#2B3139] rounded-xl flex flex-col items-center justify-center text-center">
-                            <Archive className="w-12 h-12 text-[#2B3139] mb-4" />
-                            <h3 className="text-[#EAECEF] font-bold mb-2">Módulo en Sincronización</h3>
-                            <p className="text-[#848E9C] text-sm max-w-md">
-                                Estamos vinculando las descripciones de productos de tus facturas para generar un inventario automático basado en la rotación de ventas.
-                            </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     )
 }
+

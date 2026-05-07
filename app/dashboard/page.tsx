@@ -8,37 +8,38 @@ import {
     CartesianGrid, BarChart, Bar, Cell
 } from 'recharts'
 
-const PRIMARY = '#0F172A'    // Deep Slate / Navy
-const SECONDARY = '#334155'  // Slate
-const ACCENT = '#3B82F6'     // Professional Blue
-const GREEN = '#059669'      // Muted Emerald
-const RED = '#DC2626'        // Muted Red
-
-// Mapeo retrocompatible para evitar errores en el archivo
-const TEAL = PRIMARY
-const NAVY = SECONDARY
-const GOLD = ACCENT
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    GREY_LT: '#9CA3AF',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444',
+}
 
 const TOOLTIP_STYLE = {
     contentStyle: {
         backgroundColor: '#FFFFFF',
-        border: '1px solid #E2E8F0',
-        borderRadius: '8px',
-        color: '#0F172A',
-        fontSize: '12px',
-        boxShadow: '0 4px 16px rgba(15,23,42,0.08)',
+        border: `1px solid ${JA.BORDER}`,
+        borderRadius: '2px',
+        color: JA.TEXT,
+        fontSize: '11px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
     },
-    cursor: { fill: 'rgba(15,23,42,0.03)' }
+    cursor: { fill: 'rgba(19,33,60,0.03)' }
 }
 
-const AXIS_STYLE = { fill: '#64748B', fontSize: 11, fontFamily: 'var(--font-inter)' }
+const AXIS_STYLE = { fill: JA.GREY, fontSize: 10, fontFamily: 'Inter, sans-serif' }
 
 const cardStyle = {
     background: '#FFFFFF',
-    border: '1px solid #E2E8F0',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-    padding: '24px',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    padding: '20px',
 }
 
 export default function DashboardPage() {
@@ -46,9 +47,10 @@ export default function DashboardPage() {
 
     if (loading || !clientData) {
         return (
-            <div className="p-8 flex items-center gap-3 text-slate-600">
-                <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: `${TEAL}40`, borderTopColor: TEAL }} />
-                Cargando datos del cliente...
+            <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: '12px', color: JA.GREY, fontSize: '14px' }}>
+                <div style={{ width: '16px', height: '16px', border: `2px solid ${JA.BORDER}`, borderTopColor: JA.NAVY, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                Sincronizando datos corporativos...
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
         )
     }
@@ -59,18 +61,18 @@ export default function DashboardPage() {
     }))
 
     const topClientsData = clientData.topClients.map(c => ({
-        name: c.name.length > 16 ? c.name.substring(0, 16) + '…' : c.name,
+        name: c.name.length > 14 ? c.name.substring(0, 14) + '…' : c.name,
         amount: Math.round(c.amount),
         percent: c.percent
     }))
 
-    const barColors = [TEAL, NAVY, GOLD, GREEN, '#8B5CF6']
+    const barColors = [JA.NAVY, '#1C3460', '#2B4A8C', '#3A60B8', '#4976E4']
 
     return (
-        <div className="space-y-6 pb-8" style={{ fontFamily: 'var(--font-inter)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
 
             {/* ── Métricas Principales ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                 <MetricCard
                     title={clientData.metrics.sales.title}
                     value={clientData.metrics.sales.value}
@@ -79,7 +81,7 @@ export default function DashboardPage() {
                     icon={DollarSign}
                     trend={clientData.metrics.sales.trend}
                     sparklineData={clientData.metrics.sales.sparklineData}
-                    accentColor={TEAL}
+                    accentColor={JA.NAVY}
                 />
                 <MetricCard
                     title={clientData.metrics.newClients.title}
@@ -89,7 +91,7 @@ export default function DashboardPage() {
                     icon={Users}
                     trend={clientData.metrics.newClients.trend}
                     sparklineData={clientData.metrics.newClients.sparklineData}
-                    accentColor={NAVY}
+                    accentColor={JA.NAVY}
                 />
                 <MetricCard
                     title={clientData.metrics.overdue.title}
@@ -99,7 +101,7 @@ export default function DashboardPage() {
                     icon={Wallet}
                     trend={clientData.metrics.overdue.trend}
                     sparklineData={clientData.metrics.overdue.sparklineData}
-                    accentColor={RED}
+                    accentColor={JA.RED}
                 />
                 <MetricCard
                     title={clientData.metrics.productsSold.title}
@@ -109,92 +111,62 @@ export default function DashboardPage() {
                     icon={Package}
                     trend={clientData.metrics.productsSold.trend}
                     sparklineData={clientData.metrics.productsSold.sparklineData}
-                    accentColor={GOLD}
+                    accentColor={JA.GOLD}
                 />
             </div>
 
             {/* ── Gráficas principales ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px' }}>
 
                 {/* Área: Ventas */}
-                <div className="lg:col-span-2" style={cardStyle}>
-                    <div className="flex items-center justify-between mb-4">
+                <div style={{ ...cardStyle, gridColumn: 'span 2' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                         <div>
-                            <h3 className="font-bold text-slate-800 text-sm">Ventas Últimos 30 Días</h3>
-                            <p className="text-xs text-slate-400 mt-0.5">Histórico de facturación · COP</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            {['30D', '7D', '24H'].map((p, i) => (
-                                <button key={p} className="px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors"
-                                    style={i === 0
-                                        ? { background: TEAL, color: 'white' }
-                                        : { background: '#F1F5F9', color: '#64748B' }}>
-                                    {p}
-                                </button>
-                            ))}
+                            <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>Ventas Últimos 30 Días</h3>
+                            <p style={{ fontSize: '11px', color: JA.GREY, marginTop: '2px' }}>Análisis de facturación mensual en COP</p>
                         </div>
                     </div>
                     {salesData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={220}>
-                            <AreaChart data={salesData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor={TEAL} stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor={TEAL} stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                                <XAxis dataKey="day" tick={AXIS_STYLE} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                                <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false}
-                                    tickFormatter={(v) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
-                                    width={48} />
-                                <Tooltip {...TOOLTIP_STYLE}
-                                    formatter={(v: any) => [`$${Number(v).toLocaleString('es-CO')}`, 'Total']}
-                                    labelStyle={{ color: '#1E293B', fontWeight: 'bold' }} />
-                                <Area type="monotone" dataKey="value" stroke={TEAL} strokeWidth={2.5}
-                                    fill="url(#gTeal)" dot={false}
-                                    activeDot={{ r: 5, fill: TEAL, strokeWidth: 0, stroke: 'white' }} />
+                        <ResponsiveContainer width="100%" height={240}>
+                            <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={JA.BORDER} vertical={false} />
+                                <XAxis dataKey="day" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+                                <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} width={40}
+                                    tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                                <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [`$${Number(v).toLocaleString()}`, 'Total']} />
+                                <Area type="monotone" dataKey="value" stroke={JA.NAVY} strokeWidth={2} fill={JA.NAVY} fillOpacity={0.05} dot={false} />
                             </AreaChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
-                            Sin datos de ventas disponibles
+                        <div style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: JA.GREY_LT, fontSize: '13px' }}>
+                            Sin datos registrados
                         </div>
                     )}
                 </div>
 
                 {/* Top Clientes */}
                 <div style={cardStyle}>
-                    <div className="mb-4">
-                        <h3 className="font-bold text-slate-800 text-sm">Top Clientes</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Por facturación total</p>
+                    <div style={{ marginBottom: '20px' }}>
+                        <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>Distribución por Clientes</h3>
+                        <p style={{ fontSize: '11px', color: JA.GREY, marginTop: '2px' }}>Principales cuentas por volumen</p>
                     </div>
                     {topClientsData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={topClientsData} layout="vertical"
-                                margin={{ top: 5, right: 12, left: 0, bottom: 0 }} barSize={10}>
-                                <XAxis type="number" tick={AXIS_STYLE} axisLine={false} tickLine={false}
-                                    tickFormatter={(v) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}M` : `${(v / 1000).toFixed(0)}K`} />
-                                <YAxis type="category" dataKey="name" tick={AXIS_STYLE} axisLine={false} tickLine={false} width={90} />
-                                <Tooltip {...TOOLTIP_STYLE}
-                                    formatter={(v: any) => [`$${Number(v).toLocaleString('es-CO')}`, 'Total']}
-                                    labelStyle={{ color: '#1E293B', fontWeight: 'bold' }} />
-                                <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
+                        <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={topClientsData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }} barSize={12}>
+                                <XAxis type="number" hide />
+                                <YAxis type="category" dataKey="name" tick={AXIS_STYLE} axisLine={false} tickLine={false} width={100} />
+                                <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [`$${Number(v).toLocaleString()}`, 'Total']} />
+                                <Bar dataKey="amount" radius={[0, 2, 2, 0]}>
                                     {topClientsData.map((_, i) => (
-                                        <Cell key={i} fill={barColors[i % barColors.length]} fillOpacity={1 - i * 0.08} />
+                                        <Cell key={i} fill={barColors[i % barColors.length]} />
                                     ))}
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div className="space-y-3 pt-2">
-                            {[...Array(3)].map((_, i) => (
-                                <div key={i} className="space-y-1">
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-400">Sin datos</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-100 rounded-full" />
-                                </div>
+                        <div style={{ height: '240px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px' }}>
+                            {[1, 2, 3].map(i => (
+                                <div key={i} style={{ height: '12px', background: JA.BG, borderRadius: '1px' }} />
                             ))}
                         </div>
                     )}
@@ -202,87 +174,62 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Segunda fila ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px' }}>
 
-                {/* Estado de Cartera */}
+                {/* Cartera */}
                 <div style={cardStyle}>
-                    <h3 className="font-bold text-slate-800 text-sm mb-4">Estado de Cartera</h3>
-                    <div className="flex flex-col md:flex-row items-center gap-6">
-                        {/* Donut */}
-                        <div className="relative w-36 h-36 flex-shrink-0">
-                            <svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full">
-                                <circle cx="50" cy="50" r="40" fill="none" stroke="#F1F5F9" strokeWidth="12" />
-                                <circle cx="50" cy="50" r="40" fill="none" stroke={TEAL} strokeWidth="13"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${(clientData.portfolio.current.percent * 251.3) / 100} 251.3`}
-                                    className="transition-all duration-1000 ease-out" />
-                                <circle cx="50" cy="50" r="40" fill="none" stroke={GOLD} strokeWidth="13"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${(clientData.portfolio.dueSoon.percent * 251.3) / 100} 251.3`}
-                                    strokeDashoffset={`-${(clientData.portfolio.current.percent * 251.3) / 100}`}
-                                    className="transition-all duration-1000 delay-300 ease-out" />
-                                <circle cx="50" cy="50" r="40" fill="none" stroke={RED} strokeWidth="13"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${(clientData.portfolio.overdue.percent * 251.3) / 100} 251.3`}
-                                    strokeDashoffset={`-${((clientData.portfolio.current.percent + clientData.portfolio.dueSoon.percent) * 251.3) / 100}`}
-                                    className="transition-all duration-1000 delay-500 ease-out" />
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '20px' }}>Estado de Cartera</h3>
+                    <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                        <div style={{ width: '120px', height: '120px', position: 'relative' }}>
+                            <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+                                <circle cx="50" cy="50" r="40" fill="none" stroke={JA.BG} strokeWidth="10" />
+                                <circle cx="50" cy="50" r="40" fill="none" stroke={JA.GREEN} strokeWidth="10"
+                                    strokeDasharray={`${(clientData.portfolio.current.percent * 251) / 100} 251`} />
+                                <circle cx="50" cy="50" r="40" fill="none" stroke={JA.RED} strokeWidth="10"
+                                    strokeDasharray={`${(clientData.portfolio.overdue.percent * 251) / 100} 251`}
+                                    strokeDashoffset={`-${((clientData.portfolio.current.percent + clientData.portfolio.dueSoon.percent) * 251) / 100}`} />
                             </svg>
-                            <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                <span className="text-xl font-black text-slate-800">
-                                    {clientData.portfolio.current.percent + clientData.portfolio.dueSoon.percent}%
-                                </span>
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-teal-600">Saludable</span>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '16px', fontWeight: 700, color: JA.TEXT }}>{clientData.portfolio.current.percent}%</span>
+                                <span style={{ fontSize: '8px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase' }}>Al día</span>
                             </div>
                         </div>
-
-                        {/* Detalle */}
-                        <div className="flex-1 w-full space-y-2">
-                            <div className="p-3 rounded-xl mb-3" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest mb-0.5">Cartera Total</p>
-                                <p className="text-xl font-black text-slate-800">{clientData.portfolio.total}</p>
-                            </div>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {[
-                                { label: 'Al Día', data: clientData.portfolio.current, color: TEAL },
-                                { label: 'Por Vencer (7d)', data: clientData.portfolio.dueSoon, color: GOLD },
-                                { label: 'Vencida', data: clientData.portfolio.overdue, color: RED },
+                                { label: 'Vigente', color: JA.GREEN, val: clientData.portfolio.current.value },
+                                { label: 'Vencida', color: JA.RED, val: clientData.portfolio.overdue.value },
+                                { label: 'Total', color: JA.NAVY, val: clientData.portfolio.total }
                             ].map((item, i) => (
-                                <div key={i} className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-slate-50 transition-colors">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: item.color }} />
-                                        <div>
-                                            <p className="text-xs font-bold text-slate-700">{item.label}</p>
-                                            <p className="text-[10px] text-slate-400">{item.data.value}</p>
-                                        </div>
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${JA.BG}`, paddingBottom: '4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '1px', background: item.color }} />
+                                        <span style={{ fontSize: '11px', color: JA.GREY }}>{item.label}</span>
                                     </div>
-                                    <span className="text-xs font-black" style={{ color: item.color }}>{item.data.percent}%</span>
+                                    <span style={{ fontSize: '11px', fontWeight: 600, color: JA.TEXT }}>{item.val}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                {/* Actividad Reciente */}
+                {/* Actividad */}
                 <div style={cardStyle}>
-                    <h3 className="font-bold text-slate-800 text-sm mb-4">Actividad Reciente</h3>
-                    <div className="space-y-3">
-                        {clientData.recentActivity.length > 0 ? clientData.recentActivity.map((activity, i) => (
-                            <div key={i} className="flex items-start gap-3 pb-3 border-b border-slate-50 last:border-0 last:pb-0">
-                                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                                    style={{ background: `${TEAL}15` }}>
-                                    <div className="w-2 h-2 rounded-full" style={{ background: TEAL }} />
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '20px' }}>Historial Operativo</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {clientData.recentActivity.length > 0 ? clientData.recentActivity.slice(0, 5).map((activity, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: JA.BG, borderLeft: `3px solid ${JA.NAVY}` }}>
+                                <div>
+                                    <p style={{ fontSize: '11px', fontWeight: 600, color: JA.TEXT, margin: 0 }}>{activity.text}</p>
+                                    <p style={{ fontSize: '10px', color: JA.GREY, margin: 0 }}>{activity.client}</p>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-slate-700">{activity.text}</p>
-                                    <p className="text-xs text-slate-400 truncate">{activity.client}</p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                    <p className="text-sm font-bold font-mono" style={{ color: TEAL }}>{activity.amount}</p>
-                                    <p className="text-xs text-slate-400">{activity.time}</p>
+                                <div style={{ textAlign: 'right' }}>
+                                    <p style={{ fontSize: '11px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>{activity.amount}</p>
+                                    <p style={{ fontSize: '10px', color: JA.GREY_LT, margin: 0 }}>{activity.time}</p>
                                 </div>
                             </div>
                         )) : (
-                            <div className="text-center py-8 text-slate-400 text-sm">
-                                Sin actividad reciente registrada
+                            <div style={{ textAlign: 'center', padding: '32px', color: JA.GREY_LT, fontSize: '12px' }}>
+                                Sin actividad reciente
                             </div>
                         )}
                     </div>
@@ -291,3 +238,4 @@ export default function DashboardPage() {
         </div>
     )
 }
+

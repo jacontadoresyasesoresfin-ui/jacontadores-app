@@ -111,14 +111,13 @@ export const fetchClientData = async (clientName: string, googleSheetUrl: string
                 complete: (results) => {
                     const rows = results.data as Record<string, unknown>[]
 
-                    // Filtrar por empresa (Emisor o Receptor)
+                    // Cada empresa tiene su propio Sheet privado (google_sheet_url en su perfil).
+                    // NO filtramos por nombre ya que el Sheet ya pertenece exclusivamente a esa empresa.
+                    // Filtro por nombre solo aplica para el modo "demo" heredado.
                     const normalizedSearch = clientName.toLowerCase().trim()
-                const filteredRows = (normalizedSearch === 'empresa demo' || normalizedSearch === '')
-                    ? rows
-                    : rows.filter(row =>
-                        String(row['Nombre Emisor'] || '').toLowerCase().includes(normalizedSearch) ||
-                        String(row['Nombre Receptor'] || '').toLowerCase().includes(normalizedSearch)
-                    )
+                    const filteredRows = normalizedSearch === 'empresa demo'
+                        ? rows.slice(0, 50) // demo: limitar a 50 filas de muestra
+                        : rows // datos completos del Sheet privado de la empresa
 
                 let totalSales = 0
                 const dateAggregation: Record<string, number> = {}

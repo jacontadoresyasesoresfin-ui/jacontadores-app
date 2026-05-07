@@ -1,8 +1,28 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertTriangle, TrendingDown, TrendingUp, RotateCcw, Receipt, Bell, CheckCircle, XCircle, ExternalLink } from 'lucide-react'
+import { AlertTriangle, TrendingDown, TrendingUp, RotateCcw, Receipt, Bell, CheckCircle, XCircle, ExternalLink, Info, AlertCircle } from 'lucide-react'
+
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    GREY_LT: '#9CA3AF',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444',
+    BLUE:    '#3B82F6'
+}
+
+const cardStyle = {
+    background: '#FFFFFF',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    padding: '20px',
+}
 
 const IVA_ACUMULADO = 45800000
 const IVA_UMBRAL = 92000000
@@ -35,80 +55,71 @@ const ALERTAS: Alerta[] = [
     {
         id: 'iva-umbral',
         tipo: 'warning',
-        titulo: 'Estás acercándote al umbral de responsabilidad IVA',
-        descripcion: `Tus ingresos acumulados son ${(IVA_ACUMULADO / 1000000).toFixed(1)}M COP. El umbral para ser responsable de IVA es aproximadamente ${(IVA_UMBRAL / 1000000).toFixed(0)}M COP. Tienes margen pero debes monitorearlo mensualmente.`,
-        valor: `${((IVA_ACUMULADO / IVA_UMBRAL) * 100).toFixed(0)}% del umbral`,
+        titulo: 'Umbral de Responsabilidad IVA',
+        descripcion: `Tus ingresos acumulados son ${(IVA_ACUMULADO / 1000000).toFixed(1)}M COP. El umbral para ser responsable de IVA es aproximadamente ${(IVA_UMBRAL / 1000000).toFixed(0)}M COP.`,
+        valor: `${((IVA_ACUMULADO / IVA_UMBRAL) * 100).toFixed(0)}% DEL TOPE`,
         activa: IVA_ACUMULADO > IVA_UMBRAL * 0.8,
-        accion: 'Ver módulo Impuestos'
+        accion: 'GESTIONAR IMPUESTOS'
     },
     {
         id: 'comisiones-altas',
         tipo: 'danger',
-        titulo: 'Tus comisiones superan el 20% de las ventas',
-        descripcion: `Las comisiones de Mercado Libre representan el ${COMISIONES_PCT}% de tus ventas brutas. Lo ideal es mantenerlas bajo el 20%. Considera optimizar tu precio de venta o activar publicidad más eficiente.`,
-        valor: `${COMISIONES_PCT}% de comisión total`,
+        titulo: 'Exceso de Comisiones de Plataforma',
+        descripcion: `Las comisiones de Mercado Libre representan el ${COMISIONES_PCT}% de tus ventas brutas. El estándar corporativo es mantener este indicador bajo el 20%.`,
+        valor: `${COMISIONES_PCT}% COMISIÓN`,
         activa: COMISIONES_PCT > 20,
-        accion: 'Ver módulo de Comisiones'
+        accion: 'AUDITAR COMISIONES'
     },
     {
         id: 'devoluciones-altas',
         tipo: 'danger',
-        titulo: 'Tienes un porcentaje alto de devoluciones',
-        descripcion: `Tu tasa de devoluciones es del ${DEVOLUCIONES_PCT}%. Mercado Libre puede suspender publicaciones si supera el 10%. Revisa los motivos más frecuentes en el módulo de Devoluciones.`,
-        valor: `${DEVOLUCIONES_PCT}% tasa de devolución`,
+        titulo: 'Tasa de Devolución Crítica',
+        descripcion: `Tu tasa de devoluciones es del ${DEVOLUCIONES_PCT}%. Existe riesgo inminente de penalización en el posicionamiento de tus publicaciones.`,
+        valor: `${DEVOLUCIONES_PCT}% DEVOLUCIÓN`,
         activa: DEVOLUCIONES_PCT > 5,
-        accion: 'Ver Devoluciones y Reclamos'
+        accion: 'REVISAR RECLAMOS'
     },
     {
         id: 'utilidad-bajando',
         tipo: 'warning',
-        titulo: 'Tus utilidades están bajando este mes',
-        descripcion: `Tu utilidad real cayó un ${Math.abs(TENDENCIA_UTILIDAD)}% comparado con el mes anterior. Esto puede deberse a mayor competencia, aumento de costos o más devoluciones. Revisa tu estructura de costos.`,
-        valor: `${TENDENCIA_UTILIDAD}% vs mes anterior`,
+        titulo: 'Contracción de Margen Neto',
+        descripcion: `Tu utilidad real cayó un ${Math.abs(TENDENCIA_UTILIDAD)}% comparado con el mes anterior. Se requiere auditoría de costos unitarios.`,
+        valor: `${TENDENCIA_UTILIDAD}% VS ANTERIOR`,
         activa: TENDENCIA_UTILIDAD < -5,
-        accion: 'Ver Costos del Producto'
+        accion: 'AUDITAR COSTOS'
     },
     {
         id: 'declaracion-impuestos',
         tipo: 'info',
-        titulo: 'Debes declarar impuestos este mes',
-        descripcion: 'Según el calendario DIAN 2025, tienes obligaciones tributarias próximas. Revisa el módulo de Impuestos para ver el detalle del IVA, ReteFuente y ReteICA acumulados.',
-        valor: 'Vence el 15 de marzo',
+        titulo: 'Vencimiento Tributario Próximo',
+        descripcion: 'Según el calendario DIAN 2025, tienes obligaciones tributarias próximas de IVA y ReteFuente.',
+        valor: 'VENCE: 15 MAR',
         activa: MES_DECLARACION,
-        accion: 'Ver Módulo Impuestos'
+        accion: 'VER CALENDARIO'
     },
     {
         id: 'reputacion-ok',
         tipo: 'success',
-        titulo: 'Tu reputación en Mercado Libre es positiva',
-        descripcion: 'Tu nivel de reputación está en verde. Mantén tiempos de envío cortos y responde rápido los reclamos para conservarlo.',
-        valor: 'Nivel: Verde',
+        titulo: 'Estado de Reputación: Óptimo',
+        descripcion: 'Tu nivel de reputación corporativa en Mercado Libre se mantiene en verde. Continúa con los estándares actuales.',
+        valor: 'NIVEL: VERDE',
         activa: true,
-        accion: 'Ver Ecommerce Hub'
-    },
-    {
-        id: 'full-disponible',
-        tipo: 'info',
-        titulo: 'Considera activar Mercado Libre Full',
-        descripcion: 'Tus productos más vendidos (Auriculares Bluetooth y Teclado Mecánico) tienen alta demanda. Activar Full puede reducir tiempos de entrega y mejorar tu reputación.',
-        valor: 'Potencial +35% ventas',
-        activa: true,
-        accion: 'Ver Ecommerce Hub'
+        accion: 'VER MÉTRICAS'
     },
 ]
 
 const TIPO_CONFIG = {
-    danger: { bg: 'bg-[#F6465D]/10', border: 'border-[#F6465D]/30', icon: XCircle, iconColor: 'text-[#F6465D]', badge: 'bg-[#F6465D] text-white' },
-    warning: { bg: 'bg-[#F0B90B]/10', border: 'border-[#F0B90B]/30', icon: AlertTriangle, iconColor: 'text-[#F0B90B]', badge: 'bg-[#F0B90B] text-[#0B0E11]' },
-    info: { bg: 'bg-[#5B8DEF]/10', border: 'border-[#5B8DEF]/30', icon: Bell, iconColor: 'text-[#5B8DEF]', badge: 'bg-[#5B8DEF] text-white' },
-    success: { bg: 'bg-[#0ECB81]/10', border: 'border-[#0ECB81]/30', icon: CheckCircle, iconColor: 'text-[#0ECB81]', badge: 'bg-[#0ECB81] text-[#0B0E11]' },
+    danger: { color: JA.RED, icon: XCircle, bg: JA.RED + '08', border: JA.RED + '20' },
+    warning: { color: JA.GOLD, icon: AlertTriangle, bg: JA.GOLD + '08', border: JA.GOLD + '20' },
+    info: { color: JA.BLUE, icon: Bell, bg: JA.BLUE + '08', border: JA.BLUE + '20' },
+    success: { color: JA.GREEN, icon: CheckCircle, bg: JA.GREEN + '08', border: JA.GREEN + '20' },
 }
 
 const KPI_ALERTAS = [
-    { label: 'Alertas Críticas', value: ALERTAS.filter(a => a.tipo === 'danger' && a.activa).length, color: '#F6465D', icon: XCircle },
-    { label: 'Advertencias', value: ALERTAS.filter(a => a.tipo === 'warning' && a.activa).length, color: '#F0B90B', icon: AlertTriangle },
-    { label: 'Informativas', value: ALERTAS.filter(a => a.tipo === 'info' && a.activa).length, color: '#5B8DEF', icon: Bell },
-    { label: 'Estado Positivo', value: ALERTAS.filter(a => a.tipo === 'success' && a.activa).length, color: '#0ECB81', icon: CheckCircle },
+    { label: 'Alertas Críticas', value: ALERTAS.filter(a => a.tipo === 'danger' && a.activa).length, color: JA.RED, icon: XCircle },
+    { label: 'Advertencias', value: ALERTAS.filter(a => a.tipo === 'warning' && a.activa).length, color: JA.GOLD, icon: AlertTriangle },
+    { label: 'Informativas', value: ALERTAS.filter(a => a.tipo === 'info' && a.activa).length, color: JA.BLUE, icon: Bell },
+    { label: 'Estado Salud', value: ALERTAS.filter(a => a.tipo === 'success' && a.activa).length, color: JA.GREEN, icon: CheckCircle },
 ]
 
 const COP_M = (n: number) => `$${(n / 1000000).toFixed(1)}M`
@@ -117,110 +128,116 @@ export default function AlertasPage() {
     const alertasActivas = ALERTAS.filter(a => a.activa)
 
     return (
-        <div className="space-y-6 pb-10 font-sans animate-in fade-in duration-500">
-            <div>
-                <h1 className="text-2xl font-bold text-[#EAECEF]">
-                    Centro de <span className="text-[#F0B90B]">Alertas</span>
-                </h1>
-                <p className="text-[#848E9C] text-sm mt-1">Monitoreo inteligente de tu negocio en Mercado Libre</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '20px' }}>
+                <div>
+                    <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Centro de <span style={{ color: JA.GOLD }}>Control de Riesgos</span></h1>
+                    <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Monitoreo preventivo de métricas de cumplimiento y rentabilidad operativa.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{
+                        padding: '8px 16px', fontSize: '11px', fontWeight: 700, border: `1px solid ${JA.BORDER}`,
+                        background: 'white', color: JA.TEXT, borderRadius: '2px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px'
+                    }}>
+                        <Info style={{ width: '14px', height: '14px', color: JA.GOLD }} />
+                        REPORTE DE INCIDENCIAS
+                    </button>
+                </div>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                 {KPI_ALERTAS.map((kpi, i) => (
-                    <Card key={i} className="bg-[#1E2329] border-[#2B3139]">
-                        <CardContent className="pt-4 pb-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} />
-                                <p className="text-[#848E9C] text-[10px] uppercase font-bold tracking-wider">{kpi.label}</p>
-                            </div>
-                            <p className="font-black text-3xl" style={{ color: kpi.color }}>{kpi.value}</p>
-                        </CardContent>
-                    </Card>
+                    <div key={i} style={{ ...cardStyle, borderLeft: `4px solid ${kpi.color}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', margin: 0 }}>{kpi.label}</p>
+                            <kpi.icon style={{ width: '12px', height: '12px', color: kpi.color }} />
+                        </div>
+                        <p style={{ fontSize: '24px', fontWeight: 800, color: JA.TEXT, margin: 0, fontFamily: 'monospace' }}>{kpi.value}</p>
+                    </div>
                 ))}
             </div>
 
-            {/* Barómetro IVA */}
-            <Card className="bg-[#1E2329] border-[#2B3139]">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-[#EAECEF] text-sm flex items-center gap-2">
-                        <Receipt className="w-4 h-4 text-[#F0B90B]" /> Barómetro IVA — Umbral de Responsabilidad
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    <div className="flex justify-between text-sm mb-2">
-                        <span className="text-[#848E9C]">Ingresos acumulados: <strong className="text-[#EAECEF]">{COP_M(IVA_ACUMULADO)}</strong></span>
-                        <span className="text-[#848E9C]">Umbral: <strong className="text-[#F0B90B]">{COP_M(IVA_UMBRAL)}</strong></span>
-                    </div>
-                    <div className="w-full bg-[#2B3139] rounded-full h-4 overflow-hidden">
-                        <div className="h-4 rounded-full transition-all duration-1000"
-                            style={{
-                                width: `${Math.min((IVA_ACUMULADO / IVA_UMBRAL) * 100, 100)}%`,
-                                background: IVA_ACUMULADO > IVA_UMBRAL * 0.9 ? '#F6465D' : IVA_ACUMULADO > IVA_UMBRAL * 0.75 ? '#F0B90B' : '#0ECB81'
-                            }} />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-[#848E9C]">
-                        <span>$0</span>
-                        <span className="text-[#F0B90B]">⚠ Zona de riesgo (75%)</span>
-                        <span>{COP_M(IVA_UMBRAL)}</span>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* KPIs de negocio */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className={`bg-[#1E2329] ${COMISIONES_PCT > 20 ? 'border-[#F6465D]/40' : 'border-[#2B3139]'}`}>
-                    <CardContent className="pt-4 pb-3">
-                        <div className="flex items-center gap-2 mb-1"><TrendingDown className="w-4 h-4 text-[#F0B90B]" /><p className="text-[#848E9C] text-xs uppercase font-bold">% Comisiones / Ventas</p></div>
-                        <p className={`font-black text-2xl ${COMISIONES_PCT > 20 ? 'text-[#F6465D]' : 'text-[#0ECB81]'}`}>{COMISIONES_PCT}%</p>
-                        <p className="text-[#848E9C] text-xs">Objetivo: menor al 20%</p>
-                    </CardContent>
-                </Card>
-                <Card className={`bg-[#1E2329] ${DEVOLUCIONES_PCT > 5 ? 'border-[#F6465D]/40' : 'border-[#2B3139]'}`}>
-                    <CardContent className="pt-4 pb-3">
-                        <div className="flex items-center gap-2 mb-1"><RotateCcw className="w-4 h-4 text-[#F6465D]" /><p className="text-[#848E9C] text-xs uppercase font-bold">% Devoluciones</p></div>
-                        <p className={`font-black text-2xl ${DEVOLUCIONES_PCT > 5 ? 'text-[#F6465D]' : 'text-[#0ECB81]'}`}>{DEVOLUCIONES_PCT}%</p>
-                        <p className="text-[#848E9C] text-xs">Límite ML: 10%</p>
-                    </CardContent>
-                </Card>
-                <Card className={`bg-[#1E2329] ${TENDENCIA_UTILIDAD < 0 ? 'border-[#F6465D]/40' : 'border-[#2B3139]'}`}>
-                    <CardContent className="pt-4 pb-3">
-                        <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-4 h-4 text-[#F0B90B]" /><p className="text-[#848E9C] text-xs uppercase font-bold">Tendencia Utilidad</p></div>
-                        <p className={`font-black text-2xl ${TENDENCIA_UTILIDAD < 0 ? 'text-[#F6465D]' : 'text-[#0ECB81]'}`}>{TENDENCIA_UTILIDAD}%</p>
-                        <p className="text-[#848E9C] text-xs">vs mes anterior</p>
-                    </CardContent>
-                </Card>
+            {/* IVA Barometer */}
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Receipt style={{ width: '16px', height: '16px', color: JA.GOLD }} /> BARÓMETRO DE RESPONSABILIDAD TRIBUTARIA
+                    </h3>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '8px' }}>
+                    <span style={{ color: JA.GREY }}>Acumulado Ventas 2025: <strong style={{ color: JA.NAVY }}>{COP_M(IVA_ACUMULADO)}</strong></span>
+                    <span style={{ color: JA.GREY }}>Límite de Régimen: <strong style={{ color: JA.GOLD }}>{COP_M(IVA_UMBRAL)}</strong></span>
+                </div>
+                <div style={{ width: '100%', background: JA.BG, height: '12px', borderRadius: '1px', overflow: 'hidden', display: 'flex' }}>
+                    <div style={{
+                        width: `${Math.min((IVA_ACUMULADO / IVA_UMBRAL) * 100, 100)}%`,
+                        background: IVA_ACUMULADO > IVA_UMBRAL * 0.85 ? JA.RED : IVA_ACUMULADO > IVA_UMBRAL * 0.7 ? JA.GOLD : JA.GREEN,
+                        height: '100%',
+                        transition: 'width 1s ease-in-out'
+                    }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT }}>$0</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: JA.GOLD }}>ADVERTENCIA (70%)</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: JA.RED }}>TOPE CRÍTICO</span>
+                </div>
             </div>
 
-            {/* Lista de alertas */}
-            <div className="space-y-3">
-                <h2 className="text-[#EAECEF] font-bold text-sm">Alertas activas ({alertasActivas.length})</h2>
+            {/* Metrics Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                {[
+                    { label: 'Margen de Intermediación', value: `${COMISIONES_PCT}%`, color: COMISIONES_PCT > 20 ? JA.RED : JA.GREEN, icon: TrendingDown, target: 'MÁX 20%' },
+                    { label: 'Incidencia de Retorno', value: `${DEVOLUCIONES_PCT}%`, color: DEVOLUCIONES_PCT > 5 ? JA.RED : JA.GREEN, icon: RotateCcw, target: 'LÍMITE 10%' },
+                    { label: 'Evolución de Rentabilidad', value: `${TENDENCIA_UTILIDAD}%`, color: TENDENCIA_UTILIDAD < 0 ? JA.RED : JA.GREEN, icon: TrendingUp, target: 'VS MES ANT.' },
+                ].map((metric, i) => (
+                    <div key={i} style={cardStyle}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <metric.icon style={{ width: '14px', height: '14px', color: metric.color }} />
+                            <span style={{ fontSize: '9px', fontWeight: 800, color: JA.GREY_LT, textTransform: 'uppercase' }}>{metric.target}</span>
+                        </div>
+                        <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, margin: 0, textTransform: 'uppercase' }}>{metric.label}</p>
+                        <p style={{ fontSize: '24px', fontWeight: 800, color: metric.color, margin: '4px 0', fontFamily: 'monospace' }}>{metric.value}</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Active Alerts List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <h2 style={{ fontSize: '14px', fontWeight: 800, color: JA.NAVY, margin: '8px 0' }}>EVENTOS DE GESTIÓN ACTIVA ({alertasActivas.length})</h2>
                 {alertasActivas.map((alerta) => {
                     const cfg = TIPO_CONFIG[alerta.tipo]
                     const Icon = cfg.icon
                     const ruta = RUTAS_ACCION[alerta.id]
                     return (
-                        <div key={alerta.id} className={`p-4 ${cfg.bg} border ${cfg.border} rounded-xl`}>
-                            <div className="flex items-start gap-3">
-                                <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${cfg.iconColor}`} />
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                                        <p className="text-[#EAECEF] font-bold text-sm">{alerta.titulo}</p>
-                                        {alerta.valor && (
-                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${cfg.badge}`}>{alerta.valor}</span>
-                                        )}
-                                    </div>
-                                    <p className="text-[#848E9C] text-xs leading-relaxed">{alerta.descripcion}</p>
-                                    {alerta.accion && ruta && (
-                                        <Link
-                                            href={ruta}
-                                            className={`mt-2 inline-flex items-center gap-1 text-xs font-bold ${cfg.iconColor} hover:underline underline-offset-2 transition-all`}
-                                        >
-                                            <ExternalLink className="w-3 h-3" />
-                                            {alerta.accion}
-                                        </Link>
+                        <div key={alerta.id} style={{ 
+                            padding: '16px', background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: '2px',
+                            display: 'flex', gap: '16px', alignItems: 'flex-start'
+                        }}>
+                            <div style={{ width: '32px', height: '32px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '1px', border: `1px solid ${cfg.border}`, flexShrink: 0 }}>
+                                <Icon style={{ width: '18px', height: '18px', color: cfg.color }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <p style={{ fontSize: '13px', fontWeight: 800, color: JA.TEXT, margin: 0 }}>{alerta.titulo.toUpperCase()}</p>
+                                    {alerta.valor && (
+                                        <span style={{ fontSize: '10px', fontWeight: 900, color: cfg.color, fontFamily: 'monospace', padding: '2px 8px', background: 'white', borderRadius: '1px', border: `1px solid ${cfg.border}` }}>
+                                            {alerta.valor}
+                                        </span>
                                     )}
                                 </div>
+                                <p style={{ fontSize: '11px', color: JA.GREY, lineHeight: '1.5', margin: 0 }}>{alerta.descripcion}</p>
+                                {alerta.accion && ruta && (
+                                    <Link href={ruta} style={{ 
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '12px',
+                                        fontSize: '11px', fontWeight: 700, color: cfg.color, textDecoration: 'none'
+                                    }}>
+                                        <ExternalLink style={{ width: '12px', height: '12px' }} />
+                                        {alerta.accion}
+                                    </Link>
+                                )}
                             </div>
                         </div>
                     )

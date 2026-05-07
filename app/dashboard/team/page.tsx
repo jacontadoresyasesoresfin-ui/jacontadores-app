@@ -2,18 +2,26 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Phone, Shield, Users as UsersIcon, RefreshCw, Crown, User } from 'lucide-react'
+import { Phone, Shield, Users as UsersIcon, RefreshCw, Crown, User, Mail } from 'lucide-react'
 
-const TEAL = '#14B8A6'
-const NAVY = '#0B2447'
-const GOLD = '#D4A843'
-const GREEN = '#10B981'
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    GREY_LT: '#9CA3AF',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444',
+    BLUE:    '#3B82F6'
+}
 
-const card = {
+const cardStyle = {
     background: '#FFFFFF',
-    border: '1.5px solid #E2E8F0',
-    borderRadius: '16px',
-    boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
     padding: '20px',
 }
 
@@ -67,130 +75,134 @@ export default function TeamPage() {
 
     useEffect(() => { fetchCollaborators() }, [])
 
-    const roleConfig: Record<string, { label: string; color: string; bg: string; icon: React.ComponentType<{ className?: string }> }> = {
-        superadmin: { label: 'Superadmin', color: GOLD, bg: '#FEF3C7', icon: Crown },
-        admin: { label: 'Administrador', color: TEAL, bg: '#CCFBF1', icon: Shield },
-        user: { label: 'Usuario', color: '#64748B', bg: '#F1F5F9', icon: User },
+    const roleConfig: Record<string, { label: string; color: string; bg: string; icon: React.ComponentType<{ style?: React.CSSProperties }> }> = {
+        superadmin: { label: 'SUPERADMIN', color: JA.GOLD, bg: JA.GOLD + '15', icon: Crown },
+        admin: { label: 'ADMINISTRADOR', color: JA.BLUE, bg: JA.BLUE + '15', icon: Shield },
+        user: { label: 'COLABORADOR', color: JA.GREY, bg: JA.BG, icon: User },
     }
 
     const filteredMembers = selectedRole === 'all' ? collaborators : collaborators.filter(m => m.role === selectedRole)
 
     const stats = [
-        { label: 'Total Colaboradores', value: collaborators.length, color: NAVY, bg: '#E0F2FE', icon: UsersIcon },
-        { label: 'Administradores', value: collaborators.filter(m => m.role === 'admin').length, color: TEAL, bg: '#CCFBF1', icon: Shield },
-        { label: 'Usuarios Estándar', value: collaborators.filter(m => m.role === 'user').length, color: '#64748B', bg: '#F1F5F9', icon: User },
+        { label: 'Total Colaboradores', value: collaborators.length, color: JA.NAVY, bg: JA.NAVY + '10', icon: UsersIcon },
+        { label: 'Administradores', value: collaborators.filter(m => m.role === 'admin').length, color: JA.BLUE, bg: JA.BLUE + '10', icon: Shield },
+        { label: 'Usuarios Estándar', value: collaborators.filter(m => m.role === 'user').length, color: JA.GREY, bg: JA.BG, icon: User },
     ]
 
     if (loading) {
         return (
-            <div className="p-8 flex items-center gap-3 text-slate-600">
-                <div className="w-5 h-5 border-2 rounded-full animate-spin"
-                    style={{ borderColor: `${TEAL}40`, borderTopColor: TEAL }} />
-                Cargando Equipo...
+            <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: '12px', color: JA.GREY, fontSize: '14px' }}>
+                <div style={{ width: '16px', height: '16px', border: `2px solid ${JA.BORDER}`, borderTopColor: JA.NAVY, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                Sincronizando Nómina de Colaboradores...
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6 pb-10" style={{ fontFamily: 'var(--font-inter)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
+            
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '20px' }}>
                 <div>
-                    <h1 className="text-2xl font-black text-slate-800" style={{ fontFamily: 'var(--font-outfit)' }}>
-                        Equipo <span style={{ color: TEAL }}>J&A Contadores</span>
-                    </h1>
-                    <p className="text-slate-400 text-sm mt-1">Colaboradores internos y gestión de roles</p>
+                    <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Gestión de <span style={{ color: JA.GOLD }}>Capital Humano</span></h1>
+                    <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Directorio técnico de consultores y niveles de acceso corporativo.</p>
                 </div>
                 <button onClick={fetchCollaborators}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition-all hover:bg-slate-50"
-                    style={{ border: '1.5px solid #E2E8F0', color: '#64748B' }}>
-                    <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+                    style={{ 
+                        display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', 
+                        background: '#FFFFFF', border: `1px solid ${JA.BORDER}`, borderRadius: '2px',
+                        fontSize: '11px', fontWeight: 700, color: JA.TEXT, cursor: 'pointer'
+                    }}>
+                    <RefreshCw style={{ width: '12px', height: '12px' }} /> ACTUALIZAR REGISTROS
                 </button>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                 {stats.map((s, i) => (
-                    <div key={i} style={card} className="hover:-translate-y-0.5 transition-transform">
-                        <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
-                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
-                            </div>
-                            <div>
-                                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">{s.label}</p>
-                                <p className="text-2xl font-black" style={{ color: s.color }}>{s.value}</p>
-                            </div>
+                    <div key={i} style={{ ...cardStyle, display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ width: '40px', height: '40px', background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '1px' }}>
+                            <s.icon style={{ width: '18px', height: '18px', color: s.color }} />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '9px', fontWeight: 800, color: JA.GREY, textTransform: 'uppercase', margin: 0 }}>{s.label}</p>
+                            <p style={{ fontSize: '22px', fontWeight: 800, color: s.color, margin: 0, fontFamily: 'monospace' }}>{s.value}</p>
                         </div>
                     </div>
                 ))}
             </div>
 
             {/* Filtros */}
-            <div style={card}>
-                <div className="flex items-center gap-2 mb-5 flex-wrap">
-                    <span className="text-slate-500 text-sm font-medium">Filtrar por rol:</span>
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: JA.GREY, textTransform: 'uppercase' }}>Filtrar por Jerarquía:</span>
                     {['all', 'admin', 'user'].map(rol => (
                         <button key={rol} onClick={() => setSelectedRole(rol)}
-                            className="px-3 py-1.5 text-xs font-bold rounded-xl transition-all"
-                            style={selectedRole === rol
-                                ? { background: NAVY, color: 'white', boxShadow: '0 4px 12px rgba(11,36,71,0.2)' }
-                                : { background: '#F8FAFC', color: '#64748B', border: '1.5px solid #E2E8F0' }}>
-                            {rol === 'all' ? 'Todos' : rol === 'admin' ? 'Administradores' : 'Usuarios'}
+                            style={{ 
+                                padding: '6px 12px', fontSize: '10px', fontWeight: 800, borderRadius: '1px', border: 'none',
+                                cursor: 'pointer', transition: 'all 0.15s',
+                                background: selectedRole === rol ? JA.NAVY : JA.BG,
+                                color: selectedRole === rol ? '#FFFFFF' : JA.GREY,
+                                border: `1px solid ${selectedRole === rol ? JA.NAVY : JA.BORDER}`
+                            }}>
+                            {rol === 'all' ? 'TODOS' : rol === 'admin' ? 'ADMINISTRADORES' : 'USUARIOS'}
                         </button>
                     ))}
                 </div>
 
                 {filteredMembers.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0' }}>
-                            <UsersIcon className="w-7 h-7 text-slate-300" />
-                        </div>
-                        <p className="text-slate-500 text-sm font-medium">No hay colaboradores con este rol</p>
-                        <p className="text-slate-400 text-xs mt-1">Crea colaboradores desde el Panel Maestro</p>
+                    <div style={{ padding: '64px', textAlign: 'center', border: `1px dashed ${JA.BORDER}`, borderRadius: '2px', background: JA.BG }}>
+                        <UsersIcon style={{ width: '32px', height: '32px', color: JA.GREY_LT, marginBottom: '12px' }} />
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: JA.GREY, margin: 0 }}>No se encontraron registros de personal</p>
+                        <p style={{ fontSize: '11px', color: JA.GREY_LT, marginTop: '4px' }}>Verifique la configuración en el Panel Maestro de Supabase.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
                         {filteredMembers.map((member) => {
                             const rc = roleConfig[member.role] || roleConfig.user
                             const initials = (member.full_name || 'NN').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
                             const Icon = rc.icon
 
                             return (
-                                <div key={member.id} className="group hover:-translate-y-1 transition-all duration-200"
-                                    style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: '14px', padding: '16px' }}>
-                                    <div className="flex items-center gap-3 mb-3">
+                                <div key={member.id} style={{ ...cardStyle, padding: '16px', background: JA.BG, border: `1px solid ${JA.BORDER}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
                                         {/* Avatar */}
-                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform"
-                                            style={{ background: `linear-gradient(135deg, ${NAVY}, ${TEAL})` }}>
+                                        <div style={{ 
+                                            width: '48px', height: '48px', background: JA.NAVY, display: 'flex', 
+                                            alignItems: 'center', justifyContent: 'center', fontSize: '14px', 
+                                            fontWeight: 800, color: '#FFFFFF', borderRadius: '1px'
+                                        }}>
                                             {initials}
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="font-black text-slate-800 text-sm truncate">{member.full_name || 'Sin nombre'}</p>
-                                            <div className="flex items-center gap-1 mt-0.5">
-                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md"
-                                                    style={{ background: rc.bg, color: rc.color }}>
+                                        <div style={{ minWidth: 0 }}>
+                                            <p style={{ fontSize: '14px', fontWeight: 800, color: JA.TEXT, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {member.full_name || 'Sin nombre'}
+                                            </p>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                                <span style={{ fontSize: '8px', fontWeight: 900, px: '6px', py: '2px', borderRadius: '1px', background: rc.bg, color: rc.color, border: `1px solid ${rc.color}30`, padding: '1px 5px' }}>
                                                     {rc.label}
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-1.5">
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: `1px solid ${JA.BORDER}`, paddingTop: '12px' }}>
                                         {member.phone && (
-                                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                <Phone className="w-3 h-3 flex-shrink-0" style={{ color: TEAL }} />
-                                                <span>{member.phone}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: JA.GREY }}>
+                                                <Phone style={{ width: '12px', height: '12px', color: JA.BLUE }} />
+                                                <span style={{ fontFamily: 'monospace' }}>{member.phone}</span>
                                             </div>
                                         )}
                                         {member.tenant_name && (
-                                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                <Shield className="w-3 h-3 flex-shrink-0" style={{ color: NAVY }} />
-                                                <span>{member.tenant_name}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: JA.GREY }}>
+                                                <Shield style={{ width: '12px', height: '12px', color: JA.NAVY }} />
+                                                <span style={{ fontWeight: 700 }}>{member.tenant_name}</span>
                                             </div>
                                         )}
-                                        <div className="flex items-center gap-2 text-xs text-slate-400">
-                                            <Icon className="w-3 h-3 flex-shrink-0" />
-                                            <span>Miembro desde {new Date(member.created_at).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', color: JA.GREY_LT }}>
+                                            <Icon style={{ width: '12px', height: '12px' }} />
+                                            <span>Incorporado en {new Date(member.created_at).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}</span>
                                         </div>
                                     </div>
                                 </div>

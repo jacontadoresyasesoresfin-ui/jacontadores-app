@@ -1,13 +1,29 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { DollarSign, TrendingDown, TrendingUp, RefreshCw, CreditCard, ArrowDownCircle, ArrowUpCircle, AlertCircle } from 'lucide-react'
+import { DollarSign, TrendingDown, TrendingUp, RefreshCw, CreditCard, ArrowDownCircle, ArrowUpCircle, AlertCircle, Filter, Info } from 'lucide-react'
+
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444'
+}
+
+const cardStyle = {
+    background: '#FFFFFF',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    padding: '20px',
+}
 
 const COP = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`
 
-// Datos de demostración de movimientos Mercado Pago
 const DEMO_MOVEMENTS = [
     { fecha: '2025-03-01', tipo: 'Pago recibido', orden: '#2381940', debito: 0, credito: 185000, saldo: 1850000, estado: 'acreditado' },
     { fecha: '2025-03-01', tipo: 'Comisión ML', orden: '#2381940', debito: 22200, credito: 0, saldo: 1827800, estado: 'debitado' },
@@ -25,183 +41,150 @@ const DEMO_MOVEMENTS = [
     { fecha: '2025-03-10', tipo: 'Costo envío ML', orden: '#2398540', debito: 19500, credito: 0, saldo: 4047900, estado: 'debitado' },
 ]
 
-const TIPO_COLOR: Record<string, string> = {
-    'Pago recibido': 'bg-[#0ECB81]/10 text-[#0ECB81]',
-    'Liberación de fondos': 'bg-[#0ECB81]/10 text-[#0ECB81]',
-    'Ajuste ML': 'bg-[#5B8DEF]/10 text-[#5B8DEF]',
-    'Comisión ML': 'bg-[#F0B90B]/10 text-[#F0B90B]',
-    'Costo envío ML': 'bg-[#F0B90B]/10 text-[#F0B90B]',
-    'Publicidad ML': 'bg-[#F0B90B]/10 text-[#F0B90B]',
-    'Retención DIAN': 'bg-[#F6465D]/10 text-[#F6465D]',
-    'Reembolso': 'bg-[#F6465D]/10 text-[#F6465D]',
-}
-
 export default function MercadoPagoPage() {
     const [filter, setFilter] = useState<string>('todos')
 
+    const saldoActual = DEMO_MOVEMENTS[DEMO_MOVEMENTS.length - 1].saldo
     const totalCreditos = DEMO_MOVEMENTS.reduce((s, m) => s + m.credito, 0)
     const totalDebitos = DEMO_MOVEMENTS.reduce((s, m) => s + m.debito, 0)
-    const saldoActual = DEMO_MOVEMENTS[DEMO_MOVEMENTS.length - 1].saldo
     const totalRetenciones = DEMO_MOVEMENTS.filter(m => m.tipo === 'Retención DIAN').reduce((s, m) => s + m.debito, 0)
-    const totalReembolsos = DEMO_MOVEMENTS.filter(m => m.tipo === 'Reembolso').reduce((s, m) => s + m.debito, 0)
     const totalLiberaciones = DEMO_MOVEMENTS.filter(m => m.tipo === 'Liberación de fondos').reduce((s, m) => s + m.credito, 0)
 
     const FILTROS = ['todos', 'Pago recibido', 'Comisión ML', 'Retención DIAN', 'Reembolso', 'Liberación de fondos', 'Costo envío ML']
-
     const movFiltrados = filter === 'todos' ? DEMO_MOVEMENTS : DEMO_MOVEMENTS.filter(m => m.tipo === filter)
 
     return (
-        <div className="space-y-6 pb-10 font-sans animate-in fade-in duration-500">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
             {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-4">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '20px' }}>
                 <div>
-                    <h1 className="text-2xl font-bold text-[#EAECEF]">
-                        Pagos <span className="text-[#FFE600]">Mercado Pago</span>
-                    </h1>
-                    <p className="text-[#848E9C] text-sm mt-1">Movimientos financieros reales de tu cuenta</p>
+                    <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Pagos <span style={{ color: JA.GOLD }}>Mercado Pago</span></h1>
+                    <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Auditoría financiera y control de dispersión de fondos en tiempo real.</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-[#2B3139] rounded-lg text-[#EAECEF] text-sm hover:bg-[#3B4149] transition-colors">
-                    <RefreshCw className="w-4 h-4 text-[#F0B90B]" />
-                    Sincronizar ahora
+                <button style={{
+                    padding: '8px 16px', fontSize: '11px', fontWeight: 700, border: `1px solid ${JA.BORDER}`,
+                    background: 'white', color: JA.TEXT, borderRadius: '2px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '8px'
+                }}>
+                    <RefreshCw style={{ width: '14px', height: '14px', color: JA.GOLD }} />
+                    SINCRONIZAR CUENTA
                 </button>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                 {[
-                    { label: 'Saldo Actual', value: COP(saldoActual), icon: CreditCard, color: '#F0B90B' },
-                    { label: 'Total Cobrado', value: COP(totalCreditos), icon: ArrowUpCircle, color: '#0ECB81' },
-                    { label: 'Total Debitado', value: COP(totalDebitos), icon: ArrowDownCircle, color: '#F6465D' },
-                    { label: 'Retenciones DIAN', value: COP(totalRetenciones), icon: AlertCircle, color: '#F6465D' },
-                    { label: 'Fondos Liberados', value: COP(totalLiberaciones), icon: TrendingUp, color: '#5B8DEF' },
+                    { label: 'Saldo Disponible', value: COP(saldoActual), icon: CreditCard, color: JA.NAVY },
+                    { label: 'Ingresos (Mes)', value: COP(totalCreditos), icon: ArrowUpCircle, color: JA.GREEN },
+                    { label: 'Débitos / Cargos', value: COP(totalDebitos), icon: ArrowDownCircle, color: JA.RED },
+                    { label: 'Retenciones DIAN', value: COP(totalRetenciones), icon: AlertCircle, color: JA.RED },
+                    { label: 'Liberado Est.', value: COP(totalLiberaciones), icon: TrendingUp, color: JA.GOLD },
                 ].map((kpi, i) => (
-                    <Card key={i} className="bg-[#1E2329] border-[#2B3139] hover:border-[#3B4149] transition-colors">
-                        <CardContent className="pt-4 pb-3 px-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} />
-                                <p className="text-[#848E9C] text-[10px] uppercase font-bold tracking-wider">{kpi.label}</p>
-                            </div>
-                            <p className="font-bold text-base" style={{ color: kpi.color }}>{kpi.value}</p>
-                        </CardContent>
-                    </Card>
+                    <div key={i} style={{ ...cardStyle, borderLeft: `4px solid ${kpi.color}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', margin: 0 }}>{kpi.label}</p>
+                            <kpi.icon style={{ width: '12px', height: '12px', color: kpi.color }} />
+                        </div>
+                        <p style={{ fontSize: '16px', fontWeight: 700, color: JA.TEXT, margin: 0, fontFamily: 'monospace' }}>{kpi.value}</p>
+                    </div>
                 ))}
             </div>
 
-            {/* Resumen de Retenciones */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-[#1E2329] border-[#2B3139] border-l-4 border-l-[#F6465D]">
-                    <CardContent className="pt-5 space-y-2">
-                        <p className="text-[#848E9C] text-xs uppercase font-bold">Retenciones del período</p>
-                        <div className="space-y-1.5 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-[#848E9C]">Retención DIAN</span>
-                                <span className="text-[#F6465D] font-bold">{COP(totalRetenciones)}</span>
+            {/* Financial Analysis */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px' }}>
+                <div style={cardStyle}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '20px' }}>Resumen de Liquidación</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {[
+                            { label: 'Ventas Brutas Mercado Libre', value: totalCreditos, color: JA.TEXT },
+                            { label: 'Cargos por Servicio y Envío', value: -totalDebitos + totalRetenciones, color: JA.RED },
+                            { label: 'Carga Impositiva (Retenciones)', value: -totalRetenciones, color: JA.RED },
+                            { label: 'Remanente Neto Estimado', value: totalCreditos - totalDebitos, color: JA.GREEN, bold: true },
+                        ].map((row, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: i < 3 ? `1px solid ${JA.BG}` : 'none', paddingBottom: '8px' }}>
+                                <span style={{ fontSize: '11px', color: JA.GREY }}>{row.label}</span>
+                                <span style={{ fontSize: '12px', fontWeight: row.bold ? 700 : 500, color: row.color, fontFamily: 'monospace' }}>{COP(row.value)}</span>
                             </div>
-                            <div className="flex justify-between">
-                                <span className="text-[#848E9C]">Reembolsos emitidos</span>
-                                <span className="text-[#F6465D] font-bold">{COP(totalReembolsos)}</span>
-                            </div>
-                            <div className="flex justify-between border-t border-[#2B3139] pt-1">
-                                <span className="text-[#EAECEF] font-bold">Total retenciones</span>
-                                <span className="text-[#F6465D] font-bold">{COP(totalRetenciones + totalReembolsos)}</span>
-                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div style={{ ...cardStyle, background: JA.NAVY, border: 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'white', margin: 0 }}>Estado de Conciliación</h3>
+                        <CheckCircle style={{ width: '16px', height: '16px', color: JA.GOLD }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                        <div style={{ width: '80px', height: '80px', border: `4px solid ${JA.GOLD}`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: 'white', fontSize: '16px', fontWeight: 700 }}>100%</span>
                         </div>
-                    </CardContent>
-                </Card>
-                <Card className="bg-[#1E2329] border-[#2B3139] border-l-4 border-l-[#0ECB81] md:col-span-2">
-                    <CardContent className="pt-5 space-y-2">
-                        <p className="text-[#848E9C] text-xs uppercase font-bold">Flujo de dinero</p>
-                        <div className="grid grid-cols-3 gap-3">
-                            <div className="text-center p-2 bg-[#0B0E11]/60 rounded-lg">
-                                <p className="text-[#848E9C] text-[10px] uppercase font-bold mb-1">Ingresos brutos</p>
-                                <p className="text-[#0ECB81] font-bold">{COP(totalCreditos)}</p>
-                            </div>
-                            <div className="text-center p-2 bg-[#0B0E11]/60 rounded-lg">
-                                <p className="text-[#848E9C] text-[10px] uppercase font-bold mb-1">Cargos ML</p>
-                                <p className="text-[#F6465D] font-bold">{COP(totalDebitos)}</p>
-                            </div>
-                            <div className="text-center p-2 bg-[#0B0E11]/60 rounded-lg">
-                                <p className="text-[#848E9C] text-[10px] uppercase font-bold mb-1">Neto recibido</p>
-                                <p className="text-[#F0B90B] font-bold">{COP(totalCreditos - totalDebitos)}</p>
-                            </div>
+                        <div>
+                            <p style={{ color: 'white', fontSize: '12px', fontWeight: 600, margin: 0 }}>Cuentas Sincronizadas</p>
+                            <p style={{ color: JA.GREY_LT, fontSize: '11px', marginTop: '4px', margin: 0 }}>Todos los movimientos de Mercado Pago han sido conciliados con el registro de ventas de este mes.</p>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
             </div>
 
-            {/* Tabla de movimientos */}
-            <Card className="bg-[#1E2329] border-[#2B3139]">
-                <CardHeader className="border-b border-[#2B3139]">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                        <CardTitle className="text-[#EAECEF] flex items-center gap-2">
-                            <DollarSign className="w-5 h-5 text-[#F0B90B]" />
-                            Movimientos del Período
-                            <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] ml-2">{movFiltrados.length}</Badge>
-                        </CardTitle>
-                        {/* Filtros */}
-                        <div className="flex flex-wrap gap-1.5">
-                            {FILTROS.map(f => (
-                                <button
-                                    key={f}
-                                    onClick={() => setFilter(f)}
-                                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all ${filter === f
-                                        ? 'bg-[#F0B90B] text-[#0B0E11]'
-                                        : 'bg-[#2B3139] text-[#848E9C] hover:bg-[#3B4149]'}`}
-                                >
-                                    {f === 'todos' ? 'Todos' : f}
-                                </button>
+            {/* Movements Table */}
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>Historial Operativo (Dispersión)</h3>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {FILTROS.map(f => (
+                            <button key={f} onClick={() => setFilter(f)} style={{
+                                padding: '4px 10px', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
+                                background: filter === f ? JA.NAVY : JA.BG,
+                                color: filter === f ? 'white' : JA.GREY,
+                                border: `1px solid ${JA.BORDER}`, borderRadius: '1px'
+                            }}>
+                                {f.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                            <tr style={{ background: JA.BG, textAlign: 'left', borderBottom: `2px solid ${JA.BORDER}` }}>
+                                <th style={{ padding: '12px' }}>FECHA</th>
+                                <th style={{ padding: '12px' }}>TIPO DE OPERACIÓN</th>
+                                <th style={{ padding: '12px' }}>REF. ORDEN</th>
+                                <th style={{ padding: '12px', textAlign: 'right' }}>DÉBITO (-)</th>
+                                <th style={{ padding: '12px', textAlign: 'right' }}>CRÉDITO (+)</th>
+                                <th style={{ padding: '12px', textAlign: 'right' }}>SALDO ACUM.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {movFiltrados.map((mov, i) => (
+                                <tr key={i} style={{ borderBottom: `1px solid ${JA.BG}` }}>
+                                    <td style={{ padding: '12px', color: JA.GREY }}>{mov.fecha}</td>
+                                    <td style={{ padding: '12px', fontWeight: 600, color: JA.TEXT }}>{mov.tipo}</td>
+                                    <td style={{ padding: '12px', fontFamily: 'monospace', color: JA.NAVY }}>{mov.orden}</td>
+                                    <td style={{ padding: '12px', textAlign: 'right', color: JA.RED, fontWeight: 500 }}>{mov.debito > 0 ? COP(mov.debito) : '—'}</td>
+                                    <td style={{ padding: '12px', textAlign: 'right', color: JA.GREEN, fontWeight: 500 }}>{mov.credito > 0 ? COP(mov.credito) : '—'}</td>
+                                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: JA.TEXT }}>{COP(mov.saldo)}</td>
+                                </tr>
                             ))}
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-[#2B3139] bg-[#2B3139]/30">
-                                    {['Fecha', 'Tipo de Movimiento', 'Orden', 'Débito', 'Crédito', 'Saldo'].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-[#848E9C] text-[10px] uppercase font-bold tracking-wider">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {movFiltrados.map((mov, i) => (
-                                    <tr key={i} className="border-b border-[#2B3139]/50 hover:bg-[#2B3139]/20 transition-colors">
-                                        <td className="px-4 py-3 text-[#848E9C] text-xs">{mov.fecha}</td>
-                                        <td className="px-4 py-3">
-                                            <Badge className={`${TIPO_COLOR[mov.tipo] || 'bg-[#2B3139] text-[#848E9C]'} text-xs`}>
-                                                {mov.tipo}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-4 py-3 text-[#848E9C] text-xs font-mono">{mov.orden}</td>
-                                        <td className="px-4 py-3 text-right font-mono text-sm">
-                                            {mov.debito > 0
-                                                ? <span className="flex items-center gap-1 text-[#F6465D]"><TrendingDown className="w-3 h-3" />{COP(mov.debito)}</span>
-                                                : <span className="text-[#2B3139]">—</span>
-                                            }
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-mono text-sm">
-                                            {mov.credito > 0
-                                                ? <span className="flex items-center gap-1 text-[#0ECB81]"><TrendingUp className="w-3 h-3" />{COP(mov.credito)}</span>
-                                                : <span className="text-[#2B3139]">—</span>
-                                            }
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-bold text-[#F0B90B] font-mono text-sm">{COP(mov.saldo)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr className="border-t-2 border-[#F0B90B]/30 bg-[#2B3139]/20">
-                                    <td colSpan={3} className="px-4 py-3 font-bold text-[#EAECEF] text-xs uppercase">TOTALES DEL PERÍODO</td>
-                                    <td className="px-4 py-3 text-right font-bold text-[#F6465D] font-mono">{COP(movFiltrados.reduce((s, m) => s + m.debito, 0))}</td>
-                                    <td className="px-4 py-3 text-right font-bold text-[#0ECB81] font-mono">{COP(movFiltrados.reduce((s, m) => s + m.credito, 0))}</td>
-                                    <td className="px-4 py-3 text-right font-bold text-[#F0B90B] font-mono">{COP(saldoActual)}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </CardContent>
-            </Card>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Footer Notice */}
+            <div style={{ ...cardStyle, background: JA.BG, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <Info style={{ width: '16px', height: '16px', color: JA.GREY }} />
+                <p style={{ fontSize: '10px', color: JA.GREY, margin: 0, fontStyle: 'italic' }}>
+                    * Los movimientos de "Comisión ML" y "Costo Envío" son liquidados automáticamente por la plataforma. 
+                    Las retenciones DIAN son calculadas según la normativa vigente en Colombia para medios de pago electrónicos.
+                </p>
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
     )
+}
+
+function CheckCircle({ className, style }: any) {
+    return <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
 }

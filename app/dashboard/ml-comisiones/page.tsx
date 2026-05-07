@@ -1,20 +1,39 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Percent, DollarSign, Package, Megaphone, Warehouse, MoreHorizontal, TrendingDown } from 'lucide-react'
+import { Percent, DollarSign, Package, Megaphone, Warehouse, MoreHorizontal, TrendingDown, Info, LayoutGrid, List } from 'lucide-react'
+
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    GREY_LT: '#9CA3AF',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444',
+    PURPLE:  '#8B5CF6',
+    BLUE:    '#3B82F6'
+}
+
+const cardStyle = {
+    background: '#FFFFFF',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    padding: '20px',
+}
 
 const COP = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`
 const PCT = (n: number) => `${n.toFixed(1)}%`
 
 const TOOLTIP_STYLE = {
-    contentStyle: { backgroundColor: '#141720', border: '1px solid #2B3139', borderRadius: '10px', color: '#EAECEF', fontSize: '12px' },
-    cursor: { fill: 'rgba(255,255,255,0.03)' }
+    contentStyle: { backgroundColor: '#FFFFFF', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', color: JA.TEXT, fontSize: '11px', fontWeight: 600 },
+    cursor: { fill: 'rgba(19,33,60,0.03)' }
 }
 
-// Datos de demostración de comisiones
 const COMISIONES_PRODUCTO = [
     { producto: 'Auriculares Bluetooth Pro', ventas: 1850000, comisionVenta: 222000, envio: 90000, publicidad: 45000, total: 357000, pct: 19.3 },
     { producto: 'Teclado Mecánico RGB', ventas: 2400000, comisionVenta: 288000, envio: 120000, publicidad: 60000, total: 468000, pct: 19.5 },
@@ -34,168 +53,195 @@ const COMISIONES_MES = [
 ]
 
 const TIPO_CARGO = [
-    { tipo: 'Comisión por venta', icon: DollarSign, color: '#F0B90B', total: 1569600, pct: 12.0 },
-    { tipo: 'Cargo por envío ML', icon: Package, color: '#0ECB81', total: 402000, pct: 3.1 },
-    { tipo: 'Publicidad ML', icon: Megaphone, color: '#5B8DEF', total: 186000, pct: 1.4 },
-    { tipo: 'Almacenamiento Full', icon: Warehouse, color: '#9B59B6', total: 61000, pct: 0.5 },
-    { tipo: 'Otros cargos', icon: MoreHorizontal, color: '#F6465D', total: 23400, pct: 0.2 },
+    { tipo: 'Comisión por venta', icon: DollarSign, color: JA.GOLD, total: 1569600, pct: 12.0 },
+    { tipo: 'Cargo por envío ML', icon: Package, color: JA.GREEN, total: 402000, pct: 3.1 },
+    { tipo: 'Publicidad ML', icon: Megaphone, color: JA.BLUE, total: 186000, pct: 1.4 },
+    { tipo: 'Almacenamiento Full', icon: Warehouse, color: JA.PURPLE, total: 61000, pct: 0.5 },
+    { tipo: 'Otros cargos', icon: MoreHorizontal, color: JA.RED, total: 23400, pct: 0.2 },
 ]
 
 const PIE_DATA = TIPO_CARGO.map(t => ({ name: t.tipo, value: t.total }))
-const PIE_COLORS = ['#F0B90B', '#0ECB81', '#5B8DEF', '#9B59B6', '#F6465D']
-const AXIS_STYLE = { fill: '#848E9C', fontSize: 11 }
+const PIE_COLORS = [JA.GOLD, JA.GREEN, JA.BLUE, JA.PURPLE, JA.RED]
+const AXIS_STYLE = { fill: JA.GREY, fontSize: 10, fontWeight: 600 }
 
 export default function ComisionesPage() {
     const [vista, setVista] = useState<'producto' | 'mes'>('mes')
 
     const totalComisiones = TIPO_CARGO.reduce((s, t) => s + t.total, 0)
     const totalVentas = COMISIONES_PRODUCTO.reduce((s, p) => s + p.ventas, 0)
-    const pctTotal = ((totalComisiones / totalVentas) * 100).toFixed(1)
+    const pctTotal = (totalComisiones / totalVentas) * 100
 
     return (
-        <div className="space-y-6 pb-10 font-sans animate-in fade-in duration-500">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-[#EAECEF]">
-                    Comisiones <span className="text-[#FFE600]">Mercado Libre</span>
-                </h1>
-                <p className="text-[#848E9C] text-sm mt-1">
-                    Desglose de lo que cobra ML — período actual
-                </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '20px' }}>
+                <div>
+                    <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Comisiones <span style={{ color: JA.GOLD }}>Mercado Libre</span></h1>
+                    <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Auditoría técnica de cargos operativos y márgenes de intermediación.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{
+                        padding: '8px 16px', fontSize: '11px', fontWeight: 700, border: `1px solid ${JA.BORDER}`,
+                        background: 'white', color: JA.TEXT, borderRadius: '2px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px'
+                    }}>
+                        <Info style={{ width: '14px', height: '14px', color: JA.GOLD }} />
+                        VER POLÍTICAS ML
+                    </button>
+                </div>
             </div>
 
-            {/* KPIs globales */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                 {[
-                    { label: 'Total Comisiones', value: COP(totalComisiones), color: '#F6465D', icon: TrendingDown },
-                    { label: 'Comisión / Ventas', value: PCT(parseFloat(pctTotal)), color: '#F0B90B', icon: Percent },
-                    { label: 'Comisión por Venta', value: COP(TIPO_CARGO[0].total), color: '#F0B90B', icon: DollarSign },
-                    { label: 'Envíos Pagados', value: COP(TIPO_CARGO[1].total), color: '#0ECB81', icon: Package },
+                    { label: 'Costo Operativo Total', value: COP(totalComisiones), color: JA.RED, icon: TrendingDown },
+                    { label: 'Margen de Retención', value: PCT(pctTotal), color: JA.GOLD, icon: Percent },
+                    { label: 'Retención Directa Venta', value: COP(TIPO_CARGO[0].total), color: JA.NAVY, icon: DollarSign },
+                    { label: 'Logística y Envíos', value: COP(TIPO_CARGO[1].total), color: JA.GREEN, icon: Package },
                 ].map((kpi, i) => (
-                    <Card key={i} className="bg-[#1E2329] border-[#2B3139]">
-                        <CardContent className="pt-4 pb-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} />
-                                <p className="text-[#848E9C] text-[10px] uppercase font-bold tracking-wider">{kpi.label}</p>
-                            </div>
-                            <p className="font-black text-lg" style={{ color: kpi.color }}>{kpi.value}</p>
-                        </CardContent>
-                    </Card>
+                    <div key={i} style={{ ...cardStyle, borderLeft: `4px solid ${kpi.color}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', margin: 0 }}>{kpi.label}</p>
+                            <kpi.icon style={{ width: '12px', height: '12px', color: kpi.color }} />
+                        </div>
+                        <p style={{ fontSize: '18px', fontWeight: 700, color: JA.TEXT, margin: 0, fontFamily: 'monospace' }}>{kpi.value}</p>
+                    </div>
                 ))}
             </div>
 
-            {/* Tipos de cargo + Pie */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-                <Card className="lg:col-span-3 bg-[#1E2329] border-[#2B3139]">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-[#EAECEF] text-sm">Tipos de Cargo Mercado Libre</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
+            {/* Breakdown Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px' }}>
+                <div style={cardStyle}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '20px' }}>Desglose de Cargos por Tipo</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         {TIPO_CARGO.map((t, i) => (
-                            <div key={i} className="flex items-center gap-3 p-3 bg-[#0B0E11]/50 rounded-xl border border-[#2B3139]">
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${t.color}15` }}>
-                                    <t.icon className="w-5 h-5" style={{ color: t.color }} />
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '32px', height: '32px', background: JA.BG, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '1px' }}>
+                                    <t.icon style={{ width: '16px', height: '16px', color: t.color }} />
                                 </div>
-                                <div className="flex-1">
-                                    <p className="text-[#EAECEF] text-sm font-medium">{t.tipo}</p>
-                                    <div className="w-full bg-[#2B3139] rounded-full h-1.5 mt-1.5">
-                                        <div className="h-1.5 rounded-full transition-all" style={{ width: `${(t.total / totalComisiones) * 100}%`, backgroundColor: t.color }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '11px', fontWeight: 600, color: JA.TEXT }}>{t.tipo}</span>
+                                        <span style={{ fontSize: '11px', fontWeight: 700, color: JA.TEXT, fontFamily: 'monospace' }}>{COP(t.total)}</span>
                                     </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm font-bold" style={{ color: t.color }}>{COP(t.total)}</p>
-                                    <p className="text-[#848E9C] text-[10px]">{PCT(t.pct)} de ventas</p>
+                                    <div style={{ width: '100%', height: '4px', background: JA.BG, borderRadius: '1px' }}>
+                                        <div style={{ width: `${(t.total / totalComisiones) * 100}%`, height: '100%', background: t.color, borderRadius: '1px' }} />
+                                    </div>
                                 </div>
                             </div>
                         ))}
-                        <div className="flex justify-between p-3 bg-[#F6465D]/5 border border-[#F6465D]/20 rounded-xl">
-                            <span className="text-[#EAECEF] font-bold text-sm">TOTAL ML cobra este mes</span>
-                            <span className="text-[#F6465D] font-black text-sm">{COP(totalComisiones)}</span>
-                        </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                    <div style={{ marginTop: '24px', padding: '12px', background: JA.NAVY, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'white' }}>TOTAL CARGOS ML</span>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: JA.GOLD, fontFamily: 'monospace' }}>{COP(totalComisiones)}</span>
+                    </div>
+                </div>
 
-                <Card className="lg:col-span-2 bg-[#1E2329] border-[#2B3139]">
-                    <CardHeader className="pb-1">
-                        <CardTitle className="text-[#EAECEF] text-sm">Distribución de Cargos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={280}>
+                <div style={cardStyle}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '20px' }}>Proporción de Intermediación</h3>
+                    <div style={{ height: '240px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie data={PIE_DATA} cx="50%" cy="45%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                                <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={2} dataKey="value" stroke="none">
                                     {PIE_DATA.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
                                 </Pie>
-                                <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [COP(v as number), '']} />
-                                <Legend wrapperStyle={{ fontSize: '10px' }} formatter={(v) => <span style={{ color: '#EAECEF' }}>{v}</span>} />
+                                <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [COP(v), 'Costo']} />
+                                <Legend verticalAlign="bottom" align="center" iconType="rect" wrapperStyle={{ fontSize: '9px', fontWeight: 700, paddingTop: '20px' }} />
                             </PieChart>
                         </ResponsiveContainer>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
             </div>
 
-            {/* Evolución mensual */}
-            <Card className="bg-[#1E2329] border-[#2B3139]">
-                <CardHeader className="pb-1 flex flex-row items-center justify-between">
+            {/* Evolution Area */}
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>
-                        <CardTitle className="text-[#EAECEF] text-sm">Evolución de Comisiones</CardTitle>
-                        <p className="text-[#848E9C] text-[10px] mt-0.5">Últimos 6 meses · COP</p>
+                        <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>Análisis de Tendencia</h3>
+                        <p style={{ fontSize: '10px', color: JA.GREY, marginTop: '2px' }}>Histórico consolidado de costos de plataforma.</p>
                     </div>
-                    <div className="flex gap-2">
-                        {(['mes', 'producto'] as const).map(v => (
-                            <button key={v} onClick={() => setVista(v)}
-                                className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all ${vista === v ? 'bg-[#F0B90B] text-[#0B0E11]' : 'bg-[#2B3139] text-[#848E9C]'}`}>
-                                {v === 'mes' ? 'Por Mes' : 'Por Producto'}
-                            </button>
-                        ))}
+                    <div style={{ display: 'flex', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
+                        <button onClick={() => setVista('mes')} style={{
+                            padding: '6px 12px', fontSize: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
+                            background: vista === 'mes' ? JA.NAVY : 'white', color: vista === 'mes' ? 'white' : JA.GREY,
+                            display: 'flex', alignItems: 'center', gap: '6px'
+                        }}>
+                            <LayoutGrid style={{ width: '12px', height: '12px' }} /> MENSUAL
+                        </button>
+                        <button onClick={() => setVista('producto')} style={{
+                            padding: '6px 12px', fontSize: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
+                            background: vista === 'producto' ? JA.NAVY : 'white', color: vista === 'producto' ? 'white' : JA.GREY,
+                            borderLeft: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: '6px'
+                        }}>
+                            <List style={{ width: '12px', height: '12px' }} /> POR PRODUCTO
+                        </button>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    {vista === 'mes' ? (
-                        <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={COMISIONES_MES} barGap={3} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#2B3139" vertical={false} />
+                </div>
+
+                {vista === 'mes' ? (
+                    <div style={{ height: '300px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={COMISIONES_MES} barGap={4} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={JA.BG} vertical={false} />
                                 <XAxis dataKey="mes" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
-                                <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}K`} width={48} />
-                                <Tooltip {...TOOLTIP_STYLE} formatter={(v: unknown, name: unknown) => [COP(v as number), String(name)]} />
-                                <Legend wrapperStyle={{ fontSize: '10px' }} formatter={(v) => <span style={{ color: '#EAECEF' }}>{v}</span>} />
-                                <Bar dataKey="comision" name="Comisión Venta" fill="#F0B90B" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                                <Bar dataKey="envio" name="Envíos" fill="#0ECB81" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                                <Bar dataKey="publicidad" name="Publicidad" fill="#5B8DEF" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                                <Bar dataKey="full" name="Full ML" fill="#9B59B6" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                                <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} width={50} />
+                                <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [COP(v), '']} />
+                                <Legend verticalAlign="top" align="right" iconType="rect" wrapperStyle={{ fontSize: '10px', fontWeight: 600, paddingBottom: '20px' }} />
+                                <Bar dataKey="comision" name="Comisión Venta" fill={JA.GOLD} radius={[1, 1, 0, 0]} maxBarSize={25} />
+                                <Bar dataKey="envio" name="Logística" fill={JA.GREEN} radius={[1, 1, 0, 0]} maxBarSize={25} />
+                                <Bar dataKey="publicidad" name="Publicidad" fill={JA.BLUE} radius={[1, 1, 0, 0]} maxBarSize={25} />
+                                <Bar dataKey="full" name="Almacenaje" fill={JA.PURPLE} radius={[1, 1, 0, 0]} maxBarSize={25} />
                             </BarChart>
                         </ResponsiveContainer>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                                <thead>
-                                    <tr className="border-b border-[#2B3139]">
-                                        {['Producto', 'Ventas', 'Comisión Venta', 'Costo Envío', 'Publicidad', 'Total ML', '% Ventas'].map(h => (
-                                            <th key={h} className="text-left px-3 py-2 text-[#848E9C] uppercase font-bold tracking-wider">{h}</th>
-                                        ))}
+                    </div>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                            <thead>
+                                <tr style={{ background: JA.BG, textAlign: 'left', borderBottom: `2px solid ${JA.BORDER}` }}>
+                                    <th style={{ padding: '12px' }}>PRODUCTO / SKU</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>VTAS BRUTAS</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>COMISIÓN</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>LOGÍSTICA</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>ADS</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>TOTAL ML</th>
+                                    <th style={{ padding: '12px', textAlign: 'center' }}>% RETENCIÓN</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {COMISIONES_PRODUCTO.map((p, i) => (
+                                    <tr key={i} style={{ borderBottom: `1px solid ${JA.BG}` }}>
+                                        <td style={{ padding: '12px', fontWeight: 600, color: JA.TEXT }}>{p.producto}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'monospace', color: JA.GREY }}>{COP(p.ventas)}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'monospace', color: JA.GOLD, fontWeight: 600 }}>{COP(p.comisionVenta)}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'monospace', color: JA.GREEN }}>{COP(p.envio)}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'monospace', color: JA.BLUE }}>{COP(p.publicidad)}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'monospace', color: JA.RED, fontWeight: 700 }}>{COP(p.total)}</td>
+                                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                                            <span style={{ 
+                                                padding: '2px 8px', borderRadius: '1px', fontSize: '10px', fontWeight: 800,
+                                                background: p.pct > 19 ? JA.RED + '15' : JA.BG,
+                                                color: p.pct > 19 ? JA.RED : JA.GREY
+                                            }}>
+                                                {PCT(p.pct)}
+                                            </span>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#2B3139]/60">
-                                    {COMISIONES_PRODUCTO.map((p, i) => (
-                                        <tr key={i} className="hover:bg-[#2B3139]/20 transition-colors">
-                                            <td className="px-3 py-2.5 text-[#EAECEF] font-medium max-w-[180px] truncate">{p.producto}</td>
-                                            <td className="px-3 py-2.5 text-[#848E9C] font-mono">{COP(p.ventas)}</td>
-                                            <td className="px-3 py-2.5 text-[#F0B90B] font-mono">{COP(p.comisionVenta)}</td>
-                                            <td className="px-3 py-2.5 text-[#0ECB81] font-mono">{COP(p.envio)}</td>
-                                            <td className="px-3 py-2.5 text-[#5B8DEF] font-mono">{COP(p.publicidad)}</td>
-                                            <td className="px-3 py-2.5 text-[#F6465D] font-bold font-mono">{COP(p.total)}</td>
-                                            <td className="px-3 py-2.5">
-                                                <Badge className={`${p.pct > 20 ? 'bg-[#F6465D]/10 text-[#F6465D]' : 'bg-[#F0B90B]/10 text-[#F0B90B]'}`}>
-                                                    {PCT(p.pct)}
-                                                </Badge>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* Audit Notice */}
+            <div style={{ ...cardStyle, background: JA.BG, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <Info style={{ width: '16px', height: '16px', color: JA.GREY }} />
+                <p style={{ fontSize: '10px', color: JA.GREY, margin: 0, fontStyle: 'italic' }}>
+                    * Los cálculos de comisiones presentados corresponden a los cargos liquidados directamente por Mercado Libre. 
+                    No incluyen IVA sobre comisiones ni retenciones en la fuente adicionales que puedan aplicar según el régimen tributario.
+                </p>
+            </div>
         </div>
     )
 }

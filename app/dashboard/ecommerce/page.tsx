@@ -2,12 +2,28 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ShoppingCart, DollarSign, Package, TrendingUp, RefreshCw, Store, AlertCircle, ExternalLink } from 'lucide-react'
+import { ShoppingCart, DollarSign, Package, TrendingUp, RefreshCw, Store, AlertCircle, Eye, Info } from 'lucide-react'
 import AuthGuard from '@/components/AuthGuard'
 import { useClient } from '../ClientContext'
+
+const JA = {
+    NAVY:    '#13213C',
+    GOLD:    '#B8960C',
+    TEXT:    '#1C2B45',
+    GREY:    '#4B5563',
+    BORDER:  '#E5E7EB',
+    BG:      '#F8FAFC',
+    GREEN:   '#10B981',
+    RED:     '#EF4444'
+}
+
+const cardStyle = {
+    background: '#FFFFFF',
+    border: `1px solid ${JA.BORDER}`,
+    borderRadius: '2px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    padding: '20px',
+}
 
 const PLATFORM_CONFIG: Record<string, {
     label: string
@@ -15,27 +31,11 @@ const PLATFORM_CONFIG: Record<string, {
     accent: string
     logo: string
 }> = {
-    mercadolibre: { label: 'Mercado Libre', color: 'bg-[#FFE600]/10', accent: '#FFE600', logo: '🛒' },
-    dropi: { label: 'Dropi', color: 'bg-blue-500/10', accent: '#3B82F6', logo: '📦' },
-    shopify: { label: 'Shopify', color: 'bg-[#96BF48]/10', accent: '#96BF48', logo: '🏪' },
-    woocommerce: { label: 'WooCommerce', color: 'bg-purple-500/10', accent: '#9333EA', logo: '🔷' },
-    tiendanube: { label: 'Tienda Nube', color: 'bg-sky-500/10', accent: '#0EA5E9', logo: '☁️' },
-}
-
-const STATUS_COLORS: Record<string, string> = {
-    paid: 'bg-[#0ECB81]/10 text-[#0ECB81]',
-    delivered: 'bg-[#0ECB81]/10 text-[#0ECB81]',
-    entregado: 'bg-[#0ECB81]/10 text-[#0ECB81]',
-    completed: 'bg-[#0ECB81]/10 text-[#0ECB81]',
-    pending: 'bg-[#F0B90B]/10 text-[#F0B90B]',
-    processing: 'bg-[#F0B90B]/10 text-[#F0B90B]',
-    cancelled: 'bg-[#F6465D]/10 text-[#F6465D]',
-    refunded: 'bg-[#F6465D]/10 text-[#F6465D]',
-    default: 'bg-[#2B3139] text-[#848E9C]',
-}
-
-function statusColor(s: string) {
-    return STATUS_COLORS[s?.toLowerCase()] || STATUS_COLORS.default
+    mercadolibre: { label: 'Mercado Libre', color: JA.NAVY, accent: '#FFE600', logo: '🛒' },
+    dropi: { label: 'Dropi', color: JA.NAVY, accent: '#3B82F6', logo: '📦' },
+    shopify: { label: 'Shopify', color: JA.NAVY, accent: '#96BF48', logo: '🏪' },
+    woocommerce: { label: 'WooCommerce', color: JA.NAVY, accent: '#9333EA', logo: '🔷' },
+    tiendanube: { label: 'Tienda Nube', color: JA.NAVY, accent: '#0EA5E9', logo: '☁️' },
 }
 
 const COP = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`
@@ -45,7 +45,8 @@ export default function EcommercePage() {
 }
 
 function EcommerceContent() {
-    const { profile } = useClient()
+    const { profile: myProfile, activeProfile } = useClient()
+    const targetProfile = activeProfile || myProfile
     const supabase = useMemo(() => createClient(), [])
     const [integrations, setIntegrations] = useState<Record<string, { enabled?: boolean }>>({})
     const [activeTab, setActiveTab] = useState<string>('')
@@ -53,14 +54,13 @@ function EcommerceContent() {
     const [loading, setLoading] = useState<Record<string, boolean>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    // Load integrations from profile
     useEffect(() => {
         async function load() {
-            if (!profile?.id) return
+            if (!targetProfile?.id) return
             const { data } = await supabase
                 .from('profiles')
                 .select('ecommerce_integrations')
-                .eq('id', profile.id)
+                .eq('id', targetProfile.id)
                 .maybeSingle()
 
             const intg = data?.ecommerce_integrations || {}
@@ -69,14 +69,14 @@ function EcommerceContent() {
             if (enabled.length > 0 && !activeTab) setActiveTab(enabled[0])
         }
         load()
-    }, [profile?.id, supabase])
+    }, [targetProfile?.id, supabase])
 
     const enabledPlatforms = Object.entries(integrations)
         .filter(([, v]) => (v as Record<string, unknown>)?.enabled)
         .map(([k]) => k)
 
     const fetchPlatformData = async (platform: string) => {
-        if (platformData[platform]) return // already loaded
+        if (platformData[platform]) return
         setLoading(prev => ({ ...prev, [platform]: true }))
         setErrors(prev => ({ ...prev, [platform]: '' }))
         try {
@@ -99,22 +99,22 @@ function EcommerceContent() {
         }
     }
 
-    // Auto-fetch when tab changes
     useEffect(() => {
         if (activeTab) fetchPlatformData(activeTab)
     }, [activeTab])
 
     if (enabledPlatforms.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-                <div className="w-20 h-20 bg-[#2B3139] rounded-full flex items-center justify-center mb-6">
-                    <Store className="w-10 h-10 text-[#848E9C]" />
+            <div style={{ padding: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '20px' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '2px', background: JA.BG, border: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Store style={{ width: '32px', height: '32px', color: JA.BORDER }} />
                 </div>
-                <h2 className="text-2xl font-bold text-[#EAECEF] mb-2">Sin integraciones activas</h2>
-                <p className="text-[#848E9C] max-w-md">
-                    Tu cuenta no tiene plataformas ecommerce conectadas. Contacta al administrador para activar
-                    Mercado Libre, Dropi, Shopify u otras integraciones.
-                </p>
+                <div style={{ maxWidth: '400px' }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: JA.TEXT, marginBottom: '8px' }}>Módulo de Integración Desactivado</h2>
+                    <p style={{ fontSize: '12px', color: JA.GREY, lineHeight: 1.6 }}>
+                        No se detectaron canales de venta activos para este perfil. Contacte a su consultor JA para habilitar la sincronización con Mercado Libre, Shopify o Dropi.
+                    </p>
+                </div>
             </div>
         )
     }
@@ -125,157 +125,130 @@ function EcommerceContent() {
     const err = errors[activeTab]
 
     return (
-        <div className="min-h-screen p-8 space-y-8 font-sans">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '32px' }}>
             {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-4">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '20px' }}>
                 <div>
-                    <h1 className="text-4xl font-bold text-[#EAECEF]">
-                        Ecommerce <span className="text-[#F0B90B]">Hub</span>
-                    </h1>
-                    <p className="text-[#848E9C] mt-1">Métricas en tiempo real de tus plataformas de venta</p>
+                    <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Ecommerce <span style={{ color: JA.GOLD }}>Hub</span></h1>
+                    <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Consolidado operativo de canales de venta digital y marketplaces.</p>
                 </div>
-                <Button
-                    variant="outline"
-                    className="border-[#2B3139] text-[#EAECEF] hover:bg-[#2B3139]"
-                    onClick={() => {
-                        setPlatformData(prev => ({ ...prev, [activeTab]: undefined }))
-                        fetchPlatformData(activeTab)
-                    }}
+                <button 
+                    onClick={() => { setPlatformData(prev => ({ ...prev, [activeTab]: undefined })); fetchPlatformData(activeTab); }}
                     disabled={isLoading}
-                >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                    Actualizar
-                </Button>
+                    style={{
+                        padding: '8px 16px', fontSize: '11px', fontWeight: 700, border: `1px solid ${JA.BORDER}`,
+                        background: 'white', color: JA.TEXT, borderRadius: '2px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px'
+                    }}>
+                    <RefreshCw style={{ width: '14px', height: '14px', animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
+                    SINCRONIZAR
+                </button>
             </div>
 
-            {/* Platform Tabs */}
-            <div className="flex gap-2 border-b border-[#2B3139] overflow-x-auto">
-                {enabledPlatforms.map(p => {
-                    const c = PLATFORM_CONFIG[p]
-                    return (
-                        <button
-                            key={p}
-                            onClick={() => setActiveTab(p)}
-                            className={`px-5 py-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === p
-                                    ? 'border-[#F0B90B] text-[#F0B90B]'
-                                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
-                                }`}
-                        >
-                            <span>{c?.logo}</span>
-                            {c?.label || p}
-                        </button>
-                    )
-                })}
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '4px', background: JA.BG, padding: '4px', border: `1px solid ${JA.BORDER}`, borderRadius: '2px' }}>
+                {enabledPlatforms.map(p => (
+                    <button key={p} onClick={() => setActiveTab(p)}
+                        style={{
+                            flex: 1, padding: '8px 16px', border: 'none', borderRadius: '1px', fontSize: '11px', fontWeight: 700,
+                            cursor: 'pointer', transition: 'all 0.2s',
+                            background: activeTab === p ? JA.NAVY : 'transparent',
+                            color: activeTab === p ? 'white' : JA.GREY
+                        }}>
+                        {PLATFORM_CONFIG[p]?.label || p}
+                    </button>
+                ))}
             </div>
 
-            {/* Error */}
+            {/* Error State */}
             {err && (
-                <div className="flex items-center gap-3 p-4 bg-[#F6465D]/10 border border-[#F6465D]/30 rounded-xl text-[#F6465D]">
-                    <AlertCircle className="w-5 h-5 shrink-0" />
+                <div style={{ ...cardStyle, background: JA.RED + '05', border: `1px solid ${JA.RED}20`, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <AlertCircle style={{ width: '18px', height: '18px', color: JA.RED }} />
                     <div>
-                        <p className="font-semibold">Error al conectar con {cfg?.label}</p>
-                        <p className="text-sm opacity-80">{err}</p>
+                        <p style={{ fontSize: '12px', fontWeight: 700, color: JA.RED, margin: 0 }}>Fallo de Conexión: {cfg?.label}</p>
+                        <p style={{ fontSize: '11px', color: JA.RED, opacity: 0.8, margin: 0 }}>{err}</p>
                     </div>
                 </div>
             )}
 
-            {/* Loading skeleton */}
-            {isLoading && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-pulse">
-                    {[...Array(4)].map((_, i) => (
-                        <div key={i} className="h-28 bg-[#1E2329] rounded-xl border border-[#2B3139]" />
-                    ))}
+            {/* Content */}
+            {isLoading ? (
+                <div style={{ padding: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', color: JA.GREY, fontSize: '14px' }}>
+                    <RefreshCw style={{ width: '18px', height: '18px', animation: 'spin 1s linear infinite' }} />
+                    Conectando con la API de {cfg?.label}...
                 </div>
-            )}
-
-            {/* Metrics */}
-            {current && !isLoading && (
+            ) : current && (
                 <>
-                    {/* Seller info (ML only) */}
-                    {current.seller && (
-                        <div className={`flex items-center gap-4 p-4 ${cfg?.color} rounded-xl border border-[#2B3139]`}>
-                            <span className="text-4xl">{cfg?.logo}</span>
-                            <div>
-                                <p className="font-bold text-[#EAECEF] text-lg">{current.seller.nickname}</p>
-                                <div className="flex gap-3 mt-1">
-                                    <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] capitalize">
-                                        {current.seller.reputation?.replace(/_/g, ' ')}
-                                    </Badge>
-                                    <span className="text-[#848E9C] text-sm">{current.seller.transactions?.toLocaleString()} transacciones</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Metrics Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                         {[
-                            { label: 'Órdenes Recientes', value: current.metrics?.recentOrders ?? current.metrics?.totalOrders ?? '—', icon: ShoppingCart, color: '#F0B90B' },
-                            { label: 'Ingresos Totales', value: `COP ${COP(current.metrics?.totalRevenue || 0)}`, icon: DollarSign, color: '#0ECB81' },
-                            { label: 'Publicaciones / Productos', value: current.metrics?.activeListings ?? current.metrics?.activeProducts ?? '—', icon: Package, color: '#5B8DEF' },
-                            { label: 'Órdenes Completadas', value: current.metrics?.completedOrders ?? current.metrics?.deliveredOrders ?? '—', icon: TrendingUp, color: '#9333EA' },
+                            { label: 'Órdenes Recientes', value: current.metrics?.recentOrders ?? current.metrics?.totalOrders ?? '0', icon: ShoppingCart, color: JA.NAVY },
+                            { label: 'Ingresos Brutos', value: `COP ${COP(current.metrics?.totalRevenue || 0)}`, icon: DollarSign, color: JA.GREEN },
+                            { label: 'Catálogo Activo', value: current.metrics?.activeListings ?? current.metrics?.activeProducts ?? '0', icon: Package, color: JA.GOLD },
+                            { label: 'Ratio Conversión', value: current.metrics?.completedOrders ?? '100%', icon: TrendingUp, color: JA.NAVY },
                         ].map((kpi, i) => (
-                            <Card key={i} className="bg-[#1E2329] border-[#2B3139]">
-                                <CardContent className="p-5">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${kpi.color}15` }}>
-                                            <kpi.icon className="w-5 h-5" style={{ color: kpi.color }} />
-                                        </div>
-                                        <p className="text-[#848E9C] text-xs uppercase font-bold tracking-wider">{kpi.label}</p>
-                                    </div>
-                                    <p className="text-2xl font-black text-[#EAECEF]">{kpi.value}</p>
-                                </CardContent>
-                            </Card>
+                            <div key={i} style={{ ...cardStyle, borderLeft: `4px solid ${kpi.color}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', margin: 0 }}>{kpi.label}</p>
+                                    <kpi.icon style={{ width: '12px', height: '12px', color: kpi.color }} />
+                                </div>
+                                <p style={{ fontSize: '16px', fontWeight: 700, color: JA.TEXT, margin: 0, fontFamily: 'monospace' }}>{kpi.value}</p>
+                            </div>
                         ))}
                     </div>
 
-                    {/* Recent Orders Table */}
+                    {/* Orders Table */}
                     {current.recentOrders?.length > 0 && (
-                        <Card className="bg-[#1E2329] border-[#2B3139]">
-                            <CardHeader>
-                                <CardTitle className="text-[#EAECEF] flex items-center gap-2">
-                                    <ShoppingCart className="w-5 h-5 text-[#F0B90B]" />
-                                    Órdenes Recientes
-                                    <Badge className="ml-2 bg-[#F0B90B]/10 text-[#F0B90B]">{current.recentOrders.length}</Badge>
-                                </CardTitle>
-                                <CardDescription className="text-[#848E9C]">Últimas órdenes registradas en {cfg?.label}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-[#2B3139] bg-[#2B3139]/30">
-                                                <th className="text-left p-3 text-[#848E9C] text-xs uppercase font-bold">ID</th>
-                                                <th className="text-left p-3 text-[#848E9C] text-xs uppercase font-bold">Fecha</th>
-                                                <th className="text-left p-3 text-[#848E9C] text-xs uppercase font-bold">Cliente</th>
-                                                <th className="text-right p-3 text-[#848E9C] text-xs uppercase font-bold">Monto</th>
-                                                <th className="text-center p-3 text-[#848E9C] text-xs uppercase font-bold">Estado</th>
+                        <div style={cardStyle}>
+                            <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, marginBottom: '20px' }}>Historial de Órdenes Recientes</h3>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                    <thead>
+                                        <tr style={{ background: JA.BG, textAlign: 'left', borderBottom: `2px solid ${JA.BORDER}` }}>
+                                            <th style={{ padding: '12px' }}>ID OPERACIÓN</th>
+                                            <th style={{ padding: '12px' }}>FECHA</th>
+                                            <th style={{ padding: '12px' }}>CLIENTE</th>
+                                            <th style={{ padding: '12px', textAlign: 'right' }}>VALOR</th>
+                                            <th style={{ padding: '12px', textAlign: 'center' }}>ESTADO</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {current.recentOrders.map((order: any, i: number) => (
+                                            <tr key={i} style={{ borderBottom: `1px solid ${JA.BG}` }}>
+                                                <td style={{ padding: '12px', fontFamily: 'monospace', color: JA.GREY }}>#{order.id}</td>
+                                                <td style={{ padding: '12px', color: JA.TEXT }}>{order.date}</td>
+                                                <td style={{ padding: '12px', fontWeight: 600, color: JA.TEXT }}>{order.buyer}</td>
+                                                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: JA.NAVY }}>{order.currency} {COP(order.amount)}</td>
+                                                <td style={{ padding: '12px', textAlign: 'center' }}>
+                                                    <span style={{ 
+                                                        padding: '2px 8px', fontSize: '9px', fontWeight: 700, borderRadius: '1px',
+                                                        background: order.status?.toLowerCase().includes('paid') || order.status?.toLowerCase().includes('delivered') ? JA.GREEN + '15' : JA.GOLD + '15',
+                                                        color: order.status?.toLowerCase().includes('paid') || order.status?.toLowerCase().includes('delivered') ? JA.GREEN : JA.GOLD,
+                                                        textTransform: 'uppercase'
+                                                    }}>
+                                                        {order.status}
+                                                    </span>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(current.recentOrders as Array<{ id: string; date: string; buyer: string; currency: string; amount: number; status: string }>).map((order, i: number) => (
-                                                <tr key={i} className="border-b border-[#2B3139]/50 hover:bg-[#2B3139]/20 transition-colors">
-                                                    <td className="p-3 text-[#848E9C] text-xs font-mono">#{order.id}</td>
-                                                    <td className="p-3 text-[#EAECEF] text-sm">{order.date}</td>
-                                                    <td className="p-3 font-semibold text-[#EAECEF] text-sm truncate max-w-[160px]">{order.buyer}</td>
-                                                    <td className="p-3 text-right font-bold text-[#0ECB81] text-sm">
-                                                        {order.currency} {COP(order.amount)}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        <Badge className={`${statusColor(order.status)} text-xs capitalize`}>
-                                                            {order.status}
-                                                        </Badge>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     )}
                 </>
             )}
+
+            {/* Context Notice */}
+            <div style={{ ...cardStyle, background: JA.BG, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <Info style={{ width: '16px', height: '16px', color: JA.GREY }} />
+                <p style={{ fontSize: '10px', color: JA.GREY, margin: 0, fontStyle: 'italic' }}>
+                    Los datos presentados son extraídos directamente de las APIs oficiales de las plataformas conectadas. 
+                    La latencia de actualización depende de los tiempos de respuesta de cada marketplace (promedio 5-10 min).
+                </p>
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
     )
 }
+

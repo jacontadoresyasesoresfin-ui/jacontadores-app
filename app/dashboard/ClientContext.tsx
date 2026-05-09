@@ -25,8 +25,8 @@ export const DEFAULT_MODULES: Record<string, boolean> = {
     analytics: true, siigo_bi: true, reconciliation: true,
     sales: true, ecommerce: true, portfolio: true,
     inventory: true, reports: true, team: true,
-    taxes: true, configuracion: true, ml_pagos: true,
-    ml_comisiones: true, ml_devoluciones: true, ml_costos: true, ml_alertas: true,
+    taxes: true, configuracion: true, nomina: true,
+    ml_pagos: true, ml_comisiones: true, ml_devoluciones: true, ml_costos: true, ml_alertas: true,
 }
 
 export function getModules(profile: Profile | null): Record<string, boolean> {

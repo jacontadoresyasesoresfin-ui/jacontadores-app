@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
     LayoutDashboard, TrendingUp, ShoppingCart, Wallet, Package, FileText,
     Users, Receipt, Store, CreditCard, Percent, RotateCcw, DollarSign,
-    Bell, Settings, FileSpreadsheet, FileCheck
+    Bell, Settings, FileSpreadsheet, FileCheck, Calculator, Search
 } from 'lucide-react'
 import { useClient } from '@/app/dashboard/ClientContext'
 
@@ -31,6 +31,8 @@ const tabs = [
     { name: 'Equipo',       href: '/dashboard/team',            icon: Users,           moduleKey: 'team'      },
     { name: 'Impuestos',    href: '/dashboard/taxes',           icon: Receipt,         moduleKey: 'taxes'     },
     { name: 'Configuración',href: '/dashboard/configuracion',   icon: Settings,        moduleKey: 'configuracion' },
+    { name: 'Nómina PILA', href: '/dashboard/nomina',          icon: Calculator,      moduleKey: 'nomina'        },
+    { name: 'Verificar NIT',href: '/dashboard/nit',            icon: Search,          moduleKey: null            },
 ]
 
 const mlTabs = [

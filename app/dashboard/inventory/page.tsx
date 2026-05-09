@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Package, TrendingDown, AlertTriangle, TrendingUp, Search, BarChart3, Archive } from 'lucide-react'
+import { Package, TrendingDown, AlertTriangle, TrendingUp, Search, BarChart3, Archive, Download } from 'lucide-react'
 import { useClient } from '../ClientContext'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
+import { exportToExcel, exportToCSV } from '@/utils/export'
 
 const JA = {
     NAVY:    '#13213C', GOLD: '#B8960C', GOLD_PALE: '#F5E9C0',
@@ -92,9 +93,15 @@ export default function InventoryPage() {
                         {productos.length} SKUs detectados en facturación · Stock estimado por velocidad de venta
                     </p>
                 </div>
-                <div style={{ fontSize: '10px', color: JA.GREY_LT, textAlign: 'right', lineHeight: 1.6 }}>
-                    <p style={{ margin: 0, fontWeight: 600, color: JA.GREY }}>Fuente: Google Sheets</p>
-                    <p style={{ margin: 0 }}>Derivado de registros de facturación</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button onClick={() => exportToExcel(filtered.map(p => ({ Producto: p.name, Unidades: p.count, 'Total COP': p.total, 'Precio Prom.': Math.round(p.precioPromedio), 'Stock Est.': p.stockEstimado, 'Días Stock': p.diasStock >= 999 ? '—' : p.diasStock, Estado: p.estado })), `Inventario_${new Date().toISOString().slice(0,10)}`)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: JA.GREEN, color: '#FFF', border: 'none', borderRadius: '2px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>
+                        <Download style={{ width: 11, height: 11 }} /> Excel
+                    </button>
+                    <button onClick={() => exportToCSV(filtered.map(p => ({ Producto: p.name, Unidades: p.count, 'Total COP': p.total, 'Precio Prom.': Math.round(p.precioPromedio), 'Stock Est.': p.stockEstimado, 'Días Stock': p.diasStock >= 999 ? '—' : p.diasStock, Estado: p.estado })), `Inventario_${new Date().toISOString().slice(0,10)}`)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', background: '#FFF', color: JA.NAVY, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>
+                        <Download style={{ width: 11, height: 11 }} /> CSV
+                    </button>
                 </div>
             </div>
 

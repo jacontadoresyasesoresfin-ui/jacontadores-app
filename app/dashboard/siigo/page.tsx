@@ -77,10 +77,27 @@ interface SiigoRow {
 }
 interface MonthData  { mes: string; ingresos: number; egresos: number; neto: number }
 interface CuentaData { cuenta: string; total: number; tipo: 'ingreso' | 'egreso' }
+
+/* Estado de Cuenta por cliente (NIT) */
+interface EstadoCuentaRow {
+    nit: string
+    nombre: string
+    totalFacturado: number
+    totalPagado: number
+    saldoPendiente: number
+    facturas: number
+    d0_30: number   /* saldo en cartera 0-30 días */
+    d31_60: number
+    d61_90: number
+    dMas90: number
+    ultimaFecha: string
+}
+
 interface SiigoSummary {
     totalIngresos: number; totalEgresos: number; saldoNeto: number; margenPct: number
     rows: SiigoRow[];  byMonth: MonthData[];  byCuenta: CuentaData[];  columnas: string[]
     tipoInforme: 'ventas' | 'libro'
+    estadoCuenta: EstadoCuentaRow[]
 }
 
 /* ── Parser CSV ──────────────────────────────────────────── */
@@ -211,10 +228,55 @@ function analyzeSiigo(data: string[][], headers: string[]): SiigoSummary {
     const totalEgresos  = parsed.reduce((s,r)=>s+r.haber,0)
     const saldoNeto = totalIngresos - (isVentas ? 0 : totalEgresos)
 
+    /* ── Estado de Cuenta por NIT/Cliente ─────────────────── */
+    const today = new Date()
+    const nitMap: Record<string, EstadoCuentaRow> = {}
+    for (const r of parsed) {
+        const key = r.nit?.trim() || 'SIN NIT'
+        if (!nitMap[key]) {
+            nitMap[key] = {
+                nit: key,
+                nombre: r.descripcion || key,
+                totalFacturado: 0, totalPagado: 0, saldoPendiente: 0,
+                facturas: 0, d0_30: 0, d31_60: 0, d61_90: 0, dMas90: 0,
+                ultimaFecha: r.fecha,
+            }
+        }
+        const c = nitMap[key]
+        c.totalFacturado += r.debe
+        c.totalPagado    += r.haber
+        if (r.descripcion && r.descripcion.length > 2) c.nombre = r.descripcion
+        if (r.fecha > c.ultimaFecha) c.ultimaFecha = r.fecha
+        c.facturas++
+
+        // Antigüedad basada en la fecha de la transacción
+        const partes = r.fecha.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/) ||
+                       r.fecha.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})/)
+        let diasAntiguedad = 0
+        if (partes) {
+            const d = partes[1].length === 4
+                ? new Date(`${partes[1]}-${partes[2]}-${partes[3]}`)
+                : new Date(`${partes[3].length === 2 ? '20'+partes[3] : partes[3]}-${partes[2].padStart(2,'0')}-${partes[1].padStart(2,'0')}`)
+            diasAntiguedad = Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000))
+        }
+        const saldoFila = r.debe - r.haber
+        if (saldoFila > 0) {
+            if (diasAntiguedad <= 30)       c.d0_30   += saldoFila
+            else if (diasAntiguedad <= 60)  c.d31_60  += saldoFila
+            else if (diasAntiguedad <= 90)  c.d61_90  += saldoFila
+            else                            c.dMas90  += saldoFila
+        }
+    }
+    const estadoCuenta: EstadoCuentaRow[] = Object.values(nitMap)
+        .map(c => ({ ...c, saldoPendiente: Math.max(0, c.totalFacturado - c.totalPagado) }))
+        .filter(c => c.totalFacturado > 0)
+        .sort((a,b) => b.saldoPendiente - a.saldoPendiente)
+        .slice(0, 50)
+
     return {
         totalIngresos, totalEgresos, saldoNeto,
         margenPct: totalIngresos > 0 ? (saldoNeto/totalIngresos)*100 : 0,
-        rows: parsed, byMonth, byCuenta, columnas: cleanH, tipoInforme
+        rows: parsed, byMonth, byCuenta, columnas: cleanH, tipoInforme, estadoCuenta
     }
 }
 
@@ -253,7 +315,7 @@ export default function SiigoPage() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [summary, setSummary] = useState<SiigoSummary | null>(null)
-    const [activeTab, setActiveTab] = useState<'overview'|'monthly'|'accounts'|'table'>('overview')
+    const [activeTab, setActiveTab] = useState<'overview'|'monthly'|'accounts'|'table'|'estado'>('overview')
     const [urlFocused, setUrlFocused] = useState(false)
 
     const convertUrl = (url: string): string => {
@@ -295,6 +357,7 @@ export default function SiigoPage() {
         { id: 'overview'  as const, label: '📊 Resumen' },
         { id: 'monthly'   as const, label: '📅 Por Mes' },
         { id: 'accounts'  as const, label: '📂 Por Cuenta' },
+        { id: 'estado'    as const, label: '🧾 Estado de Cuenta' },
         { id: 'table'     as const, label: '📋 Detalle' },
     ]
 
@@ -641,6 +704,80 @@ export default function SiigoPage() {
                                             <span style={{ fontSize:'12px', fontWeight:700, color:CHART_COLORS[i%CHART_COLORS.length], fontFamily:'monospace', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{COP(c.total)}</span>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── TAB: Estado de Cuenta ─────────────── */}
+                    {activeTab === 'estado' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            {/* KPIs cartera */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                                {[
+                                    { label: 'Total Clientes', value: summary.estadoCuenta.length.toString(), color: JA.NAVY },
+                                    { label: 'Cartera 0–30 días', value: COP(summary.estadoCuenta.reduce((s,c)=>s+c.d0_30,0)), color: JA.GREEN },
+                                    { label: 'Cartera 31–90 días', value: COP(summary.estadoCuenta.reduce((s,c)=>s+c.d31_60+c.d61_90,0)), color: JA.GOLD },
+                                    { label: 'Cartera +90 días', value: COP(summary.estadoCuenta.reduce((s,c)=>s+c.dMas90,0)), color: JA.RED },
+                                    { label: 'Saldo Total Pendiente', value: COP(summary.estadoCuenta.reduce((s,c)=>s+c.saldoPendiente,0)), color: JA.NAVY, bold: true },
+                                ].map((kpi, i) => (
+                                    <div key={i} style={{ ...CARD, borderLeft: `3px solid ${kpi.color}`, padding: '14px 16px' }}>
+                                        <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px', fontFamily: 'Inter,sans-serif' }}>{kpi.label}</p>
+                                        <p style={{ fontSize: '18px', fontWeight: 800, color: kpi.color, margin: 0, fontFamily: 'Inter,sans-serif', fontVariantNumeric: 'tabular-nums' }}>{kpi.value}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Tabla estado de cuenta */}
+                            <div style={CARD}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.TEXT, margin: '0 0 2px', fontFamily: 'Montserrat,sans-serif' }}>Estado de Cuenta por Cliente / NIT</h3>
+                                        <p style={{ fontSize: '10px', color: JA.GREY, margin: 0, fontFamily: 'Inter,sans-serif' }}>Cartera por antigüedad · ordenada por saldo mayor a menor</p>
+                                    </div>
+                                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '12px', background: 'rgba(19,33,60,0.08)', color: JA.NAVY, border: '1px solid rgba(19,33,60,0.12)', fontFamily: 'Inter,sans-serif' }}>
+                                        {summary.estadoCuenta.length} terceros
+                                    </span>
+                                </div>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', fontFamily: 'Inter,sans-serif' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '2px solid #E0DDD8', background: '#F9F7F2' }}>
+                                                {['NIT','Nombre / Razón Social','Facturado','Pagado','Saldo','0–30 d','31–60 d','61–90 d','+90 d','Última Fecha'].map(h => (
+                                                    <th key={h} style={{ textAlign: 'left', padding: '9px 10px 9px 0', color: JA.GREY, fontWeight: 700, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {summary.estadoCuenta.map((row, i) => {
+                                                const tieneVencido = row.d61_90 > 0 || row.dMas90 > 0
+                                                return (
+                                                    <tr key={i}
+                                                        style={{ borderBottom: '1px solid #F4F1EC', background: tieneVencido ? 'rgba(220,38,38,0.03)' : i%2===0?'transparent':'#FAFAF8' }}
+                                                        onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background='#F0EDE6'}
+                                                        onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = tieneVencido ? 'rgba(220,38,38,0.03)' : i%2===0?'transparent':'#FAFAF8'}>
+                                                        <td style={{ padding: '8px 10px 8px 0', color: JA.GREY_LT, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.nit}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', color: JA.TEXT, fontWeight: 600, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.nombre}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', color: JA.NAVY, fontWeight: 700, whiteSpace: 'nowrap' }}>{COP(row.totalFacturado)}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', color: JA.GREEN, whiteSpace: 'nowrap' }}>{row.totalPagado > 0 ? COP(row.totalPagado) : '—'}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', fontWeight: 800, color: row.saldoPendiente > 0 ? (tieneVencido ? JA.RED : JA.GOLD) : JA.GREEN, whiteSpace: 'nowrap' }}>
+                                                            {row.saldoPendiente > 0 ? COP(row.saldoPendiente) : <span style={{ color: JA.GREEN }}>✓ Pagado</span>}
+                                                        </td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', color: JA.GREEN, whiteSpace: 'nowrap' }}>{row.d0_30 > 0 ? COP(row.d0_30) : '—'}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', color: JA.GOLD, whiteSpace: 'nowrap' }}>{row.d31_60 > 0 ? COP(row.d31_60) : '—'}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', color: JA.GOLD, whiteSpace: 'nowrap' }}>{row.d61_90 > 0 ? COP(row.d61_90) : '—'}</td>
+                                                        <td style={{ padding: '8px 10px 8px 0', fontFamily: 'monospace', color: row.dMas90 > 0 ? JA.RED : '#D0CDCA', fontWeight: row.dMas90 > 0 ? 700 : 400, whiteSpace: 'nowrap' }}>{row.dMas90 > 0 ? COP(row.dMas90) : '—'}</td>
+                                                        <td style={{ padding: '8px 0', color: JA.GREY_LT, whiteSpace: 'nowrap' }}>{row.ultimaFecha}</td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                    {summary.estadoCuenta.length === 0 && (
+                                        <div style={{ textAlign: 'center', padding: '32px', color: JA.GREY_LT, fontSize: '12px', fontFamily: 'Inter,sans-serif' }}>
+                                            No se detectaron NITs en el Sheet. Verifica que el archivo tenga columnas de NIT o Identificación.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

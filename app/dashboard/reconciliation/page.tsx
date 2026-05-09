@@ -206,15 +206,62 @@ export default function ReconciliationPage() {
                     <h1 style={{ fontSize: '20px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Conciliación Fiscal</h1>
                     <p style={{ fontSize: '12px', color: JA.GREY, marginTop: '4px' }}>Control y auditoría de documentos electrónicos DIAN</p>
                 </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button onClick={fetchInvoices} style={{ background: '#FFF', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', padding: '8px 12px', fontSize: '12px', fontWeight: 600, color: JA.TEXT, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                         <RefreshCw style={{ width: 14, height: 14 }} /> Sincronizar
                     </button>
-                    <button onClick={() => { setShowSheetSync(!showSheetSync); setShowDriveSync(false); }} style={{ background: JA.NAVY, border: 'none', borderRadius: '2px', padding: '8px 16px', fontSize: '12px', fontWeight: 600, color: '#FFF', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <button onClick={() => { setShowDriveSync(!showDriveSync); setShowSheetSync(false); setSyncResult(null); }} style={{ background: showDriveSync ? JA.GOLD : '#FFF', border: `1px solid ${showDriveSync ? JA.GOLD : JA.BORDER}`, borderRadius: '2px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, color: showDriveSync ? '#FFF' : JA.TEXT, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <Upload style={{ width: 14, height: 14 }} /> Leer PDFs Drive
+                    </button>
+                    <button onClick={() => { setShowSheetSync(!showSheetSync); setShowDriveSync(false); setSheetSyncResult(null); }} style={{ background: showSheetSync ? JA.NAVY : '#FFF', border: `1px solid ${showSheetSync ? JA.NAVY : JA.BORDER}`, borderRadius: '2px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, color: showSheetSync ? '#FFF' : JA.TEXT, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                         <FileSpreadsheet style={{ width: 14, height: 14 }} /> Importar Reporte DIAN
                     </button>
                 </div>
             </div>
+
+            {/* Panel — Drive PDF Sync */}
+            {showDriveSync && (
+                <div style={{ background: '#FFFDF5', border: `1px solid ${JA.GOLD}`, borderRadius: '2px', padding: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <Upload style={{ width: 14, height: 14, color: JA.GOLD }} />
+                        <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.NAVY, margin: 0 }}>Conciliación automática desde Google Drive (PDFs)</h3>
+                    </div>
+                    <p style={{ fontSize: '11px', color: JA.GREY, margin: '0 0 14px', lineHeight: 1.6 }}>
+                        Pega la URL de la <strong>carpeta de Drive</strong> donde están los PDFs de facturas electrónicas.
+                        La carpeta debe ser <strong>pública</strong> ("Cualquiera con el enlace"). El sistema extrae automáticamente
+                        CUFE, NIT y Valor de cada PDF y cruza con los registros DIAN.
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <input
+                            type="text"
+                            placeholder="https://drive.google.com/drive/folders/CARPETA_ID"
+                            style={{ flex: 1, minWidth: '260px', padding: '9px 12px', fontSize: '12px', fontFamily: 'Inter, sans-serif', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', outline: 'none', color: JA.TEXT }}
+                            value={driveUrl}
+                            onChange={(e) => setDriveUrl(e.target.value)}
+                        />
+                        <button
+                            onClick={handleDriveSync}
+                            disabled={syncingDrive || !driveUrl}
+                            style={{ background: JA.GOLD, color: '#FFF', border: 'none', borderRadius: '2px', padding: '9px 20px', fontSize: '12px', fontWeight: 700, cursor: syncingDrive || !driveUrl ? 'not-allowed' : 'pointer', opacity: syncingDrive || !driveUrl ? 0.65 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            <Upload style={{ width: 13, height: 13 }} />
+                            {syncingDrive ? 'Procesando PDFs...' : 'Iniciar conciliación'}
+                        </button>
+                    </div>
+                    {syncResult && (
+                        <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '2px', background: syncResult.includes('Error') ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${syncResult.includes('Error') ? '#FECACA' : '#BBF7D0'}` }}>
+                            {syncResult.includes('Error')
+                                ? <AlertCircle style={{ width: 14, height: 14, color: JA.RED, flexShrink: 0 }} />
+                                : <CheckCircle2 style={{ width: 14, height: 14, color: JA.GREEN, flexShrink: 0 }} />}
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: syncResult.includes('Error') ? JA.RED : JA.GREEN }}>{syncResult}</span>
+                        </div>
+                    )}
+                    <p style={{ fontSize: '10px', color: JA.GREY_LT, marginTop: '10px' }}>
+                        Requiere variable de entorno <code style={{ background: '#F3F4F6', padding: '1px 4px', borderRadius: '2px' }}>GOOGLE_DRIVE_API_KEY</code> configurada en el servidor.
+                        Si no está configurada, el sistema te indicará cómo obtenerla gratis en Google Cloud Console.
+                    </p>
+                </div>
+            )}
 
             {/* Sync Panels */}
             {showSheetSync && (

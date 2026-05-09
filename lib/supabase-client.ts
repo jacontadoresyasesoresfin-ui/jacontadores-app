@@ -23,6 +23,7 @@ export interface Profile {
 // Tipos base para la estructura de facturas DIAN
 export interface DianInvoice {
     id: string
+    profile_id?: string
     cufe: string
     fecha_emision: string
     tipo: 'emitida' | 'recibida'

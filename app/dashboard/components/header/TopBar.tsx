@@ -219,27 +219,39 @@ export default function TopBar() {
                         jacontadores.com
                     </Link>
 
-                    {/* Panel Maestro */}
-                    <Link href="/admin"
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '5px 10px',
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: 'rgba(255,255,255,0.55)',
-                            fontFamily: 'Inter, sans-serif',
-                            textDecoration: 'none',
-                            transition: 'all 0.15s',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.3)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
-                        <Settings style={{ width: '11px', height: '11px' }} />
-                        Panel Maestro
-                    </Link>
+                    {/* Panel Maestro — solo superadmin */}
+                    {profile?.role === 'superadmin' && (
+                        <Link href="/admin"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                                padding: '5px 10px', borderRadius: '8px', fontSize: '11px',
+                                fontWeight: 600, color: 'rgba(255,255,255,0.55)',
+                                fontFamily: 'Inter, sans-serif', textDecoration: 'none',
+                                transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.1)',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.3)' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
+                            <Settings style={{ width: '11px', height: '11px' }} />
+                            Panel Maestro
+                        </Link>
+                    )}
+
+                    {/* Panel Firma — solo firma_admin */}
+                    {profile?.role === 'firma_admin' && (
+                        <Link href="/firma-admin"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                                padding: '5px 10px', borderRadius: '8px', fontSize: '11px',
+                                fontWeight: 600, color: 'rgba(255,255,255,0.55)',
+                                fontFamily: 'Inter, sans-serif', textDecoration: 'none',
+                                transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.1)',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.3)' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
+                            <Settings style={{ width: '11px', height: '11px' }} />
+                            Panel Firma
+                        </Link>
+                    )}
 
                     {/* Usuario menú */}
                     <div style={{ position: 'relative' }}>

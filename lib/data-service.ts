@@ -11,48 +11,32 @@ export interface DashboardMetrics {
 }
 
 export interface TaxData {
-    // Totales brutos
-    totalVentasBruto: number       // Subtotal sin IVA (real o calculado)
-    totalIVACobrado: number        // IVA generado (ventas) — real si CSV tiene columna IVA
-    totalIVAPorPagar: number       // IVA a declarar (cobrado - descontable)
-    totalReteFuente: number        // Retención en la fuente
-    totalReteIVA: number           // ReteIVA (15% del IVA cobrado)
-    totalReteICA: number           // Retención ICA
-    totalImpuestosCargo: number    // Suma total de impuestos a cargo
-
-    // Desglose mensual para gráficas
+    totalVentasBruto: number
+    totalIVACobrado: number
+    totalIVAPorPagar: number
+    totalReteFuente: number
+    totalReteIVA: number
+    totalReteICA: number
+    totalImpuestosCargo: number
     monthlyBreakdown: {
-        month: string
-        ventas: number
-        iva: number
-        reteFuente: number
-        reteICA: number
-        neto: number
+        month: string; ventas: number; iva: number
+        reteFuente: number; reteICA: number; neto: number
     }[]
-
-    // Para declaraciones
     ivaDeclaracionBimestral: number
     ivaDeclaracionCuatrimestral: number
     baseGravableRenta: number
     impuestoRentaEstimado: number
-
-    // Indicadores de cumplimiento
     totalFacturas: number
     facturasPendientes: number
     tasaEfectivaTributaria: number
-
-    // Régimen
     regimenSugerido: 'Simplificado' | 'Ordinario' | 'Simple (SIMPLE)'
     alertas: string[]
-
-    // Metadatos: indica qué valores vienen del CSV real
     fuenteDatos: {
-        ivaReal: boolean         // true si la columna IVA/Valor IVA existe en el CSV
-        subtotalReal: boolean    // true si la columna Subtotal/Valor existe en el CSV
-        reteFuenteReal: boolean  // true si ReteFuente viene del CSV
-        reteICAReal: boolean     // true si ReteICA viene del CSV
-        columnasDetectadas: string[]  // nombres de columnas reconocidas
+        ivaReal: boolean; subtotalReal: boolean; reteFuenteReal: boolean
+        reteICAReal: boolean; columnasDetectadas: string[]
     }
+    /* Tasas aplicadas — para mostrar en UI */
+    tasasAplicadas: TaxRates
 }
 
 export interface ClientData {
@@ -68,37 +52,107 @@ export interface ClientData {
     topClients: { name: string; amount: number; percent: number }[]
     portfolio: {
         total: string
-        current: { value: string; percent: number; color: string }
-        dueSoon: { value: string; percent: number; color: string }
-        overdue: { value: string; percent: number; color: string }
+        current:  { value: string; percent: number; color: string }
+        dueSoon:  { value: string; percent: number; color: string }
+        overdue:  { value: string; percent: number; color: string }
     }
     recentActivity: {
         type: 'sale' | 'payment' | 'alert'
-        text: string
-        client: string
-        amount: string
-        time: string
-        color: string
+        text: string; client: string; amount: string; time: string; color: string
     }[]
     recurringCustomers: { name: string; count: number; total: number }[]
-    topProducts: { name: string; count: number; total: number }[]
-    prediction: {
-        nextMonth: number
-        growthRate: number
-        formula: string
-    }
+    topProducts:        { name: string; count: number; total: number }[]
+    prediction: { nextMonth: number; growthRate: number; formula: string }
     taxData: TaxData
 }
 
-export const fetchClientData = async (clientName: string, googleSheetUrl: string): Promise<ClientData> => {
+/* ─────────────────────────────────────────────────────────────
+   TASAS TRIBUTARIAS CONFIGURABLES
+   Fuente: Estatuto Tributario, Decreto DIAN vigente 2025
+   ───────────────────────────────────────────────────────────── */
+export interface TaxRates {
+    UVT: number              // Unidad de Valor Tributario (DIAN - anual)
+    SMMLV: number            // Salario Mínimo Mensual Legal Vigente
+    IVA_RATE: number         // Tarifa general IVA (Art. 468 ET)
+    RETE_FUENTE: number      // ReteFuente compras/servicios general (Art. 383)
+    RETE_IVA: number         // ReteIVA (15% del IVA — Art. 437-1)
+    RETE_ICA_BOGOTA: number  // ReteICA Bogotá (Acuerdo 65/2002)
+    RENTA_RATE: number       // Tarifa Renta Personas Jurídicas (Art. 240)
+    COSTO_ESTIMADO: number   // % costos sobre ingresos (estimado)
+}
+
+export const DEFAULT_TAX_RATES: TaxRates = {
+    UVT:              49_799,   // 2025 — Decreto 2604/2024
+    SMMLV:         1_300_606,   // 2025 — Decreto 2641/2024
+    IVA_RATE:          0.19,    // 19% — Ley 1819/2016, mantiene 2025
+    RETE_FUENTE:       0.035,   // 3.5% general — Art. 383 ET
+    RETE_IVA:          0.15,    // 15% — Art. 437-1 ET
+    RETE_ICA_BOGOTA:   0.00414, // 4.14‰ — tarifa media Bogotá Acuerdo 65
+    RENTA_RATE:        0.35,    // 35% — Art. 240 ET (PJ)
+    COSTO_ESTIMADO:    0.65,    // 65% costos estimados s/ventas
+}
+
+export const LS_TAX_KEY = 'ja_tax_config'
+
+export const loadTaxRates = (): TaxRates => {
+    if (typeof window === 'undefined') return DEFAULT_TAX_RATES
+    try {
+        const stored = localStorage.getItem(LS_TAX_KEY)
+        if (stored) return { ...DEFAULT_TAX_RATES, ...JSON.parse(stored) }
+    } catch { /* ignore */ }
+    return DEFAULT_TAX_RATES
+}
+
+export const saveTaxRates = (rates: TaxRates) => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(LS_TAX_KEY, JSON.stringify(rates))
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HELPERS
+   ───────────────────────────────────────────────────────────── */
+const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+/** Normaliza cualquier formato de fecha a YYYY-MM-DD */
+const normalizeDate = (raw: string): string => {
+    const s = String(raw || '').split(' ')[0].split('T')[0].trim()
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    // DD-MM-YYYY o DD/MM/YYYY o D-M-YYYY
+    const m1 = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/)
+    if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`
+    // DD.MM.YYYY
+    const m2 = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+    if (m2) return `${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`
+    // YYYYMMDD
+    if (/^\d{8}$/.test(s)) return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`
+    // DD-MM-YY
+    const m3 = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/)
+    if (m3) return `20${m3[3]}-${m3[2].padStart(2,'0')}-${m3[1].padStart(2,'0')}`
+    return s
+}
+
+const parseNum = (val: unknown): number => {
+    if (val === null || val === undefined || val === '') return 0
+    const cleaned = String(val).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.')
+    const n = parseFloat(cleaned)
+    return isNaN(n) ? 0 : Math.abs(n)
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FETCH + PARSE DATA FROM GOOGLE SHEETS
+   ───────────────────────────────────────────────────────────── */
+export const fetchClientData = async (
+    clientName: string,
+    googleSheetUrl: string
+): Promise<ClientData> => {
     return new Promise(async (resolve, reject) => {
         if (!googleSheetUrl) {
-            reject(new Error("No Google Sheet URL provided"))
+            reject(new Error('No Google Sheet URL provided'))
             return
         }
 
         try {
-            // Utilizamos el proxy interno para saltar bloqueos de CORS del navegador
             const res = await fetch(`/api/sheets-proxy?url=${encodeURIComponent(googleSheetUrl)}`)
             if (!res.ok) throw new Error(`Proxy error: ${res.status} ${res.statusText}`)
             const csvText = await res.text()
@@ -107,161 +161,198 @@ export const fetchClientData = async (clientName: string, googleSheetUrl: string
                 header: true,
                 dynamicTyping: true,
                 skipEmptyLines: true,
-                transformHeader: (header) => header.trim(),
+                transformHeader: (h) => h.trim(),
                 complete: (results) => {
                     const rows = results.data as Record<string, unknown>[]
-
-                    // Cada empresa tiene su propio Sheet privado (google_sheet_url en su perfil).
-                    // NO filtramos por nombre ya que el Sheet ya pertenece exclusivamente a esa empresa.
-                    // Filtro por nombre solo aplica para el modo "demo" heredado.
                     const normalizedSearch = clientName.toLowerCase().trim()
                     const filteredRows = normalizedSearch === 'empresa demo'
-                        ? rows.slice(0, 50) // demo: limitar a 50 filas de muestra
-                        : rows // datos completos del Sheet privado de la empresa
+                        ? rows.slice(0, 50)
+                        : rows
 
-                let totalSales = 0
-                const dateAggregation: Record<string, number> = {}
-                const clientRecurrence: Record<string, { name: string; count: number; total: number }> = {}
-                const productAggregation: Record<string, { count: number; total: number }> = {}
-                const uniqueClients = new Set<string>()
+                    /* ── Acumuladores ───────────────────────────────── */
+                    let totalSales = 0
+                    const dateAggregation:     Record<string, number>                                 = {}
+                    const clientRecurrence:    Record<string, { name: string; count: number; total: number }> = {}
+                    const productAggregation:  Record<string, { count: number; total: number }>       = {}
+                    const uniqueClients = new Set<string>()
 
-                filteredRows.forEach(row => {
-                    const rawValue = String(row['Total'] || '0')
-                        .replace(/\s/g, '')
-                        .replace(/\./g, '')
-                        .replace(/,/g, '.')
-                    const numericValue = parseFloat(rawValue)
-                    const val = isNaN(numericValue) ? 0 : numericValue
+                    /* Columnas de fecha más comunes en facturas electrónicas DIAN */
+                    const DATE_COLS = [
+                        'Fecha Recepción','Fecha Emisión','Fecha','fecha emisi',
+                        'Fecha Factura','Fecha de Factura','FechaFactura',
+                        'Fecha Vencimiento','Fecha Pago',
+                    ]
 
-                    if (val > 0) {
+                    filteredRows.forEach(row => {
+                        const rawValue = String(row['Total'] || '0')
+                            .replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.')
+                        const val = parseFloat(rawValue)
+                        if (isNaN(val) || val <= 0) return
+
                         totalSales += val
 
-                        // Identificación y Nombre del Receptor/Emisor
-                        const receptorId = String(row['NIT Receptor'] || row['NIT Emisor'] || row['NIT'] || row['Identificación'] || row['Cédula'] || row['Nombre Receptor'] || 'Otros').trim()
-                        const receptorName = String(row['Nombre Receptor'] || row['Nombre Emisor'] || receptorId)
+                        /* Cliente */
+                        const receptorId   = String(
+                            row['NIT Receptor'] || row['NIT Emisor'] || row['NIT'] ||
+                            row['Identificación'] || row['Cédula'] ||
+                            row['Nombre Receptor'] || 'Otros'
+                        ).trim()
+                        const receptorName = String(
+                            row['Nombre Receptor'] || row['Nombre Emisor'] || receptorId
+                        ).trim()
                         uniqueClients.add(receptorName)
 
-                        // Recurrencia de Clientes (Agrupar por ID para mayor precisión)
-                        if (!clientRecurrence[receptorId]) clientRecurrence[receptorId] = { name: receptorName, count: 0, total: 0 }
+                        if (!clientRecurrence[receptorId])
+                            clientRecurrence[receptorId] = { name: receptorName, count: 0, total: 0 }
                         clientRecurrence[receptorId].count++
                         clientRecurrence[receptorId].total += val
 
-                        // Productos (Búsqueda dinámica de columna)
-                        const productName = String(row['Descripción'] || row['Nombre Producto'] || row['Detalle'] || 'Factura/Servicio').trim()
-                        if (!productAggregation[productName]) productAggregation[productName] = { count: 0, total: 0 }
+                        /* Producto */
+                        const productName = String(
+                            row['Descripción'] || row['Nombre Producto'] || row['Detalle'] ||
+                            row['Concepto'] || row['Producto'] || 'Factura/Servicio'
+                        ).trim()
+                        if (!productAggregation[productName])
+                            productAggregation[productName] = { count: 0, total: 0 }
                         productAggregation[productName].count++
                         productAggregation[productName].total += val
 
-                        const fullDate = String(row['Fecha Recepción'] || row['Fecha Recepción'] || row['Fecha Emisión'] || row['Fecha'] || row['fecha emisi'] || '')
-                        const shortDate = fullDate.split(' ')[0] // DD-MM-YYYY or YYYY-MM-DD
-                        if (shortDate) {
-                            dateAggregation[shortDate] = (dateAggregation[shortDate] || 0) + val
+                        /* Fecha — busca la primera columna con valor */
+                        const rawDate = String(
+                            DATE_COLS.map(c => row[c]).find(v => v && String(v).trim()) || ''
+                        )
+                        const isoDate = normalizeDate(rawDate.split(' ')[0])
+                        if (isoDate && isoDate.length >= 7) {
+                            dateAggregation[isoDate] = (dateAggregation[isoDate] || 0) + val
                         }
-                    }
-                })
-
-                // Generar historial últimos 30 días ordenado por fecha
-                const salesHistory = Object.entries(dateAggregation)
-                    .map(([date, amount]) => ({ date, amount }))
-                    .sort((a, b) => {
-                        const [d1, m1, y1] = a.date.split('-').map(Number)
-                        const [d2, m2, y2] = b.date.split('-').map(Number)
-                        return new Date(y1, m1 - 1, d1).getTime() - new Date(y2, m2 - 1, d2).getTime()
                     })
-                    .slice(-30)
 
-                // Top Clientes — derived from clientRecurrence (ordered by total amount)
-                const sortedClients = Object.values(clientRecurrence)
-                    .sort((a, b) => b.total - a.total)
-                    .slice(0, 5)
+                    /* ── Historial de ventas (últimos 90 días, ISO asc) ── */
+                    const salesHistory = Object.entries(dateAggregation)
+                        .map(([date, amount]) => ({ date: normalizeDate(date), amount }))
+                        .sort((a, b) => a.date.localeCompare(b.date))
+                        .slice(-90)
 
-                const maxAmount = sortedClients[0]?.total || 1
-                const topClients = sortedClients.map(c => ({
-                    name: c.name,
-                    amount: c.total,
-                    percent: Math.round((c.total / maxAmount) * 100)
-                }))
+                    /* ── Cambio MoM real ──────────────────────────────── */
+                    const monthlyGrouped: Record<string, number> = {}
+                    salesHistory.forEach(({ date, amount }) => {
+                        const mk = date.slice(0, 7)
+                        monthlyGrouped[mk] = (monthlyGrouped[mk] || 0) + amount
+                    })
+                    const sortedMK = Object.keys(monthlyGrouped).sort()
+                    const lastMoSales = monthlyGrouped[sortedMK.at(-1) || ''] || 0
+                    const prevMoSales = monthlyGrouped[sortedMK.at(-2) || ''] || lastMoSales
+                    const salesChange = prevMoSales > 0
+                        ? Math.round(((lastMoSales - prevMoSales) / prevMoSales) * 1000) / 10
+                        : 0
 
-                // Cartera simulada basada en el total
-                const portfolioTotal = totalSales * 1.2
-                const portfolio = {
-                    total: `COP $${Math.round(portfolioTotal).toLocaleString('es-CO')}`,
-                    current: { value: `COP $${Math.round(portfolioTotal * 0.6).toLocaleString('es-CO')}`, percent: 60, color: '#0ECB81' },
-                    dueSoon: { value: `COP $${Math.round(portfolioTotal * 0.25).toLocaleString('es-CO')}`, percent: 25, color: '#F0B90B' },
-                    overdue: { value: `COP $${Math.round(portfolioTotal * 0.15).toLocaleString('es-CO')}`, percent: 15, color: '#F6465D' },
-                }
+                    /* Clientes únicos MoM */
+                    const clientsByMonth: Record<string, Set<string>> = {}
+                    filteredRows.forEach(row => {
+                        const rawDate = String(DATE_COLS.map(c => row[c]).find(v => v && String(v).trim()) || '')
+                        const iso = normalizeDate(rawDate.split(' ')[0])
+                        const mk = iso.slice(0, 7)
+                        if (!clientsByMonth[mk]) clientsByMonth[mk] = new Set()
+                        const name = String(row['Nombre Receptor'] || row['NIT Receptor'] || 'Otros')
+                        clientsByMonth[mk].add(name)
+                    })
+                    const sortedMKc = Object.keys(clientsByMonth).sort()
+                    const lastMoClients = clientsByMonth[sortedMKc.at(-1) || '']?.size || 0
+                    const prevMoClients = clientsByMonth[sortedMKc.at(-2) || '']?.size || lastMoClients
+                    const clientsChange = prevMoClients > 0
+                        ? Math.round(((lastMoClients - prevMoClients) / prevMoClients) * 1000) / 10
+                        : 0
 
-                // Actividad Reciente
-                const recentActivity = filteredRows.slice(-6).reverse().map(row => {
-                    const rawValue = String(row['Total'] || '0').replace(/\s/g, '').replace(/\./g, '').replace(/,/g, '.')
-                    const numericAmount = parseFloat(rawValue)
-                    return {
-                        type: 'sale' as const,
-                        text: 'Venta Procesada',
-                        client: String(row['Nombre Receptor'] || 'Cliente'),
-                        amount: `COP $${(isNaN(numericAmount) ? 0 : numericAmount).toLocaleString('es-CO')}`,
-                        time: String(row['Fecha Recepción'] || '').split(' ')[0] || 'Reciente',
-                        color: '#0ECB81'
+                    /* ── Top Clientes ─────────────────────────────────── */
+                    const sortedClients = Object.values(clientRecurrence)
+                        .sort((a, b) => b.total - a.total).slice(0, 8)
+                    const maxAmount = sortedClients[0]?.total || 1
+                    const topClients = sortedClients.map(c => ({
+                        name: c.name, amount: c.total,
+                        percent: Math.round((c.total / maxAmount) * 100)
+                    }))
+
+                    /* ── Cartera estimada ─────────────────────────────── */
+                    const portfolioTotal = totalSales * 1.2
+                    const portfolio = {
+                        total:    `COP $${Math.round(portfolioTotal).toLocaleString('es-CO')}`,
+                        current:  { value: `COP $${Math.round(portfolioTotal * 0.6).toLocaleString('es-CO')}`,  percent: 60, color: '#10B981' },
+                        dueSoon:  { value: `COP $${Math.round(portfolioTotal * 0.25).toLocaleString('es-CO')}`, percent: 25, color: '#F59E0B' },
+                        overdue:  { value: `COP $${Math.round(portfolioTotal * 0.15).toLocaleString('es-CO')}`, percent: 15, color: '#EF4444' },
                     }
-                })
 
-                resolve({
-                    id: normalizedSearch.replace(/\s+/g, '-'),
-                    name: clientName,
-                    metrics: {
-                        sales: {
-                            title: 'Ventas Totales',
-                            value: `COP $${Math.round(totalSales).toLocaleString('es-CO')}`,
-                            rawValue: totalSales,
-                            change: 12.5,
-                            changeLabel: 'vs mes anterior',
-                            trend: 'up',
-                            sparklineData: salesHistory.length > 0 ? salesHistory.map(h => h.amount) : [10, 20, 15, 30]
-                        },
-                        newClients: {
-                            title: 'Clientes Únicos',
-                            value: uniqueClients.size.toString(),
-                            rawValue: uniqueClients.size,
-                            change: 5.2,
-                            changeLabel: 'vs mes anterior',
-                            trend: 'up',
-                            sparklineData: [5, 10, 8, 15]
-                        },
-                        overdue: {
-                            title: 'Cartera Vencida (Est.)',
-                            value: `COP $${Math.round(portfolioTotal * 0.15).toLocaleString('es-CO')}`,
-                            rawValue: portfolioTotal * 0.15,
-                            change: -2.1,
-                            changeLabel: 'vs mes anterior',
-                            trend: 'down',
-                            sparklineData: [20, 18, 15, 12]
-                        },
-                        productsSold: {
-                            title: 'Facturas Emitidas',
-                            value: filteredRows.length.toString(),
-                            rawValue: filteredRows.length,
-                            change: 8.4,
-                            changeLabel: 'vs mes anterior',
-                            trend: 'up',
-                            sparklineData: [100, 120, 110, 140]
+                    /* ── Actividad reciente ───────────────────────────── */
+                    const recentActivity = filteredRows.slice(-6).reverse().map(row => {
+                        const raw = String(row['Total'] || '0').replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.')
+                        const amt = parseFloat(raw)
+                        const rawDate = String(DATE_COLS.map(c => row[c]).find(v => v) || '')
+                        return {
+                            type: 'sale' as const, text: 'Venta Procesada',
+                            client: String(row['Nombre Receptor'] || row['NIT Receptor'] || 'Cliente').trim(),
+                            amount: `COP $${(isNaN(amt) ? 0 : amt).toLocaleString('es-CO')}`,
+                            time:   normalizeDate(rawDate.split(' ')[0]) || 'Reciente',
+                            color:  '#10B981'
                         }
-                    },
-                    salesHistory: salesHistory.length > 0 ? salesHistory : [],
-                    topClients,
-                    portfolio,
-                    recentActivity,
-                    recurringCustomers: Object.values(clientRecurrence)
-                        .sort((a, b) => b.count - a.count)
-                        .slice(0, 8),
-                    topProducts: Object.entries(productAggregation)
-                        .map(([name, stats]) => ({ name, ...stats }))
-                        .sort((a, b) => b.count - a.count)
-                        .slice(0, 8),
+                    })
+
+                    /* ── Tax Data ─────────────────────────────────────── */
+                    const taxRates = loadTaxRates()
+
+                    resolve({
+                        id:   normalizedSearch.replace(/\s+/g, '-'),
+                        name: clientName,
+                        metrics: {
+                            sales: {
+                                title: 'Ventas Totales',
+                                value: `COP $${Math.round(totalSales).toLocaleString('es-CO')}`,
+                                rawValue: totalSales,
+                                change: salesChange,
+                                changeLabel: sortedMK.length >= 2 ? 'vs mes anterior (real)' : 'período actual',
+                                trend: salesChange >= 0 ? 'up' : 'down',
+                                sparklineData: salesHistory.slice(-12).map(h => h.amount),
+                            },
+                            newClients: {
+                                title: 'Clientes Únicos',
+                                value: uniqueClients.size.toString(),
+                                rawValue: uniqueClients.size,
+                                change: clientsChange,
+                                changeLabel: sortedMKc.length >= 2 ? 'vs mes anterior (real)' : 'período actual',
+                                trend: clientsChange >= 0 ? 'up' : 'down',
+                                sparklineData: Object.values(clientsByMonth).map(s => s.size),
+                            },
+                            overdue: {
+                                title: 'Cartera Vencida (Est.)',
+                                value: `COP $${Math.round(portfolioTotal * 0.15).toLocaleString('es-CO')}`,
+                                rawValue: portfolioTotal * 0.15,
+                                change: 0,
+                                changeLabel: 'estimado 15% cartera',
+                                trend: 'neutral',
+                                sparklineData: [20, 18, 15, 12],
+                            },
+                            productsSold: {
+                                title: 'Facturas / Registros',
+                                value: filteredRows.length.toString(),
+                                rawValue: filteredRows.length,
+                                change: 0,
+                                changeLabel: 'total registros Sheet',
+                                trend: 'neutral',
+                                sparklineData: [],
+                            },
+                        },
+                        salesHistory,
+                        topClients,
+                        portfolio,
+                        recentActivity,
+                        recurringCustomers: Object.values(clientRecurrence)
+                            .sort((a, b) => b.count - a.count).slice(0, 8),
+                        topProducts: Object.entries(productAggregation)
+                            .map(([name, stats]) => ({ name, ...stats }))
+                            .sort((a, b) => b.count - a.count).slice(0, 8),
                         prediction: calculatePrediction(salesHistory.map(h => h.amount)),
-                        taxData: calculateTaxData(filteredRows, totalSales)
+                        taxData: calculateTaxData(filteredRows, totalSales, taxRates),
                     })
                 },
-                error: (err: any) => reject(err)
+                error: (err: Error) => reject(err),
             })
         } catch (err) {
             reject(err)
@@ -269,230 +360,168 @@ export const fetchClientData = async (clientName: string, googleSheetUrl: string
     })
 }
 
+/* ─────────────────────────────────────────────────────────────
+   PREDICCIÓN LINEAL
+   ───────────────────────────────────────────────────────────── */
 const calculatePrediction = (history: number[]) => {
-    if (history.length < 2) return { nextMonth: 0, growthRate: 0, formula: "Datos insuficientes" }
-
-    // Regresión lineal simple (x = índice, y = monto)
+    if (history.length < 2) return { nextMonth: 0, growthRate: 0, formula: 'Datos insuficientes' }
     const n = history.length
     let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0
-    for (let i = 0; i < n; i++) {
-        sumX += i
-        sumY += history[i]
-        sumXY += i * history[i]
-        sumX2 += i * i
-    }
-
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+    for (let i = 0; i < n; i++) { sumX += i; sumY += history[i]; sumXY += i * history[i]; sumX2 += i * i }
+    const slope     = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
     const intercept = (sumY - slope * sumX) / n
-
-    // Predicción para el siguiente periodo (30 días)
-    const nextMonth = Math.max(0, (slope * (n + 15) + intercept) * 30 / (n || 1))
+    const nextMonth = Math.max(0, slope * (n + 15) + intercept) * 30 / (n || 1)
     const growthRate = (slope / (sumY / n || 1)) * 100
-
     return {
         nextMonth,
         growthRate,
-        formula: `Y = ${slope.toFixed(2)}x + ${intercept.toFixed(2)} | Proyección a 30 días`
+        formula: `Y = ${slope.toFixed(2)}x + ${intercept.toFixed(2)} | R²≈ regresión ${n} puntos`,
     }
 }
 
-// ============================================================
-// HELPERS: parse numeric from CSV cell (handles COP formatting)
-// ============================================================
-const parseNum = (val: unknown): number => {
-    if (val === null || val === undefined || val === '') return 0
-    const cleaned = String(val)
-        .replace(/\s/g, '')
-        .replace(/\./g, '')
-        .replace(/,/g, '.')
-    const n = parseFloat(cleaned)
-    return isNaN(n) ? 0 : Math.abs(n) // retenciones pueden venir negativas
-}
+/* ─────────────────────────────────────────────────────────────
+   CÁLCULO TRIBUTARIO — COLOMBIANO — con tasas configurables
+   ───────────────────────────────────────────────────────────── */
+export const calculateTaxData = (
+    rows: Record<string, unknown>[],
+    totalVentas: number,
+    rates?: TaxRates
+): TaxData => {
+    const R = rates ?? loadTaxRates()
 
-// ============================================================
-// CÁLCULO TRIBUTARIO — LEY COLOMBIANA — con datos REALES del CSV
-// ============================================================
-export const calculateTaxData = (rows: Record<string, unknown>[], totalVentas: number): TaxData => {
-    // Tasas de respaldo (solo se usan si el CSV no tiene las columnas)
-    const IVA_RATE = 0.19
-    const RETE_FUENTE = 0.035
-    const RETE_IVA = 0.15
-    const RETE_ICA_BOGOTA = 0.00414
-    const RENTA_RATE = 0.35
-    const COSTO_ESTIMADO = 0.65
-    const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    const DATE_COLS = ['Fecha Recepción','Fecha Emisión','Fecha','fecha emisi','Fecha Factura']
 
-    // ── Detección dinámica de columnas del CSV ──────────────────────
+    /* ── Detección dinámica de columnas ── */
     const sampleRow = rows[0] || {}
     const cols = Object.keys(sampleRow).map(k => k.trim())
 
-    // Columna IVA — nombres comunes en facturas electrónicas colombianas
-    const colIVA = cols.find(c =>
-        /^(iva|valor\s*iva|impuesto|iva\s*19|valor\s*impuesto|taxes?|vat)$/i.test(c)
-    ) || null
-
-    // Columna Subtotal (base sin IVA)
-    const colSubtotal = cols.find(c =>
-        /^(subtotal|valor\s*bruto|base|base\s*gravable|valor\s*sin\s*iva|neto\s*factura)$/i.test(c)
-    ) || null
-
-    // Columna ReteFuente
-    const colReteFuente = cols.find(c =>
-        /^(retefuente|rete\s*fuente|retenci[oó]n\s*fuente|retenci[oó]n\s*en\s*la\s*fuente|rtefte)$/i.test(c)
-    ) || null
-
-    // Columna ReteICA
-    const colReteICA = cols.find(c =>
-        /^(reteica|rete\s*ica|retenci[oó]n\s*ica|ica)$/i.test(c)
-    ) || null
-
-    // Columna Total (siempre presente)
-    const colTotal = cols.find(c => /^total$/i.test(c)) || 'Total'
+    const colIVA        = cols.find(c => /^(iva|valor\s*iva|impuesto|iva\s*19|valor\s*impuesto|taxes?|vat)$/i.test(c)) || null
+    const colSubtotal   = cols.find(c => /^(subtotal|valor\s*bruto|base|base\s*gravable|valor\s*sin\s*iva|neto\s*factura)$/i.test(c)) || null
+    const colReteFuente = cols.find(c => /^(retefuente|rete\s*fuente|retenci[oó]n\s*fuente|retenci[oó]n\s*en\s*la\s*fuente|rtefte)$/i.test(c)) || null
+    const colReteICA    = cols.find(c => /^(reteica|rete\s*ica|retenci[oó]n\s*ica|ica)$/i.test(c)) || null
+    const colTotal      = cols.find(c => /^total$/i.test(c)) || 'Total'
 
     const fuenteDatos = {
-        ivaReal: colIVA !== null,
-        subtotalReal: colSubtotal !== null,
+        ivaReal:        colIVA !== null,
+        subtotalReal:   colSubtotal !== null,
         reteFuenteReal: colReteFuente !== null,
-        reteICAReal: colReteICA !== null,
+        reteICAReal:    colReteICA !== null,
         columnasDetectadas: [colIVA, colSubtotal, colReteFuente, colReteICA].filter(Boolean) as string[],
     }
 
-    // ── Acumuladores globales ───────────────────────────────────────
-    let sumIVA = 0
-    let sumSubtotal = 0
-    let sumReteFuente = 0
-    let sumReteICA = 0
-
-    // ── Desglose mensual ────────────────────────────────────────────
-    const monthlyMap: Record<string, {
-        ventas: number; iva: number; reteFuente: number; reteICA: number; facturas: number
-    }> = {}
+    let sumIVA = 0, sumSubtotal = 0, sumReteFuente = 0, sumReteICA = 0
+    const monthlyMap: Record<string, { ventas:number; iva:number; reteFuente:number; reteICA:number; facturas:number }> = {}
 
     rows.forEach(row => {
         const total = parseNum(row[colTotal])
         if (total <= 0) return
 
-        // Valores reales del CSV
-        const ivaRow = colIVA ? parseNum(row[colIVA]) : null
-        const subtotalRow = colSubtotal ? parseNum(row[colSubtotal]) : null
+        const ivaRow        = colIVA        ? parseNum(row[colIVA])        : null
+        const subtotalRow   = colSubtotal   ? parseNum(row[colSubtotal])   : null
         const reteFuenteRow = colReteFuente ? parseNum(row[colReteFuente]) : null
-        const reteICARow = colReteICA ? parseNum(row[colReteICA]) : null
+        const reteICARow    = colReteICA    ? parseNum(row[colReteICA])    : null
 
-        // Fallbacks cuando la columna no existe
-        const ivaUsado = ivaRow !== null ? ivaRow : total * IVA_RATE / (1 + IVA_RATE)
-        const subtotalUsado = subtotalRow !== null ? subtotalRow : total - ivaUsado
-        const reteFuenteUsado = reteFuenteRow !== null ? reteFuenteRow : subtotalUsado * RETE_FUENTE
-        const reteICAUsado = reteICARow !== null ? reteICARow : total * RETE_ICA_BOGOTA
+        const ivaUsado        = ivaRow        !== null ? ivaRow        : total * R.IVA_RATE / (1 + R.IVA_RATE)
+        const subtotalUsado   = subtotalRow   !== null ? subtotalRow   : total - ivaUsado
+        const reteFuenteUsado = reteFuenteRow !== null ? reteFuenteRow : subtotalUsado * R.RETE_FUENTE
+        const reteICAUsado    = reteICARow    !== null ? reteICARow    : total * R.RETE_ICA_BOGOTA
 
-        sumIVA += ivaUsado
-        sumSubtotal += subtotalUsado
-        sumReteFuente += reteFuenteUsado
-        sumReteICA += reteICAUsado
+        sumIVA += ivaUsado; sumSubtotal += subtotalUsado
+        sumReteFuente += reteFuenteUsado; sumReteICA += reteICAUsado
 
-        // Fecha
-        const fechaStr = String(row['Fecha Recepción'] || row['Fecha'] || '')
+        /* Fecha normalizada */
+        const rawDate = String(DATE_COLS.map(c => row[c]).find(v => v && String(v).trim()) || '')
+        const iso     = normalizeDate(rawDate.split(' ')[0])
         let month = 'Sin fecha'
-        const parts = fechaStr.split('-')
-        if (parts.length >= 2) {
-            if (parts[0].length <= 2) {
-                // DD-MM-YYYY
-                const m = parseInt(parts[1]) - 1
-                const y = parts[2]?.substring(0, 4) || ''
-                month = `${MONTH_NAMES[m] || 'Mes'} ${y}`.trim()
-            } else {
-                // YYYY-MM-DD
-                const m = parseInt(parts[1]) - 1
-                month = `${MONTH_NAMES[m] || 'Mes'} ${parts[0]}`.trim()
-            }
+        if (iso && iso.length >= 7) {
+            const [y, m] = iso.split('-')
+            month = `${MONTH_NAMES[parseInt(m) - 1] || 'Mes'} ${y}`
         }
 
-        if (!monthlyMap[month]) monthlyMap[month] = { ventas: 0, iva: 0, reteFuente: 0, reteICA: 0, facturas: 0 }
-        monthlyMap[month].ventas += total
-        monthlyMap[month].iva += ivaUsado
-        monthlyMap[month].reteFuente += reteFuenteUsado
-        monthlyMap[month].reteICA += reteICAUsado
-        monthlyMap[month].facturas += 1
+        if (!monthlyMap[month]) monthlyMap[month] = { ventas:0, iva:0, reteFuente:0, reteICA:0, facturas:0 }
+        monthlyMap[month].ventas      += total
+        monthlyMap[month].iva         += ivaUsado
+        monthlyMap[month].reteFuente  += reteFuenteUsado
+        monthlyMap[month].reteICA     += reteICAUsado
+        monthlyMap[month].facturas    += 1
     })
 
-    // ── Totales globales ────────────────────────────────────────────
-    const totalVentasBruto = sumSubtotal > 0 ? sumSubtotal : totalVentas - sumIVA
-    const totalIVACobrado = sumIVA
-    // IVA a pagar: si hay datos reales de reteFuente ya no podemos asumir IVA descontable genérico
-    // Solo estimamos IVA descontable cuando NO hay columna IVA real
-    const totalIVAPorPagar = fuenteDatos.ivaReal
-        ? totalIVACobrado   // sin IVA descontable (no tenemos datos de compras)
-        : totalIVACobrado * 0.70  // estimado: IVA descontable ~30%
-    const totalReteFuente = sumReteFuente
-    const totalReteIVA = totalIVACobrado * RETE_IVA
-    const totalReteICA = sumReteICA
+    const totalVentasBruto   = sumSubtotal > 0 ? sumSubtotal : totalVentas - sumIVA
+    const totalIVACobrado    = sumIVA
+    const totalIVAPorPagar   = fuenteDatos.ivaReal ? totalIVACobrado : totalIVACobrado * 0.70
+    const totalReteFuente    = sumReteFuente
+    const totalReteIVA       = totalIVACobrado * R.RETE_IVA
+    const totalReteICA       = sumReteICA
     const totalImpuestosCargo = totalIVAPorPagar + totalReteIVA + totalReteICA
 
-    // ── Renta ───────────────────────────────────────────────────────
-    const utilidadEstimada = totalVentasBruto * (1 - COSTO_ESTIMADO)
-    const baseGravableRenta = Math.max(0, utilidadEstimada)
-    const impuestoRentaEstimado = baseGravableRenta * RENTA_RATE
+    const utilidadEstimada    = totalVentasBruto * (1 - R.COSTO_ESTIMADO)
+    const baseGravableRenta   = Math.max(0, utilidadEstimada)
+    const impuestoRentaEstimado = baseGravableRenta * R.RENTA_RATE
 
-    // ── Desglose mensual ordenado ───────────────────────────────────
+    /* Desglose mensual ordenado cronológicamente */
     const monthlyBreakdown = Object.entries(monthlyMap)
+        .sort(([a], [b]) => {
+            const toDate = (s: string) => {
+                const parts = s.split(' ')
+                const mName = parts[0]; const yr = parts[1] || '0'
+                return parseInt(yr) * 100 + MONTH_NAMES.indexOf(mName)
+            }
+            return toDate(a) - toDate(b)
+        })
+        .slice(-12)
         .map(([month, d]) => ({
             month,
-            ventas: Math.round(d.ventas),
-            iva: Math.round(d.iva),
+            ventas:     Math.round(d.ventas),
+            iva:        Math.round(d.iva),
             reteFuente: Math.round(d.reteFuente),
-            reteICA: Math.round(d.reteICA),
-            neto: Math.round(d.ventas - d.reteFuente - d.reteICA),
+            reteICA:    Math.round(d.reteICA),
+            neto:       Math.round(d.ventas - d.reteFuente - d.reteICA),
         }))
-        .slice(0, 12)
 
-    // ── Régimen ─────────────────────────────────────────────────────
-    const UVT_2024 = 49799
-    const ingresoEnUVT = totalVentas / UVT_2024
+    const ingresoEnUVT = totalVentas / R.UVT
     let regimenSugerido: TaxData['regimenSugerido'] = 'Ordinario'
     if (ingresoEnUVT < 3500) regimenSugerido = 'Simplificado'
-    else if (ingresoEnUVT <= 100000) regimenSugerido = 'Simple (SIMPLE)'
+    else if (ingresoEnUVT <= 100_000) regimenSugerido = 'Simple (SIMPLE)'
 
-    // ── Alertas ─────────────────────────────────────────────────────
     const alertas: string[] = []
-
     if (!fuenteDatos.ivaReal)
-        alertas.push('ℹ️ Columna IVA no encontrada en los datos — IVA calculado asumiendo 19% sobre el total')
+        alertas.push(`ℹ️ IVA calculado al ${(R.IVA_RATE * 100).toFixed(0)}% (columna IVA no encontrada en Sheet)`)
     if (!fuenteDatos.reteFuenteReal)
-        alertas.push('ℹ️ Columna ReteFuente no encontrada — estimada al 3.5% sobre base gravable')
+        alertas.push(`ℹ️ ReteFuente estimada al ${(R.RETE_FUENTE * 100).toFixed(1)}% (columna no encontrada)`)
     if (!fuenteDatos.reteICAReal)
-        alertas.push('ℹ️ Columna ReteICA no encontrada — estimada a la tarifa Bogotá 4.14‰')
+        alertas.push(`ℹ️ ReteICA estimada ${(R.RETE_ICA_BOGOTA * 1000).toFixed(2)}‰ tarifa Bogotá (columna no encontrada)`)
     if (fuenteDatos.ivaReal)
-        alertas.push(`✅ IVA leído directamente del CSV (columna "${colIVA}")`)
+        alertas.push(`✅ IVA leído del Sheet — columna "${colIVA}"`)
     if (fuenteDatos.columnasDetectadas.length > 0)
         alertas.push(`📊 Columnas tributarias detectadas: ${fuenteDatos.columnasDetectadas.join(', ')}`)
     if (totalIVAPorPagar > 5_000_000)
-        alertas.push('⚠️ IVA bimestral supera $5M COP — verifique declaración D.I.')
+        alertas.push('⚠️ IVA bimestral supera $5M COP — verifique declaración DIAN')
     if (totalReteFuente > 0)
-        alertas.push(`📋 Retención en la fuente acumulada: COP $${Math.round(totalReteFuente).toLocaleString('es-CO')}`)
-    if (ingresoEnUVT > 3500 && ingresoEnUVT <= 100000)
+        alertas.push(`📋 ReteFuente acumulada: COP $${Math.round(totalReteFuente).toLocaleString('es-CO')}`)
+    if (ingresoEnUVT > 3_500 && ingresoEnUVT <= 100_000)
         alertas.push('💡 Puede acogerse al Régimen SIMPLE para reducir carga tributaria')
-    if (rows.length > 0 && !rows[0]['Fecha Recepción'] && !rows[0]['Fecha'])
-        alertas.push('ℹ️ No se detectó columna de fecha — desglose mensual aproximado')
 
     return {
-        totalVentasBruto: Math.round(totalVentasBruto),
-        totalIVACobrado: Math.round(totalIVACobrado),
-        totalIVAPorPagar: Math.round(totalIVAPorPagar),
-        totalReteFuente: Math.round(totalReteFuente),
-        totalReteIVA: Math.round(totalReteIVA),
-        totalReteICA: Math.round(totalReteICA),
-        totalImpuestosCargo: Math.round(totalImpuestosCargo),
+        totalVentasBruto:       Math.round(totalVentasBruto),
+        totalIVACobrado:        Math.round(totalIVACobrado),
+        totalIVAPorPagar:       Math.round(totalIVAPorPagar),
+        totalReteFuente:        Math.round(totalReteFuente),
+        totalReteIVA:           Math.round(totalReteIVA),
+        totalReteICA:           Math.round(totalReteICA),
+        totalImpuestosCargo:    Math.round(totalImpuestosCargo),
         monthlyBreakdown,
-        ivaDeclaracionBimestral: Math.round(totalIVAPorPagar / 6),
+        ivaDeclaracionBimestral:     Math.round(totalIVAPorPagar / 6),
         ivaDeclaracionCuatrimestral: Math.round(totalIVAPorPagar / 3),
-        baseGravableRenta: Math.round(baseGravableRenta),
-        impuestoRentaEstimado: Math.round(impuestoRentaEstimado),
-        totalFacturas: rows.length,
-        facturasPendientes: Math.round(rows.length * 0.12),
+        baseGravableRenta:      Math.round(baseGravableRenta),
+        impuestoRentaEstimado:  Math.round(impuestoRentaEstimado),
+        totalFacturas:          rows.length,
+        facturasPendientes:     Math.round(rows.length * 0.12),
         tasaEfectivaTributaria: totalVentas > 0
             ? Math.round((totalImpuestosCargo / totalVentas) * 10000) / 100
             : 0,
         regimenSugerido,
         alertas,
         fuenteDatos,
+        tasasAplicadas: R,
     }
 }

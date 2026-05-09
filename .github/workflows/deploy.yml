@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -26,27 +27,24 @@ jobs:
       - name: Build Next.js (standalone)
         run: npm run build
         env:
-          # Supabase (sensibles - deben estar en GitHub Secrets)
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Mercado Libre (sensibles - deben estar en GitHub Secrets)
           ML_APP_ID: ${{ secrets.ML_APP_ID }}
           ML_SECRET_KEY: ${{ secrets.ML_SECRET_KEY }}
           ML_REDIRECT_URI: https://app.jacontadores.com/api/ml/callback
-          # Valores publicos (hardcoded - no sensibles)
           NEXT_PUBLIC_APP_NAME: 'J&A Contadores - Asesores'
           NEXT_PUBLIC_APP_URL: https://app.jacontadores.com
           NEXT_PUBLIC_COMPANY_WHATSAPP: '573138385201'
           NEXT_PUBLIC_COMPANY_EMAIL: info@jacontadores.com
           NEXT_PUBLIC_COMPANY_PHONE: '+57 313 8385201'
 
-      - name: Prepare standalone for FTP sync
+      - name: Prepare standalone package
         run: |
-          # Mover archivos estaticos y publicos dentro del standalone
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
-          echo "Contenido a desplegar:"
+          mkdir -p .next/standalone/tmp
+          echo "Package size: $(du -sh .next/standalone | cut -f1)"
           ls -la .next/standalone/
 
       - name: Deploy via FTP to app.jacontadores.com
@@ -55,21 +53,33 @@ jobs:
           server: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           password: ${{ secrets.CPANEL_PASSWORD }}
+          protocol: ftps-legacy
+          port: 21
           local-dir: .next/standalone/
-          server-dir: /app.jacontadores.com/
+          server-dir: app.jacontadores.com/
           dangerous-clean-slate: false
+          timeout: 60000
+          log-level: minimal
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/.cache/**
+            **/.env*
 
-      - name: Restart app via cPanel API
+      - name: Restart Node.js app via cPanel
         run: |
-          echo "Reiniciando la aplicacion Node.js..."
-          curl -ks \
+          echo "Reiniciando aplicacion Node.js en cPanel..."
+          # Metodo 1: PassengerApps API
+          HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
             -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
-            "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/save_file_content" \
-            -d "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com/tmp" \
-            -d "file=restart.txt" \
-            -d "content=restarted"
+            "https://${{ secrets.SSH_HOST }}:2083/execute/PassengerApps/restart_app?app_root=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com")
+          echo "cPanel PassengerApps restart HTTP: $HTTP_CODE"
+          # Metodo 2: touch restart.txt via cPanel File Manager API
+          curl -sk -o /dev/null \
+            -u "${{ secrets.SSH_USERNAME }}:${{ secrets.CPANEL_PASSWORD }}" \
+            -X POST "https://${{ secrets.SSH_HOST }}:2083/execute/Fileman/save_file_content" \
+            --data-urlencode "dir=/home/${{ secrets.SSH_USERNAME }}/app.jacontadores.com/tmp" \
+            --data-urlencode "file=restart.txt" \
+            --data-urlencode "content=restarted $(date)"
           echo "Deploy completado: $(date)"
+          echo "URL: https://app.jacontadores.com"

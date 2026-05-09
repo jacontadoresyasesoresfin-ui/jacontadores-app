@@ -22,8 +22,28 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Asegurar columna tenant_id en profiles (por si no existe)
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS tenant_id UUID;
+-- 2. Convertir tenant_id de TEXT a UUID si ya existe como TEXT
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles'
+          AND column_name = 'tenant_id' AND data_type = 'text'
+    ) THEN
+        -- Limpiar valores inválidos primero
+        UPDATE public.profiles SET tenant_id = NULL
+        WHERE tenant_id IS NOT NULL
+          AND tenant_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+        -- Cambiar tipo de columna
+        ALTER TABLE public.profiles
+            ALTER COLUMN tenant_id TYPE UUID USING tenant_id::UUID;
+    ELSIF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'tenant_id'
+    ) THEN
+        ALTER TABLE public.profiles ADD COLUMN tenant_id UUID;
+    END IF;
+END $$;
 
 -- 3. Foreign key a tenants (si no existe ya)
 DO $$

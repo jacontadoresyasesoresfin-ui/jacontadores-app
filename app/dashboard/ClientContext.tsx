@@ -98,7 +98,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     const activeProfile = simulatedProfile || myProfile
 
     const loadDataForProfile = async (profile: Profile) => {
-        if (!profile?.google_sheet_url) { setData(null); return }
+        setData(null)
+        if (!profile?.google_sheet_url) return
         try {
             const clientData = await fetchClientData(
                 profile.company_name || 'Mi Empresa',
@@ -107,6 +108,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             setData(clientData)
         } catch (error) {
             console.error('Error fetching sheet data:', error)
+            setData(null)
         }
     }
 

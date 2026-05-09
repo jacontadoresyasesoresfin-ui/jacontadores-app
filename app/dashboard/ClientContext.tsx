@@ -4,9 +4,20 @@ import { createContext, useContext, useState, useEffect, ReactNode, useMemo } fr
 import { fetchClientData, ClientData } from '@/lib/data-service'
 import { createClient } from '@/utils/supabase/client'
 
+export interface Tenant {
+    id: string
+    name: string
+    brand_name?: string | null
+    primary_color?: string | null
+    accent_color?: string | null
+    plan?: string | null
+    available_modules?: string[] | null
+    is_active?: boolean
+}
+
 export interface Profile {
     id: string
-    role: 'superadmin' | 'admin' | 'user'
+    role: 'superadmin' | 'firma_admin' | 'admin' | 'user'
     company_name?: string | null
     full_name?: string | null
     google_sheet_url?: string | null
@@ -20,7 +31,12 @@ export interface Profile {
     updated_at?: string
 }
 
-// Default: if modules_enabled is null/empty, all modules are visible
+export const ALL_MODULES = [
+    'analytics', 'siigo_bi', 'reconciliation', 'sales', 'ecommerce',
+    'portfolio', 'inventory', 'reports', 'team', 'taxes', 'configuracion',
+    'nomina', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas',
+]
+
 export const DEFAULT_MODULES: Record<string, boolean> = {
     analytics: true, siigo_bi: true, reconciliation: true,
     sales: true, ecommerce: true, portfolio: true,
@@ -29,26 +45,29 @@ export const DEFAULT_MODULES: Record<string, boolean> = {
     ml_pagos: true, ml_comisiones: true, ml_devoluciones: true, ml_costos: true, ml_alertas: true,
 }
 
-export function getModules(profile: Profile | null): Record<string, boolean> {
+export function getModules(profile: Profile | null, tenant?: Tenant | null): Record<string, boolean> {
     if (!profile) return DEFAULT_MODULES
-    // Superadmin sees everything always
     if (profile.role === 'superadmin') return DEFAULT_MODULES
-    
-    // Check if app_modules array exists
-    if (profile.app_modules && Array.isArray(profile.app_modules)) {
-        const mods: Record<string, boolean> = {};
-        for (const key of Object.keys(DEFAULT_MODULES)) {
-            mods[key] = false;
-        }
-        for (const mod of profile.app_modules) {
-            mods[mod] = true;
-        }
-        return mods;
+    if (profile.role === 'firma_admin') return DEFAULT_MODULES
+
+    // Build base from tenant's available modules (if firm restricts modules)
+    const tenantModules = tenant?.available_modules
+    const base: Record<string, boolean> = {}
+    for (const key of Object.keys(DEFAULT_MODULES)) {
+        base[key] = tenantModules ? tenantModules.includes(key) : true
     }
-    
-    // Fallback to older modules_enabled map
-    if (!profile.modules_enabled || Object.keys(profile.modules_enabled).length === 0) return DEFAULT_MODULES
-    return { ...DEFAULT_MODULES, ...profile.modules_enabled }
+
+    if (profile.app_modules && Array.isArray(profile.app_modules)) {
+        const mods: Record<string, boolean> = { ...base }
+        for (const key of Object.keys(base)) mods[key] = false
+        for (const mod of profile.app_modules) {
+            if (base[mod] !== false) mods[mod] = true
+        }
+        return mods
+    }
+
+    if (!profile.modules_enabled || Object.keys(profile.modules_enabled).length === 0) return base
+    return { ...base, ...profile.modules_enabled }
 }
 
 interface ClientContextType {
@@ -59,6 +78,7 @@ interface ClientContextType {
     profile: Profile | null
     activeProfile: Profile | null
     allProfiles: Profile[]
+    tenant: Tenant | null
     switchClient: (profile: Profile | null) => void
     isSimulating: boolean
     modules: Record<string, boolean>
@@ -70,6 +90,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     const [myProfile, setMyProfile] = useState<Profile | null>(null)
     const [simulatedProfile, setSimulatedProfile] = useState<Profile | null>(null)
     const [allProfiles, setAllProfiles] = useState<Profile[]>([])
+    const [tenant, setTenant] = useState<Tenant | null>(null)
     const [data, setData] = useState<ClientData | null>(null)
     const [loading, setLoading] = useState(true)
     const supabase = useMemo(() => createClient(), [])
@@ -77,10 +98,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     const activeProfile = simulatedProfile || myProfile
 
     const loadDataForProfile = async (profile: Profile) => {
-        if (!profile?.google_sheet_url) {
-            setData(null)
-            return
-        }
+        if (!profile?.google_sheet_url) { setData(null); return }
         try {
             const clientData = await fetchClientData(
                 profile.company_name || 'Mi Empresa',
@@ -88,33 +106,21 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             )
             setData(clientData)
         } catch (error) {
-            console.error("Error fetching sheet data:", error)
+            console.error('Error fetching sheet data:', error)
         }
     }
 
-    const switchClient = (profile: Profile | null) => {
-        setSimulatedProfile(profile)
-    }
+    const switchClient = (profile: Profile | null) => setSimulatedProfile(profile)
 
     useEffect(() => {
         async function loadInitialData() {
             setLoading(true)
             try {
                 const { data: authData, error: authError } = await supabase.auth.getUser()
-
-                if (authError) {
-                    console.warn("Error al obtener el usuario de Auth:", authError)
-                    setLoading(false)
-                    return
-                }
-
+                if (authError) { setLoading(false); return }
                 const user = authData?.user
-                if (!user) {
-                    setLoading(false)
-                    return
-                }
+                if (!user) { setLoading(false); return }
 
-                // 1. Cargar perfil propio
                 const { data: profileData, error: profileError } = await supabase
                     .from('profiles')
                     .select('*')
@@ -122,7 +128,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                     .maybeSingle()
 
                 if (profileError) {
-                    console.error("Error al cargar perfil:", profileError)
+                    console.error('Error al cargar perfil:', profileError)
                     setMyProfile({ id: user.id, company_name: 'Mi Empresa', role: 'user' })
                     setLoading(false)
                     return
@@ -131,53 +137,56 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                 const finalProfile = profileData || { id: user.id, company_name: 'Configuración pendiente', role: 'user' }
                 setMyProfile(finalProfile)
 
+                // Cargar datos del tenant si el perfil tiene tenant_id
+                if (finalProfile.tenant_id) {
+                    const { data: tenantData } = await supabase
+                        .from('tenants')
+                        .select('*')
+                        .eq('id', finalProfile.tenant_id)
+                        .maybeSingle()
+                    if (tenantData) setTenant(tenantData)
+                }
+
                 let profileToLoad = finalProfile
 
-                // 2. Si es superadmin, cargar todos los perfiles para el selector
                 if (finalProfile.role === 'superadmin') {
-                    const { data: allData } = await supabase
-                        .from('profiles')
-                        .select('*')
-                    
+                    // Superadmin carga todos los perfiles
+                    const { data: allData } = await supabase.from('profiles').select('*')
                     const profiles = (allData as Profile[]) || []
                     setAllProfiles(profiles)
 
-                    // Revisar si viene ?clientId=... por la URL (ej: desde el Panel Maestro)
                     const searchParams = new URLSearchParams(window.location.search)
                     const clientId = searchParams.get('clientId')
-                    
                     if (clientId) {
                         const clientProf = profiles.find(p => p.id === clientId)
-                        if (clientProf) {
-                            setSimulatedProfile(clientProf)
-                            profileToLoad = clientProf
-                        }
+                        if (clientProf) { setSimulatedProfile(clientProf); profileToLoad = clientProf }
+                    }
+
+                } else if (finalProfile.role === 'firma_admin' && finalProfile.tenant_id) {
+                    // Firma admin carga solo los clientes de su tenant
+                    const { data: tenantClients } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('tenant_id', finalProfile.tenant_id)
+                        .neq('id', finalProfile.id)
+                    setAllProfiles((tenantClients as Profile[]) || [])
+
+                    const searchParams = new URLSearchParams(window.location.search)
+                    const clientId = searchParams.get('clientId')
+                    if (clientId) {
+                        const clientProf = (tenantClients as Profile[])?.find(p => p.id === clientId)
+                        if (clientProf) { setSimulatedProfile(clientProf); profileToLoad = clientProf }
                     }
                 }
 
-                // 3. Cargar datos iniciales
                 await loadDataForProfile(profileToLoad)
 
             } catch (error: unknown) {
-                // Capturar todos los detalles posibles del error
                 const errRecord = error as Record<string, unknown>
-                const errorDetails = {
-                    message: error instanceof Error ? error.message : "Error desconocido",
-                    code: errRecord?.code,
-                    details: errRecord?.details,
-                    hint: errRecord?.hint,
-                    stack: errRecord?.stack,
-                    name: errRecord?.name,
-                    fullError: error
-                }
-
-                console.error("Error crítico detallado en ClientContext:", JSON.stringify(errorDetails, Object.getOwnPropertyNames(errorDetails), 2))
-
-                // Inspección profunda si el error parece vacío
-                if (error && typeof error === 'object' && Object.keys(error).length === 0) {
-                    console.error("Error detectado con propiedades no enumerables:", error);
-                    console.error("Verifique: 1. Conectividad con Supabase, 2. Políticas RLS en 'profiles', 3. Sesión del usuario");
-                }
+                console.error('Error crítico en ClientContext:', {
+                    message: error instanceof Error ? error.message : 'Error desconocido',
+                    code: errRecord?.code, details: errRecord?.details,
+                })
             } finally {
                 setLoading(false)
             }
@@ -186,7 +195,6 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         loadInitialData()
     }, [supabase])
 
-    // Efecto para recargar datos cuando cambie el perfil simulado
     useEffect(() => {
         if (simulatedProfile) {
             setLoading(true)
@@ -203,9 +211,10 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             profile: myProfile,
             activeProfile: activeProfile as Profile | null,
             allProfiles,
+            tenant,
             switchClient,
             isSimulating: !!simulatedProfile,
-            modules: getModules(activeProfile as Profile | null),
+            modules: getModules(activeProfile as Profile | null, tenant),
         }}>
             {children}
         </ClientContext.Provider>
@@ -214,8 +223,6 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
 export function useClient() {
     const context = useContext(ClientContext)
-    if (context === undefined) {
-        throw new Error('useClient must be used within a ClientProvider')
-    }
+    if (context === undefined) throw new Error('useClient must be used within a ClientProvider')
     return context
 }

@@ -17,6 +17,7 @@ const JA = {
     GREY:    '#4B5563',
     BORDER:  '#E5E7EB',
     BG:      '#F8FAFC',
+      GREY_LT: '#F9FAFB',
 }
 
 const MENU_CATEGORIES = [

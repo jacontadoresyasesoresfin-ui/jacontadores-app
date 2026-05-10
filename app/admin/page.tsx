@@ -445,6 +445,13 @@ function AdminContent({ user }: { user: User }) {
                     supabase={supabase}
                 />
             )}
+            {showCreateCollab && (
+                <CreateCollabModal
+                    onClose={() => setShowCreateCollab(false)}
+                    onCreated={(msg) => { showToast('success', msg); fetchData(); setShowCreateCollab(false) }}
+                    onError={(msg) => showToast('error', msg)}
+                />
+            )}
             {deletingUser && (
                 <DeleteConfirmModal
                     name={deletingUser.company_name || deletingUser.full_name || deletingUser.email || 'Registro'}

@@ -1,14 +1,12 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { useEffect, useState, useCallback } from 'react'
 import {
-    Building2, Users, Plus, Edit2, Eye, Trash2, X, Save,
+    Building2, Plus, Edit2, Eye, Trash2, X, Save,
     Loader2, Search, RefreshCw, CheckCircle2, XCircle,
     LayoutDashboard, AlertTriangle, Globe,
 } from 'lucide-react'
 import AuthGuard from '@/components/AuthGuard'
-import { User } from '@supabase/supabase-js'
 import Link from 'next/link'
 
 const JA = {
@@ -72,11 +70,10 @@ function Toast({ type, msg, onClose }: { type: 'success' | 'error'; msg: string;
 }
 
 export default function FirmaAdminPage() {
-    return <AuthGuard childrenWithUser={(user) => <FirmaAdminContent user={user} />} />
+    return <AuthGuard><FirmaAdminContent /></AuthGuard>
 }
 
-function FirmaAdminContent({ user }: { user: User }) {
-    const supabase = useMemo(() => createClient(), [])
+function FirmaAdminContent() {
     const [tenant, setTenant] = useState<TenantInfo | null>(null)
     const [clients, setClients] = useState<ClientProfile[]>([])
     const [loading, setLoading] = useState(true)
@@ -93,30 +90,27 @@ function FirmaAdminContent({ user }: { user: User }) {
 
     const loadData = useCallback(async () => {
         setLoading(true)
-        const { data: myProfile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
-
-        if (!myProfile || !['firma_admin', 'superadmin'].includes(myProfile.role)) {
-            setUnauthorized(true); setLoading(false); return
-        }
-
-        // Determinar tenant: firma_admin usa el suyo, superadmin puede ver por query param
-        let tenantId = myProfile.tenant_id
-        if (myProfile.role === 'superadmin') {
+        try {
             const params = new URLSearchParams(window.location.search)
-            tenantId = params.get('tenantId') || tenantId
+            const tenantParam = params.get('tenantId')
+            const url = tenantParam ? `/api/firma/clients?tenantId=${tenantParam}` : '/api/firma/clients'
+            const res = await fetch(url)
+
+            if (res.status === 401) { setUnauthorized(true); return }
+            if (res.status === 403) { setUnauthorized(true); return }
+            if (!res.ok) { setUnauthorized(true); return }
+
+            const { tenant: tenantData, clients: clientData } = await res.json()
+            if (!tenantData) { setUnauthorized(true); return }
+
+            setTenant(tenantData)
+            setClients(clientData || [])
+        } catch {
+            setUnauthorized(true)
+        } finally {
+            setLoading(false)
         }
-
-        if (!tenantId) { setUnauthorized(true); setLoading(false); return }
-
-        const [{ data: tenantData }, { data: clientData }] = await Promise.all([
-            supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle(),
-            supabase.from('profiles').select('*').eq('tenant_id', tenantId).neq('id', user.id).order('created_at', { ascending: false }),
-        ])
-
-        setTenant(tenantData)
-        setClients((clientData || []).filter((p: ClientProfile) => p.company_name))
-        setLoading(false)
-    }, [supabase, user.id])
+    }, [])
 
     useEffect(() => { loadData() }, [loadData])
 
@@ -289,7 +283,7 @@ function FirmaAdminContent({ user }: { user: User }) {
 
             {/* Modals */}
             {showCreate && <CreateClientForFirmaModal tenantId={tenant!.id} availableMods={activeMods} onClose={() => setShowCreate(false)} onCreated={(msg) => { showToast('success', msg); loadData(); setShowCreate(false) }} onError={(msg) => showToast('error', msg)} />}
-            {editing && <EditClientForFirmaModal client={editing} availableMods={activeMods} onClose={() => setEditing(null)} onSaved={() => { showToast('success', 'Guardado'); loadData(); setEditing(null) }} onError={(msg) => showToast('error', msg)} supabase={supabase} />}
+            {editing && <EditClientForFirmaModal client={editing} availableMods={activeMods} onClose={() => setEditing(null)} onSaved={() => { showToast('success', 'Guardado'); loadData(); setEditing(null) }} onError={(msg) => showToast('error', msg)} />}
             {deleting && (
                 <ModalBase title="Eliminar empresa" onClose={() => setDeleting(null)}>
                     <p style={{ fontSize: '14px', color: JA.TEXT, marginBottom: '24px', textAlign: 'center' }}>¿Eliminar a <strong>{deleting.company_name}</strong>?</p>
@@ -391,8 +385,7 @@ function CreateClientForFirmaModal({ tenantId, availableMods, onClose, onCreated
     )
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onError, supabase }: { client: ClientProfile; availableMods: string[]; onClose: () => void; onSaved: () => void; onError: (msg: string) => void; supabase: any }) {
+function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onError }: { client: ClientProfile; availableMods: string[]; onClose: () => void; onSaved: () => void; onError: (msg: string) => void }) {
     const [form, setForm] = useState({
         company_name: client.company_name || '',
         sheet_url: client.google_sheet_url || '',
@@ -418,15 +411,20 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
     const handleSave = async () => {
         setSaving(true)
         try {
-            const { error } = await supabase.from('profiles').update({
-                company_name: form.company_name,
-                google_sheet_url: form.sheet_url || null,
-                siigo_url: form.siigo_url || null,
-                drive_invoices_url: form.drive_invoices_url || null,
-                app_modules: form.app_modules,
-                updated_at: new Date().toISOString(),
-            }).eq('id', client.id)
-            if (error) throw error
+            const res = await fetch('/api/firma/update-client', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: client.id,
+                    company_name: form.company_name,
+                    google_sheet_url: form.sheet_url,
+                    siigo_url: form.siigo_url,
+                    drive_invoices_url: form.drive_invoices_url,
+                    app_modules: form.app_modules,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data?.error || 'Error al guardar')
             onSaved()
         } catch (e) {
             onError(e instanceof Error ? e.message : 'Error al guardar')

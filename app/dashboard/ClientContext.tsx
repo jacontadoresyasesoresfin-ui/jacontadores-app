@@ -72,11 +72,16 @@ export function getModules(profile: Profile | null, tenant?: Tenant | null): Rec
                 if (base[key] !== false) mods[key] = true
             }
         }
+        // FORZAR MÓDULOS PÚBLICOS
+        mods['nit'] = true;
+        mods['nomina'] = true;
         return mods
     }
 
-    if (!profile.modules_enabled || Object.keys(profile.modules_enabled).length === 0) return base
-    return { ...base, ...profile.modules_enabled }
+    if (!profile.modules_enabled || Object.keys(profile.modules_enabled).length === 0) {
+        return { ...base, nit: true, nomina: true };
+    }
+    return { ...base, ...profile.modules_enabled, nit: true, nomina: true }
 }
 
 interface ClientContextType {

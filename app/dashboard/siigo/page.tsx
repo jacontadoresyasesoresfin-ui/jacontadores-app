@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { useClient } from '../ClientContext'
 import {
     AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     CartesianGrid, Legend, PieChart, Pie, Cell, ComposedChart, Line
@@ -309,20 +310,48 @@ function fmtTooltip(v: any, n: any): [string, any] {
     return [COP(Number(v)), n]
 }
 
+/* ─── Detectar si es un índice de URLs de clientes ─── */
+function isIndexSheet(rows: string[][]): boolean {
+    if (rows.length < 2) return false
+    const header = rows[0].map(h => h.toLowerCase().trim())
+    return header.some(h => h === 'url' || h.includes('sheet') || h.includes('enlace')) &&
+           header.some(h => h.includes('client') || h.includes('nombre') || h.includes('id'))
+}
+
+function extractUrlsFromIndex(rows: string[][]): { id: string, nombre: string, url: string }[] {
+    const header = rows[0].map(h => h.toLowerCase().trim())
+    const urlCol = header.findIndex(h => h === 'url' || h.includes('sheet') || h.includes('enlace'))
+    const nameCol = header.findIndex(h => h.includes('nombre') || h.includes('client'))
+    const results: { id: string, nombre: string, url: string }[] = []
+    for (let i = 1; i < rows.length; i++) {
+        const urlVal = rows[i][urlCol]?.trim()
+        if (urlVal && urlVal.includes('docs.google.com/spreadsheets')) {
+            results.push({
+                id: rows[i][0]?.trim() || `Cliente ${i}`,
+                nombre: nameCol >= 0 ? rows[i][nameCol]?.trim() : `Cliente ${i}`,
+                url: urlVal,
+            })
+        }
+    }
+    return results
+}
+
 /* ── Página principal ────────────────────────────────────── */
 export default function SiigoPage() {
+    const { activeProfile } = useClient()
+    const profileSheetUrl = activeProfile?.google_sheet_url || ''
+
     const [sheetUrl, setSheetUrl] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [summary, setSummary] = useState<SiigoSummary | null>(null)
     const [activeTab, setActiveTab] = useState<'overview'|'monthly'|'accounts'|'table'|'estado'>('overview')
     const [urlFocused, setUrlFocused] = useState(false)
+    const [indexClients, setIndexClients] = useState<{ id: string, nombre: string, url: string }[]>([])
 
     const convertUrl = (url: string): string => {
         const u = url.trim()
-        // pub?output=csv URLs → use directly
         if (u.includes('pub?output=csv') || u.includes('&output=csv') || u.includes('pub?gid=')) return u
-        // Standard /d/SHEET_ID URL → convert to CSV export
         const m = u.match(/\/d\/([a-zA-Z0-9_-]+)/)
         if (m) {
             const gm = u.match(/gid=([0-9]+)/)
@@ -331,19 +360,33 @@ export default function SiigoPage() {
         return u
     }
 
-    const handleLoad = useCallback(async () => {
-        if (!sheetUrl.trim()) { setError('Por favor ingresa la URL del Google Sheet de Siigo'); return }
-        setLoading(true); setError(null); setSummary(null)
+    const loadSheet = useCallback(async (urlToLoad: string) => {
+        if (!urlToLoad.trim()) { setError('No hay URL de Google Sheet configurada'); return }
+        setLoading(true); setError(null); setSummary(null); setIndexClients([])
         try {
-            const csvUrl = convertUrl(sheetUrl.trim())
+            const csvUrl = convertUrl(urlToLoad.trim())
             const res = await fetch(`/api/sheets-proxy?url=${encodeURIComponent(csvUrl)}`)
-            if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`)
+            if (!res.ok) throw new Error(`Error ${res.status}: el Sheet no es accesible. Verifica que sea público.`)
             const text = await res.text()
             if (!text || text.length < 10) throw new Error('El Sheet está vacío o no es accesible')
             const rows = parseCSV(text)
             if (rows.length < 2) throw new Error('No se encontraron filas de datos en el Sheet')
+
+            // Si es un índice de URLs de clientes, mostrarlo como selector
+            if (isIndexSheet(rows)) {
+                const clients = extractUrlsFromIndex(rows)
+                if (clients.length > 0) {
+                    setIndexClients(clients)
+                    setLoading(false)
+                    return
+                }
+            }
+
             const result = analyzeSiigo(rows.slice(1), rows[0])
-            if (result.rows.length === 0) throw new Error('No se detectaron columnas de Debe/Haber. Verifica el formato del Sheet.')
+            if (result.rows.length === 0) {
+                const cols = rows[0].join(', ')
+                throw new Error(`No se detectaron columnas contables (Debe/Haber/Total) en este Sheet.\n\nColumnas encontradas: ${cols}\n\nExporta el informe desde Siigo como Libro Diario, Mayor o Ventas.`)
+            }
             setSummary(result)
             setActiveTab('overview')
         } catch (err) {
@@ -351,7 +394,20 @@ export default function SiigoPage() {
         } finally {
             setLoading(false)
         }
-    }, [sheetUrl])
+    }, [])
+
+    const handleLoad = useCallback(async () => {
+        const url = sheetUrl.trim() || profileSheetUrl
+        await loadSheet(url)
+    }, [sheetUrl, profileSheetUrl, loadSheet])
+
+    // Auto-cargar cuando cambia el cliente activo
+    useEffect(() => {
+        if (profileSheetUrl) {
+            setSheetUrl(profileSheetUrl)
+            loadSheet(profileSheetUrl)
+        }
+    }, [profileSheetUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const TABS_CONFIG = [
         { id: 'overview'  as const, label: '📊 Resumen' },
@@ -455,6 +511,34 @@ export default function SiigoPage() {
                     </div>
                 )}
             </div>
+
+            {/* ── Selector de clientes (cuando el Sheet es un índice) ─── */}
+            {indexClients.length > 0 && !summary && (
+                <div style={{ ...CARD, borderLeft: `4px solid ${JA.TEAL}`, marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                        <CheckCircle2 style={{ width: '16px', height: '16px', color: JA.TEAL }} />
+                        <h3 style={{ fontSize: '14px', fontWeight: 700, color: JA.TEXT, margin: 0, fontFamily: 'Montserrat,sans-serif' }}>
+                            {indexClients.length} clientes detectados — Selecciona uno para ver su informe
+                        </h3>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
+                        {indexClients.map((c, i) => (
+                            <button key={i} onClick={() => { setSheetUrl(c.url); loadSheet(c.url) }}
+                                style={{
+                                    textAlign: 'left', padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
+                                    border: `1.5px solid ${JA.CREAM_D}`, background: '#F9F7F2',
+                                    display: 'flex', flexDirection: 'column', gap: '4px',
+                                    transition: 'all 0.15s',
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = JA.TEAL; (e.currentTarget as HTMLButtonElement).style.background = '#fff' }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = JA.CREAM_D; (e.currentTarget as HTMLButtonElement).style.background = '#F9F7F2' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: JA.NAVY, fontFamily: 'Montserrat,sans-serif' }}>{c.nombre}</span>
+                                <span style={{ fontSize: '10px', color: JA.GREY_LT, fontFamily: 'Inter,sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.id}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* ── Dashboard Resultados ───────────────────────── */}
             {summary && (

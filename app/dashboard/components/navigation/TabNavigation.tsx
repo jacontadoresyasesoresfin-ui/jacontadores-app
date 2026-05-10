@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -9,16 +8,6 @@ import {
     Bell, Settings, FileSpreadsheet, FileCheck, Calculator, Search, ChevronDown
 } from 'lucide-react'
 import { useClient } from '@/app/dashboard/ClientContext'
-
-const JA = {
-    NAVY:    '#13213C',
-    GOLD:    '#B8960C',
-    TEXT:    '#1C2B45',
-    GREY:    '#4B5563',
-    BORDER:  '#E5E7EB',
-    BG:      '#F8FAFC',
-    GREY_LT: '#9CA3AF',
-}
 
 const MENU_CATEGORIES = [
     {
@@ -39,7 +28,7 @@ const MENU_CATEGORIES = [
         ]
     },
     {
-        name: 'Contabilidad y Utilidades',
+        name: 'Contabilidad',
         items: [
             { name: 'Siigo BI',      href: '/dashboard/siigo',          icon: FileSpreadsheet, moduleKey: 'siigo_bi' },
             { name: 'Conciliación',  href: '/dashboard/reconciliation', icon: FileCheck,       moduleKey: 'reconciliation' },
@@ -71,22 +60,6 @@ const MENU_CATEGORIES = [
 export default function TabNavigation() {
     const pathname = usePathname()
     const { modules } = useClient()
-    const [openMenu, setOpenMenu] = useState<string | null>(null)
-    const navRef = useRef<HTMLElement>(null)
-
-    // Close on outside click
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (navRef.current && !navRef.current.contains(e.target as Node)) {
-                setOpenMenu(null)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [])
-
-    // Close on route change
-    useEffect(() => { setOpenMenu(null) }, [pathname])
 
     const visibleCategories = MENU_CATEGORIES.map(cat => ({
         ...cat,
@@ -94,146 +67,198 @@ export default function TabNavigation() {
     })).filter(cat => cat.items.length > 0)
 
     return (
-        <nav ref={navRef} style={{
-            background: '#FFFFFF',
-            borderBottom: `1px solid ${JA.BORDER}`,
-            position: 'sticky',
-            top: '60px',
-            zIndex: 200,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-        }}>
-            <div style={{
-                maxWidth: '1400px',
-                margin: '0 auto',
-                padding: '0 20px',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                WebkitOverflowScrolling: 'touch',
-            } as React.CSSProperties}>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    height: '50px',
-                    minWidth: 'max-content',
-                }}>
-                    {visibleCategories.map((category) => {
-                        const isActive = category.items.some(item => pathname === item.href)
-                        const isOpen = openMenu === category.name
+        <>
+            {/* Inyectar estilos del mega menú una sola vez */}
+            <style>{`
+                .ja-nav {
+                    background: #FFFFFF;
+                    border-bottom: 1px solid #E5E7EB;
+                    position: sticky;
+                    top: 60px;
+                    z-index: 200;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                }
+                .ja-nav-inner {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 0 20px;
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                    scrollbar-width: none;
+                }
+                .ja-nav-inner::-webkit-scrollbar { display: none; }
+                .ja-nav-flex {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    height: 50px;
+                    min-width: max-content;
+                }
 
-                        return (
-                            <div
-                                key={category.name}
-                                style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center' }}
-                                /* Desktop: hover */
-                                onMouseEnter={() => setOpenMenu(category.name)}
-                                onMouseLeave={() => setOpenMenu(null)}
-                            >
-                                {/* Tab button */}
-                                <button
-                                    /* Mobile: tap toggles */
-                                    onClick={() => setOpenMenu(isOpen ? null : category.name)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
-                                        height: '100%',
-                                        border: 'none',
-                                        background: 'transparent',
-                                        cursor: 'pointer',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        color: isActive ? JA.NAVY : JA.GREY,
-                                        borderBottom: `2px solid ${isActive ? JA.GOLD : 'transparent'}`,
-                                        padding: '0 10px',
-                                        fontFamily: 'Inter, sans-serif',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.06em',
-                                        whiteSpace: 'nowrap',
-                                        transition: 'color 0.15s, border-color 0.15s',
-                                    }}
+                /* ── Grupo de menú (hover/focus-within nativo) ─────────── */
+                .ja-nav-group {
+                    position: relative;
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                }
+
+                /* ── Botón del tab ────────────────────────────────────── */
+                .ja-nav-btn {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    height: 100%;
+                    border: none;
+                    background: transparent;
+                    cursor: pointer;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #4B5563;
+                    border-bottom: 2px solid transparent;
+                    padding: 0 10px;
+                    font-family: Inter, sans-serif;
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                    white-space: nowrap;
+                    transition: color 0.15s, border-color 0.15s;
+                    -webkit-user-select: none;
+                    user-select: none;
+                }
+                .ja-nav-btn.active {
+                    color: #13213C;
+                    border-bottom-color: #B8960C;
+                }
+                .ja-nav-btn .ja-chevron {
+                    width: 11px;
+                    height: 11px;
+                    color: #9CA3AF;
+                    transition: transform 0.2s, color 0.15s;
+                    flex-shrink: 0;
+                }
+                .ja-nav-btn.active .ja-chevron { color: #B8960C; }
+
+                /* ── Dropdown ─────────────────────────────────────────── */
+                .ja-dropdown {
+                    position: absolute;
+                    top: calc(100% + 0px);   /* sin gap → no se cierra al pasar */
+                    left: 0;
+                    min-width: 230px;
+                    background: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-top: 2px solid #B8960C;
+                    border-radius: 0 0 4px 4px;
+                    box-shadow: 0 12px 32px rgba(19,33,60,0.14);
+                    padding: 6px 0;
+                    z-index: 999;
+                    /* Oculto por defecto */
+                    opacity: 0;
+                    visibility: hidden;
+                    transform: translateY(-6px);
+                    pointer-events: none;
+                    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+                }
+
+                /* Activar con hover O focus-within (accesibilidad teclado) */
+                .ja-nav-group:hover > .ja-dropdown,
+                .ja-nav-group:focus-within > .ja-dropdown {
+                    opacity: 1;
+                    visibility: visible;
+                    transform: translateY(0);
+                    pointer-events: auto;
+                    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0s;
+                }
+
+                /* Rotar chevron cuando el grupo está activo */
+                .ja-nav-group:hover .ja-chevron,
+                .ja-nav-group:focus-within .ja-chevron {
+                    transform: rotate(180deg);
+                }
+
+                /* ── Ítem del dropdown ────────────────────────────────── */
+                .ja-dd-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 9px 16px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #1C2B45;
+                    text-decoration: none;
+                    background: transparent;
+                    border-left: 3px solid transparent;
+                    transition: background 0.1s, border-color 0.1s;
+                    font-family: Inter, sans-serif;
+                }
+                .ja-dd-item:hover {
+                    background: #F8FAFC;
+                    border-left-color: rgba(184,150,12,0.4);
+                }
+                .ja-dd-item.active {
+                    font-weight: 700;
+                    color: #13213C;
+                    background: #F4F4F0;
+                    border-left-color: #B8960C;
+                }
+                .ja-dd-item .dd-icon {
+                    width: 15px;
+                    height: 15px;
+                    color: #B8960C;
+                    flex-shrink: 0;
+                }
+            `}</style>
+
+            <nav className="ja-nav">
+                <div className="ja-nav-inner">
+                    <div className="ja-nav-flex">
+                        {visibleCategories.map((category) => {
+                            const isActive = category.items.some(item => pathname === item.href || pathname.startsWith(item.href + '/'))
+
+                            return (
+                                <div
+                                    key={category.name}
+                                    className="ja-nav-group"
+                                    /* tabIndex permite focus-within por teclado */
+                                    tabIndex={-1}
                                 >
-                                    {category.isSub
-                                        ? <span style={{ color: JA.GOLD }}>ML</span>
-                                        : category.name
-                                    }
-                                    <ChevronDown style={{
-                                        width: 11,
-                                        height: 11,
-                                        color: isActive ? JA.GOLD : JA.GREY_LT,
-                                        transform: isOpen ? 'rotate(180deg)' : 'none',
-                                        transition: 'transform 0.2s',
-                                        flexShrink: 0,
-                                    }} />
-                                </button>
+                                    {/* Botón del tab — aria para accesibilidad */}
+                                    <button
+                                        className={`ja-nav-btn${isActive ? ' active' : ''}`}
+                                        aria-haspopup="true"
+                                        aria-expanded="false"
+                                        type="button"
+                                    >
+                                        {category.isSub
+                                            ? <span style={{ color: '#B8960C' }}>ML</span>
+                                            : category.name
+                                        }
+                                        <ChevronDown className="ja-chevron" />
+                                    </button>
 
-                                {/* Dropdown panel */}
-                                {isOpen && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        left: 0,
-                                        minWidth: '230px',
-                                        background: '#FFFFFF',
-                                        border: `1px solid ${JA.BORDER}`,
-                                        borderTop: `2px solid ${JA.GOLD}`,
-                                        borderRadius: '0 0 4px 4px',
-                                        boxShadow: '0 12px 32px rgba(19,33,60,0.14)',
-                                        padding: '6px 0',
-                                        zIndex: 999,
-                                        animation: 'ddSlide 0.15s ease-out',
-                                    }}>
-                                        <style>{`
-                                            @keyframes ddSlide {
-                                                from { opacity: 0; transform: translateY(-6px); }
-                                                to   { opacity: 1; transform: translateY(0); }
-                                            }
-                                        `}</style>
+                                    {/* Dropdown — controlado 100% por CSS */}
+                                    <div className="ja-dropdown" role="menu">
                                         {category.items.map(item => {
-                                            const isItemActive = pathname === item.href
+                                            const isItemActive = pathname === item.href || pathname.startsWith(item.href + '/')
                                             const Icon = item.icon
                                             return (
                                                 <Link
                                                     key={item.href}
                                                     href={item.href}
-                                                    onClick={() => setOpenMenu(null)}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        padding: '9px 16px',
-                                                        fontSize: '13px',
-                                                        fontWeight: isItemActive ? 700 : 500,
-                                                        color: isItemActive ? JA.NAVY : JA.TEXT,
-                                                        textDecoration: 'none',
-                                                        background: isItemActive ? '#F4F4F0' : 'transparent',
-                                                        borderLeft: isItemActive ? `3px solid ${JA.GOLD}` : '3px solid transparent',
-                                                        transition: 'background 0.1s',
-                                                        fontFamily: 'Inter, sans-serif',
-                                                    }}
-                                                    onMouseEnter={e => {
-                                                        if (!isItemActive) {
-                                                            e.currentTarget.style.background = JA.BG
-                                                        }
-                                                    }}
-                                                    onMouseLeave={e => {
-                                                        if (!isItemActive) {
-                                                            e.currentTarget.style.background = 'transparent'
-                                                        }
-                                                    }}
+                                                    className={`ja-dd-item${isItemActive ? ' active' : ''}`}
+                                                    role="menuitem"
                                                 >
-                                                    <Icon style={{ width: 15, height: 15, color: JA.GOLD, flexShrink: 0 }} />
+                                                    <Icon className="dd-icon" />
                                                     {item.name}
                                                 </Link>
                                             )
                                         })}
                                     </div>
-                                )}
-                            </div>
-                        )
-                    })}
+                                </div>
+                            )
+                        })}
+                    </div>
                 </div>
-            </div>
-        </nav>
+            </nav>
+        </>
     )
 }

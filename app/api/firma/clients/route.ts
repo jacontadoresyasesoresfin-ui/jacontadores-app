@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
             .neq('id', user.id)
             .neq('role', 'firma_admin')
             .neq('role', 'superadmin')
-            .order('created_at', { ascending: false }),
+            .order('updated_at', { ascending: false }),
     ])
 
     return NextResponse.json({

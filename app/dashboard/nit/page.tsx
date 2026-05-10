@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy, ExternalLink, ChevronDown, ChevronUp, Clock, Info } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy, ExternalLink, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 
 const JA = {
     NAVY:    '#13213C', GOLD:    '#B8960C', GOLD_PALE: '#F5E9C0',
@@ -476,7 +476,7 @@ export default function NitPage() {
 
                                 {/* Aviso */}
                                 <div style={{ margin: '0 20px 16px', padding: '10px 14px', background: JA.GOLD_PALE, border: `1px solid ${JA.GOLD}40`, borderRadius: '2px', display: 'flex', gap: '8px' }}>
-                                    <Info style={{ width: 14, height: 14, color: JA.GOLD, flexShrink: 0, marginTop: '1px' }} />
+                                    <span style={{ fontSize: '14px', color: JA.GOLD, flexShrink: 0, fontWeight: 900, lineHeight: 1 }}>ℹ</span>
                                     <p style={{ fontSize: '10px', color: JA.TEXT, margin: 0, lineHeight: 1.5 }}>
                                         {result.esJuridica
                                             ? 'Esta empresa no aparece en el Registro Mercantil público (RUES). Puede ser una entidad del Estado, cooperativa, o no tener matrícula mercantil vigente. Verifícala directamente en la DIAN o en el RUES.'

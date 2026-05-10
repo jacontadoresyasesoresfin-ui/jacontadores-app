@@ -27,6 +27,8 @@ export interface Profile {
     modules_enabled?: Record<string, boolean> | null
     reconciliation_sheet_url?: string | null
     app_modules?: string[] | null
+    siigo_url?: string | null
+    drive_invoices_url?: string | null
     created_at?: string
     updated_at?: string
 }

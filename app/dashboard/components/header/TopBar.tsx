@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { LogOut, User, ChevronDown, ExternalLink, Settings, Building2 } from 'lucide-react'
-import { useClient, Profile } from '../../ClientContext'
+import { useClient } from '../../ClientContext'
 
 export default function TopBar() {
     const [menuOpen, setMenuOpen] = useState(false)
@@ -28,7 +28,7 @@ export default function TopBar() {
             boxShadow: '0 2px 16px rgba(0,0,0,0.2)',
             position: 'sticky',
             top: 0,
-            zIndex: 50,
+            zIndex: 10000,
         }}>
             <style>{`
                 .topbar-container {

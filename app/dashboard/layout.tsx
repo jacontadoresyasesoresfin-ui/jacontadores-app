@@ -3,6 +3,7 @@ import AuthGuard from '@/components/AuthGuard'
 import { ClientProvider } from './ClientContext'
 import TabNavigation from './components/navigation/TabNavigation'
 import TopBar from './components/header/TopBar'
+import ClientSwitcher from './components/ClientSwitcher'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -16,6 +17,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                     {/* Navegación de Tabs */}
                     <TabNavigation />
+
+                    {/* Selector rápido de empresa cliente — visible para firma_admin y superadmin */}
+                    <ClientSwitcher />
 
                     <main style={{ flex: 1, padding: '24px 20px 40px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
                         {children}

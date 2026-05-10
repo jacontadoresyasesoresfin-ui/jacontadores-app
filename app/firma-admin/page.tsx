@@ -32,6 +32,7 @@ interface ClientProfile {
     company_name?: string | null; google_sheet_url?: string | null;
     phone?: string | null; tenant_id?: string | null;
     email?: string; app_modules?: string[] | null; created_at?: string;
+    siigo_url?: string | null; drive_invoices_url?: string | null;
 }
 
 interface TenantInfo {
@@ -332,7 +333,10 @@ function CreateClientForFirmaModal({ tenantId, availableMods, onClose, onCreated
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...form, sheet_url: form.sheet_url, tenant_id: tenantId, app_modules: selectedMods }),
             })
-            if (!res.ok) throw new Error('Error al registrar empresa')
+            if (!res.ok) {
+                const errData = await res.json().catch(() => null)
+                throw new Error(errData?.error || 'Error al registrar empresa')
+            }
             onCreated(`Empresa ${form.company_name} registrada`)
         } catch (e) {
             onError(e instanceof Error ? e.message : 'Error')
@@ -392,6 +396,8 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
     const [form, setForm] = useState({
         company_name: client.company_name || '',
         sheet_url: client.google_sheet_url || '',
+        siigo_url: client.siigo_url || '',
+        drive_invoices_url: client.drive_invoices_url || '',
         app_modules: (() => {
             const existing = client.app_modules || []
             if (existing.length === 0) return availableMods
@@ -413,8 +419,12 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
         setSaving(true)
         try {
             const { error } = await supabase.from('profiles').update({
-                company_name: form.company_name, google_sheet_url: form.sheet_url,
-                app_modules: form.app_modules, updated_at: new Date().toISOString(),
+                company_name: form.company_name,
+                google_sheet_url: form.sheet_url || null,
+                siigo_url: form.siigo_url || null,
+                drive_invoices_url: form.drive_invoices_url || null,
+                app_modules: form.app_modules,
+                updated_at: new Date().toISOString(),
             }).eq('id', client.id)
             if (error) throw error
             onSaved()
@@ -431,8 +441,18 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
                     <input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} style={sty.input} />
                 </div>
                 <div>
-                    <span style={sty.label}>URL Google Sheets</span>
-                    <input value={form.sheet_url} onChange={e => setForm({ ...form, sheet_url: e.target.value })} style={sty.input} />
+                    <span style={sty.label}>URL Google Sheets (datos BI)</span>
+                    <input value={form.sheet_url} onChange={e => setForm({ ...form, sheet_url: e.target.value })} style={sty.input} placeholder="https://docs.google.com/..." />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                        <span style={sty.label}>URL Siigo</span>
+                        <input value={form.siigo_url} onChange={e => setForm({ ...form, siigo_url: e.target.value })} style={sty.input} placeholder="https://..." />
+                    </div>
+                    <div>
+                        <span style={sty.label}>Drive Facturas</span>
+                        <input value={form.drive_invoices_url} onChange={e => setForm({ ...form, drive_invoices_url: e.target.value })} style={sty.input} placeholder="https://drive.google.com/..." />
+                    </div>
                 </div>
                 <div>
                     <span style={sty.label}>Módulos</span>

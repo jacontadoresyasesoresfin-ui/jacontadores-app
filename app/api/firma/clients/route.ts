@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-/**
- * GET /api/firma/clients?tenantId=xxx
- * Devuelve tenant + clientes del tenant para firma_admin o superadmin.
- * Usa service role para evitar bloqueos de RLS.
- */
 export async function GET(request: NextRequest) {
     const cookieStore = await cookies()
     const callerClient = createServerClient(
@@ -39,9 +34,7 @@ export async function GET(request: NextRequest) {
         ? (request.nextUrl.searchParams.get('tenantId') || myProfile.tenant_id)
         : myProfile.tenant_id
 
-    if (!tenantId) {
-        return NextResponse.json({ tenant: null, clients: [] })
-    }
+    if (!tenantId) return NextResponse.json({ tenant: null, clients: [] })
 
     const [{ data: tenantData }, { data: clientData }] = await Promise.all([
         adminClient.from('tenants').select('*').eq('id', tenantId).maybeSingle(),
@@ -50,11 +43,14 @@ export async function GET(request: NextRequest) {
             .select('*')
             .eq('tenant_id', tenantId)
             .neq('id', user.id)
+            .neq('role', 'firma_admin')
+            .neq('role', 'superadmin')
             .order('created_at', { ascending: false }),
     ])
 
     return NextResponse.json({
         tenant: tenantData || null,
-        clients: (clientData || []).filter((p: { company_name?: string | null }) => p.company_name),
+        tenantId,
+        clients: clientData || [],
     })
 }

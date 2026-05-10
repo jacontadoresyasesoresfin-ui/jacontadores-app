@@ -81,6 +81,7 @@ function FirmaAdminContent() {
     const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
     const [search, setSearch] = useState('')
     const [showCreate, setShowCreate] = useState(false)
+    const [showLink, setShowLink] = useState(false)
     const [editing, setEditing] = useState<ClientProfile | null>(null)
     const [deleting, setDeleting] = useState<ClientProfile | null>(null)
 
@@ -209,13 +210,19 @@ function FirmaAdminContent() {
             </div>
 
             {/* Gestión de clientes */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: JA.TEXT }}>Empresas Cliente</h2>
-                <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, color: JA.TEXT }}>
+                    Empresas Cliente
+                    <span style={{ marginLeft: '10px', fontSize: '13px', fontWeight: 400, color: JA.GREY }}>({clients.length})</span>
+                </h2>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <div style={{ position: 'relative' }}>
                         <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: JA.GREY_LT }} />
-                        <input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...sty.input, paddingLeft: '32px', width: '200px' }} />
+                        <input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...sty.input, paddingLeft: '32px', width: '180px' }} />
                     </div>
+                    <button onClick={() => setShowLink(true)} style={{ ...sty.btnSec, fontSize: '12px' }} title="Vincular empresa ya registrada en el sistema">
+                        <Search style={{ width: 13, height: 13 }} /> Vincular existente
+                    </button>
                     <button onClick={() => setShowCreate(true)} style={{ ...sty.btn, background: accentColor }}>
                         <Plus style={{ width: 14, height: 14 }} /> Nueva Empresa
                     </button>
@@ -225,11 +232,18 @@ function FirmaAdminContent() {
             {clients.length === 0 ? (
                 <div style={{ ...sty.card, textAlign: 'center', padding: '48px' }}>
                     <Building2 style={{ width: 40, height: 40, margin: '0 auto 16px', color: JA.GREY_LT }} />
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: JA.GREY }}>No hay empresas registradas aún</p>
-                    <p style={{ fontSize: '12px', color: JA.GREY_LT, marginTop: '8px' }}>Agrega la primera empresa cliente de tu firma</p>
-                    <button onClick={() => setShowCreate(true)} style={{ ...sty.btn, margin: '20px auto 0', background: accentColor }}>
-                        <Plus style={{ width: 14, height: 14 }} /> Registrar Primera Empresa
-                    </button>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: JA.GREY }}>No hay empresas vinculadas aún</p>
+                    <p style={{ fontSize: '12px', color: JA.GREY_LT, marginTop: '4px', marginBottom: '20px' }}>
+                        Crea una nueva empresa o vincula una ya existente por email
+                    </p>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                        <button onClick={() => setShowLink(true)} style={sty.btnSec}>
+                            <Search style={{ width: 14, height: 14 }} /> Vincular por email
+                        </button>
+                        <button onClick={() => setShowCreate(true)} style={{ ...sty.btn, background: accentColor }}>
+                            <Plus style={{ width: 14, height: 14 }} /> Nueva Empresa
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <div style={sty.card}>
@@ -237,7 +251,7 @@ function FirmaAdminContent() {
                         <thead>
                             <tr>
                                 <th style={sty.th}>Empresa</th>
-                                <th style={sty.th}>Repositorio</th>
+                                <th style={sty.th}>Datos BI</th>
                                 <th style={sty.th}>Módulos</th>
                                 <th style={{ ...sty.th, textAlign: 'right' }}>Acciones</th>
                             </tr>
@@ -246,31 +260,49 @@ function FirmaAdminContent() {
                             {filtered.map(client => (
                                 <tr key={client.id}>
                                     <td style={sty.td}>
-                                        <div style={{ fontWeight: 600 }}>{client.company_name}</div>
-                                        <div style={{ fontSize: '11px', color: JA.GREY_LT }}>{client.email}</div>
+                                        <div style={{ fontWeight: 600, color: client.company_name ? JA.TEXT : JA.RED }}>
+                                            {client.company_name || '— Sin razón social —'}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: JA.GREY_LT, marginTop: '2px' }}>{client.email}</div>
+                                        {!client.company_name && (
+                                            <div style={{ fontSize: '10px', color: JA.RED, marginTop: '2px' }}>
+                                                Editar para completar datos
+                                            </div>
+                                        )}
                                     </td>
                                     <td style={sty.td}>
                                         {client.google_sheet_url ? (
                                             <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: JA.GREEN }}>
-                                                <CheckCircle2 style={{ width: 12, height: 12 }} /> Configurado
+                                                <CheckCircle2 style={{ width: 12, height: 12 }} /> Hoja configurada
                                             </span>
                                         ) : (
-                                            <span style={{ fontSize: '12px', color: JA.GREY_LT }}>Sin repositorio</span>
+                                            <span style={{ fontSize: '12px', color: JA.GREY_LT }}>Sin hoja de datos</span>
                                         )}
                                     </td>
                                     <td style={sty.td}>
-                                        <span style={{ fontSize: '12px', color: JA.GREY }}>{client.app_modules?.length || activeMods.length} módulos</span>
+                                        <span style={{ fontSize: '12px', color: JA.GREY }}>
+                                            {client.app_modules?.length ? `${client.app_modules.length} módulos` : 'Todos'}
+                                        </span>
                                     </td>
                                     <td style={{ ...sty.td, textAlign: 'right' }}>
-                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                            <button onClick={() => window.open(`/dashboard?clientId=${client.id}`, '_blank')} style={{ ...sty.btnSec, padding: '4px 8px' }} title="Ver como cliente">
-                                                <Eye style={{ width: 14, height: 14 }} />
+                                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                            <button
+                                                onClick={() => window.open(`/dashboard?clientId=${client.id}`, '_blank')}
+                                                style={{ ...sty.btnSec, padding: '5px 10px', fontSize: '11px', gap: '4px' }}
+                                                title="Ver dashboard del cliente">
+                                                <Eye style={{ width: 13, height: 13 }} /> Ver
                                             </button>
-                                            <button onClick={() => setEditing(client)} style={{ ...sty.btnSec, padding: '4px 8px' }} title="Editar">
-                                                <Edit2 style={{ width: 14, height: 14 }} />
+                                            <button
+                                                onClick={() => setEditing(client)}
+                                                style={{ ...sty.btnSec, padding: '5px 10px', fontSize: '11px', gap: '4px' }}
+                                                title="Editar datos">
+                                                <Edit2 style={{ width: 13, height: 13 }} /> Editar
                                             </button>
-                                            <button onClick={() => setDeleting(client)} style={{ ...sty.btnSec, padding: '4px 8px', color: JA.RED }} title="Eliminar">
-                                                <Trash2 style={{ width: 14, height: 14 }} />
+                                            <button
+                                                onClick={() => setDeleting(client)}
+                                                style={{ ...sty.btnSec, padding: '5px 10px', fontSize: '11px', color: JA.RED, gap: '4px' }}
+                                                title="Eliminar empresa">
+                                                <Trash2 style={{ width: 13, height: 13 }} />
                                             </button>
                                         </div>
                                     </td>
@@ -283,16 +315,24 @@ function FirmaAdminContent() {
 
             {/* Modals */}
             {showCreate && <CreateClientForFirmaModal tenantId={tenant!.id} availableMods={activeMods} onClose={() => setShowCreate(false)} onCreated={(msg) => { showToast('success', msg); loadData(); setShowCreate(false) }} onError={(msg) => showToast('error', msg)} />}
-            {editing && <EditClientForFirmaModal client={editing} availableMods={activeMods} onClose={() => setEditing(null)} onSaved={() => { showToast('success', 'Guardado'); loadData(); setEditing(null) }} onError={(msg) => showToast('error', msg)} />}
+            {showLink && <LinkUserModal onClose={() => setShowLink(false)} onLinked={() => { showToast('success', 'Empresa vinculada correctamente'); loadData(); setShowLink(false) }} onError={(msg) => showToast('error', msg)} />}
+            {editing && <EditClientForFirmaModal client={editing} availableMods={activeMods} onClose={() => setEditing(null)} onSaved={() => { showToast('success', 'Cambios guardados'); loadData(); setEditing(null) }} onError={(msg) => showToast('error', msg)} />}
             {deleting && (
                 <ModalBase title="Eliminar empresa" onClose={() => setDeleting(null)}>
-                    <p style={{ fontSize: '14px', color: JA.TEXT, marginBottom: '24px', textAlign: 'center' }}>¿Eliminar a <strong>{deleting.company_name}</strong>?</p>
+                    <p style={{ fontSize: '14px', color: JA.TEXT, marginBottom: '8px', textAlign: 'center' }}>
+                        ¿Eliminar a <strong>{deleting.company_name || deleting.email}</strong>?
+                    </p>
+                    <p style={{ fontSize: '12px', color: JA.GREY_LT, textAlign: 'center', marginBottom: '24px' }}>
+                        Esta acción eliminará el acceso del usuario al portal.
+                    </p>
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                         <button onClick={() => setDeleting(null)} style={sty.btnSec}>Cancelar</button>
                         <button onClick={async () => {
                             await fetch('/api/admin/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: deleting.id }) })
                             setDeleting(null); loadData()
-                        }} style={{ ...sty.btn, background: JA.RED }}>Eliminar</button>
+                        }} style={{ ...sty.btn, background: JA.RED }}>
+                            <Trash2 style={{ width: 14, height: 14 }} /> Eliminar
+                        </button>
                     </div>
                 </ModalBase>
             )}
@@ -311,6 +351,60 @@ function ModalBase({ title, onClose, children }: { title: string; onClose: () =>
                 <div style={{ padding: '24px' }}>{children}</div>
             </div>
         </div>
+    )
+}
+
+function LinkUserModal({ onClose, onLinked, onError }: { onClose: () => void; onLinked: () => void; onError: (msg: string) => void }) {
+    const [email, setEmail] = useState('')
+    const [companyName, setCompanyName] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [errorMsg, setErrorMsg] = useState('')
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setErrorMsg('')
+        setSaving(true)
+        try {
+            const res = await fetch('/api/firma/link-user', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email.trim(), company_name: companyName.trim() }),
+            })
+            const data = await res.json()
+            if (!res.ok) { setErrorMsg(data?.error || 'Error al vincular'); return }
+            onLinked()
+        } catch (e) {
+            setErrorMsg(e instanceof Error ? e.message : 'Error de conexión')
+        } finally { setSaving(false) }
+    }
+
+    return (
+        <ModalBase title="Vincular empresa existente" onClose={onClose}>
+            <p style={{ fontSize: '12px', color: JA.GREY, marginBottom: '16px', lineHeight: 1.5 }}>
+                Si ya creaste una empresa pero no aparece en la lista, búscala por email y vincúlala a tu firma.
+            </p>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {errorMsg && (
+                    <div style={{ padding: '10px 14px', background: '#FEF2F2', border: `1px solid ${JA.RED}`, borderRadius: '2px', fontSize: '12px', color: JA.RED, fontWeight: 600 }}>
+                        {errorMsg}
+                    </div>
+                )}
+                <div>
+                    <span style={sty.label}>Email del usuario *</span>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={sty.input} required placeholder="empresa@correo.com" />
+                </div>
+                <div>
+                    <span style={sty.label}>Razón Social (si aún no tiene)</span>
+                    <input value={companyName} onChange={e => setCompanyName(e.target.value)} style={sty.input} placeholder="Nombre de la empresa" />
+                </div>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={onClose} style={sty.btnSec}>Cancelar</button>
+                    <button type="submit" disabled={saving} style={sty.btn}>
+                        {saving ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : <Search style={{ width: 14, height: 14 }} />}
+                        {saving ? ' Buscando...' : ' Vincular empresa'}
+                    </button>
+                </div>
+            </form>
+        </ModalBase>
     )
 }
 

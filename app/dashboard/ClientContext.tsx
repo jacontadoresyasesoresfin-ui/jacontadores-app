@@ -181,19 +181,19 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                     }
 
                 } else if (finalProfile.role === 'firma_admin' && finalProfile.tenant_id) {
-                    // Firma admin carga solo los clientes de su tenant
-                    const { data: tenantClients } = await supabase
-                        .from('profiles')
-                        .select('*')
-                        .eq('tenant_id', finalProfile.tenant_id)
-                        .neq('id', finalProfile.id)
-                    setAllProfiles((tenantClients as Profile[]) || [])
+                    // Firma admin carga sus clientes vía API con service role (evita bloqueos RLS)
+                    const res = await fetch('/api/firma/clients')
+                    if (res.ok) {
+                        const { clients: tenantClients } = await res.json()
+                        const profiles = (tenantClients as Profile[]) || []
+                        setAllProfiles(profiles)
 
-                    const searchParams = new URLSearchParams(window.location.search)
-                    const clientId = searchParams.get('clientId')
-                    if (clientId) {
-                        const clientProf = (tenantClients as Profile[])?.find(p => p.id === clientId)
-                        if (clientProf) { setSimulatedProfile(clientProf); profileToLoad = clientProf }
+                        const searchParams = new URLSearchParams(window.location.search)
+                        const clientId = searchParams.get('clientId')
+                        if (clientId) {
+                            const clientProf = profiles.find(p => p.id === clientId)
+                            if (clientProf) { setSimulatedProfile(clientProf); profileToLoad = clientProf }
+                        }
                     }
                 }
 

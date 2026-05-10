@@ -11,13 +11,19 @@ function calcCheckDigit(base: string): number {
     return 11 - rem
 }
 
-function getEntityType(base: string): string {
+function getEntityType(base: string): { tipo: string; subtipo: string; esJuridica: boolean } {
     const n = parseInt(base.replace(/\D/g, ''))
-    if (n >= 700_000_000 && n <= 799_999_999) return 'Persona Natural — Extranjero sin cédula'
-    if (n >= 800_000_000 && n <= 899_999_999) return 'Persona Jurídica — Empresa privada'
-    if (n >= 900_000_000 && n <= 999_999_999) return 'Persona Jurídica / Entidad pública'
-    if (n >= 1 && n <= 99_999_999)            return 'Persona Natural'
-    return 'No determinado'
+    if (n >= 700_000_000 && n <= 799_999_999)
+        return { tipo: 'Persona Natural',   subtipo: 'Extranjero sin cédula colombiana',         esJuridica: false }
+    if (n >= 800_000_000 && n <= 899_999_999)
+        return { tipo: 'Persona Jurídica',  subtipo: 'Empresa privada / sociedad comercial',      esJuridica: true  }
+    if (n >= 900_000_000 && n <= 999_999_999)
+        return { tipo: 'Persona Jurídica',  subtipo: 'Entidad pública / sin ánimo de lucro',      esJuridica: true  }
+    if (n >= 1_000_000_000)
+        return { tipo: 'Persona Natural',   subtipo: 'Cédula de ciudadanía (nueva numeración)',   esJuridica: false }
+    if (n >= 1 && n <= 99_999_999)
+        return { tipo: 'Persona Natural',   subtipo: 'Cédula de ciudadanía',                      esJuridica: false }
+    return { tipo: 'No determinado', subtipo: '', esJuridica: false }
 }
 
 function fmtDate(raw: string): string {
@@ -132,16 +138,17 @@ export async function GET(req: NextRequest) {
     const expected  = calcCheckDigit(base)
     const valid     = givenDig === expected
 
-    /* ── Consultar datos.gov.co ── */
+    /* ── Consultar RUES / datos.gov.co (máx 6 segundos) ── */
     let registros: Record<string, string>[] = []
     try {
-        const url = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${base}&$limit=5&$order=ultimo_ano_renovado%20DESC`
-        const res = await fetch(url, { next: { revalidate: 3600 } })
-        if (res.ok) {
-            registros = await res.json()
-        }
+        const ctrl = new AbortController()
+        const tid  = setTimeout(() => ctrl.abort(), 6000)
+        const url  = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${base}&$limit=5&$order=ultimo_ano_renovado%20DESC`
+        const res  = await fetch(url, { signal: ctrl.signal, next: { revalidate: 3600 } })
+        clearTimeout(tid)
+        if (res.ok) registros = await res.json()
     } catch {
-        // Red no disponible — continuar sin datos externos
+        // Timeout o red no disponible — se retornan al menos los datos locales (DV, tipo, rango)
     }
 
     /* ── Preparar respuesta ── */
@@ -154,7 +161,9 @@ export async function GET(req: NextRequest) {
         formatted:  base + '-' + givenDig,
 
         /* Clasificación por rango */
-        tipoRango: getEntityType(base),
+        tipoRango:  getEntityType(base).tipo,
+        subtipo:    getEntityType(base).subtipo,
+        esJuridica: getEntityType(base).esJuridica,
 
         /* Datos del registro mercantil */
         encontrado: registros.length > 0,

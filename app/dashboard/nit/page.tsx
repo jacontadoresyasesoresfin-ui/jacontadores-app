@@ -34,6 +34,8 @@ interface NitResult {
     providedDigit: number
     formatted: string
     tipoRango: string
+    subtipo: string
+    esJuridica: boolean
     encontrado: boolean
     razonSocial: string | null
     estadoMatricula: string | null
@@ -113,14 +115,19 @@ export default function NitPage() {
             const data: NitResult = await res.json()
             setResult(data)
         } catch {
-            /* fallback: local check digit only */
+            /* fallback offline: DV local solamente */
             const base     = cleaned.slice(0, -1)
             const given    = parseInt(cleaned.slice(-1))
             const expected = calcCheckDigit(base)
+            const n        = parseInt(base)
+            const esJur    = (n >= 800_000_000 && n <= 999_999_999)
             setResult({
                 valid: given === expected, nit: cleaned, base,
                 checkDigit: expected, providedDigit: given,
-                formatted: base + '-' + given, tipoRango: '', encontrado: false,
+                formatted: base + '-' + given,
+                tipoRango: esJur ? 'Persona Jurídica' : 'Persona Natural',
+                subtipo: '', esJuridica: esJur,
+                encontrado: false,
                 razonSocial: null, estadoMatricula: null, organizacionJuridica: null,
                 tipoSociedad: null, categoriaMatricula: null, camaraComercio: null,
                 matricula: null, fechaMatricula: null, fechaRenovacion: null,
@@ -179,7 +186,7 @@ export default function NitPage() {
         }
     }
 
-    const isNatPerson = result?.tipoRango?.includes('Persona Natural') && !result?.tipoRango?.includes('Jurídica')
+    const isNatPerson = result ? !result.esJuridica : false
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingBottom: '32px', fontFamily: 'Inter, sans-serif' }}>
@@ -429,50 +436,95 @@ export default function NitPage() {
                         </div>
 
                     ) : (
-                        /* ── Not found: show what we know ── */
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '14px' }}>
-                            <div style={{ ...CARD, padding: '24px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                                    {isNatPerson
-                                        ? <User      style={{ width: 32, height: 32, color: JA.GREY_LT }} />
-                                        : <Building2 style={{ width: 32, height: 32, color: JA.GREY_LT }} />
-                                    }
+                        /* ── No en RUES: mostrar todo lo que se puede calcular localmente ── */
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '14px' }}>
+
+                            {/* Datos calculados localmente */}
+                            <div style={CARD}>
+                                {/* Header tipo persona */}
+                                <div style={{ padding: '16px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ width: 40, height: 40, borderRadius: '4px', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        {result.esJuridica
+                                            ? <Building2 style={{ width: 20, height: 20, color: JA.NAVY }} />
+                                            : <User      style={{ width: 20, height: 20, color: JA.NAVY }} />
+                                        }
+                                    </div>
                                     <div>
-                                        <p style={{ fontSize: '14px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>
-                                            Sin registro en Cámara de Comercio
-                                        </p>
-                                        <p style={{ fontSize: '11px', color: JA.GREY_LT, margin: '3px 0 0' }}>
-                                            Este NIT no aparece en el Registro Mercantil público (puede ser entidad pública, persona natural sin matrícula, o NIT de persona natural)
+                                        <p style={{ fontSize: '15px', fontWeight: 900, color: JA.NAVY, margin: 0 }}>{result.tipoRango}</p>
+                                        {result.subtipo && <p style={{ fontSize: '11px', color: JA.GREY, margin: '2px 0 0' }}>{result.subtipo}</p>}
+                                        <p style={{ fontSize: '10px', color: JA.GREY_LT, margin: '4px 0 0' }}>
+                                            Sin registro en Cámara de Comercio · El DV fue calculado correctamente
                                         </p>
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+
+                                {/* Datos clave para contabilidad */}
+                                <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                     {[
-                                        { label: 'NIT Formateado', value: result.formatted, mono: true },
-                                        { label: 'Dígito de Verificación', value: String(result.checkDigit), mono: true },
-                                        { label: 'Base Numérica', value: result.base, mono: true },
-                                        { label: 'Clasificación DIAN', value: result.tipoRango, mono: false },
-                                    ].map(({ label, value, mono }) => (
-                                        <div key={label} style={{ padding: '12px', background: JA.BG, borderRadius: '2px', border: `1px solid ${JA.BORDER}` }}>
-                                            <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>{label}</p>
-                                            <p style={{ fontSize: mono ? '15px' : '12px', fontWeight: 800, color: JA.NAVY, margin: 0, fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</p>
+                                        { label: 'NIT / RUT completo',        value: result.formatted,          mono: true,  big: true  },
+                                        { label: 'Dígito de Verificación',    value: String(result.checkDigit), mono: true,  big: true  },
+                                        { label: 'Base numérica',             value: result.base,               mono: true,  big: false },
+                                        { label: 'Tipo de contribuyente',     value: result.tipoRango,          mono: false, big: false },
+                                        ...(result.subtipo ? [{ label: 'Clasificación DIAN', value: result.subtipo, mono: false, big: false }] : []),
+                                    ].map(({ label, value, mono, big }) => (
+                                        <div key={label} style={{ padding: '12px 14px', background: JA.BG, borderRadius: '2px', border: `1px solid ${JA.BORDER}` }}>
+                                            <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 5px' }}>{label}</p>
+                                            <p style={{ fontSize: big ? '18px' : '12px', fontWeight: 800, color: JA.NAVY, margin: 0, fontFamily: mono ? 'monospace' : 'inherit', letterSpacing: mono ? '0.05em' : 0 }}>{value}</p>
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Aviso */}
+                                <div style={{ margin: '0 20px 16px', padding: '10px 14px', background: JA.GOLD_PALE, border: `1px solid ${JA.GOLD}40`, borderRadius: '2px', display: 'flex', gap: '8px' }}>
+                                    <Info style={{ width: 14, height: 14, color: JA.GOLD, flexShrink: 0, marginTop: '1px' }} />
+                                    <p style={{ fontSize: '10px', color: JA.TEXT, margin: 0, lineHeight: 1.5 }}>
+                                        {result.esJuridica
+                                            ? 'Esta empresa no aparece en el Registro Mercantil público (RUES). Puede ser una entidad del Estado, cooperativa, o no tener matrícula mercantil vigente. Verifícala directamente en la DIAN o en el RUES.'
+                                            : 'Las personas naturales no aparecen en el Registro Mercantil. El NIT y el DV son correctos. Para nombre y datos del RUT, consulta en el portal de la DIAN con la cédula del contribuyente.'
+                                        }
+                                    </p>
+                                </div>
                             </div>
-                            <div style={{ ...CARD, padding: '16px' }}>
-                                <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>Verificar en fuentes oficiales</p>
-                                {[
-                                    { label: 'RUES — Registro Mercantil', url: 'https://www.rues.org.co' },
-                                    { label: 'DIAN — RUT Consulta', url: 'https://muisca.dian.gov.co' },
-                                    { label: 'datos.gov.co — Empresas', url: 'https://www.datos.gov.co' },
-                                ].map(({ label, url }) => (
-                                    <a key={url} href={url} target="_blank" rel="noopener noreferrer"
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '2px', border: `1px solid ${JA.BORDER}`, marginBottom: '8px', textDecoration: 'none', background: '#FFF' }}>
-                                        <span style={{ fontSize: '11px', fontWeight: 600, color: JA.TEXT }}>{label}</span>
-                                        <ExternalLink style={{ width: 11, height: 11, color: JA.GREY_LT }} />
-                                    </a>
-                                ))}
+
+                            {/* Fuentes oficiales */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ ...CARD, padding: '16px' }}>
+                                    <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>Verificar en fuentes oficiales</p>
+                                    {[
+                                        { label: 'DIAN — Consulta RUT',        url: 'https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces' },
+                                        { label: 'RUES — Registro Mercantil',  url: 'https://www.rues.org.co' },
+                                        { label: 'Cámaras de Comercio',        url: 'https://confecamaras.org.co' },
+                                    ].map(({ label, url }) => (
+                                        <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '2px', border: `1px solid ${JA.BORDER}`, marginBottom: '8px', textDecoration: 'none', background: '#FFF' }}>
+                                            <span style={{ fontSize: '11px', fontWeight: 600, color: JA.TEXT }}>{label}</span>
+                                            <ExternalLink style={{ width: 11, height: 11, color: JA.GREY_LT }} />
+                                        </a>
+                                    ))}
+                                </div>
+
+                                {/* Cálculo DV */}
+                                <div style={{ ...CARD, padding: '14px 16px' }}>
+                                    <button onClick={() => setShowCalc(!showCalc)}
+                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+                                        <span style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Verificar cálculo DV</span>
+                                        {showCalc ? <ChevronUp style={{ width: 14, height: 14, color: JA.GREY_LT }} /> : <ChevronDown style={{ width: 14, height: 14, color: JA.GREY_LT }} />}
+                                    </button>
+                                    {showCalc && (
+                                        <div style={{ marginTop: '10px', padding: '10px', background: JA.NAVY, borderRadius: '2px', overflowX: 'auto' }}>
+                                            <p style={{ fontSize: '8px', fontWeight: 700, color: JA.GOLD, margin: '0 0 6px', textTransform: 'uppercase' }}>Módulo 11 — factores primos × dígitos (der→izq)</p>
+                                            <code style={{ fontSize: '9px', color: '#D1D5DB', fontFamily: 'monospace', lineHeight: 2, display: 'block', whiteSpace: 'pre' }}>
+                                                {(() => {
+                                                    const d = result.base.replace(/\D/g, '').slice(-9).padStart(9, '0').split('').reverse()
+                                                    const sum = d.reduce((acc, ch, i) => acc + parseInt(ch) * MULTIPLIERS[i], 0)
+                                                    const rem = sum % 11
+                                                    return d.map((ch, i) => `${ch} × ${String(MULTIPLIERS[i]).padStart(2)} = ${String(parseInt(ch)*MULTIPLIERS[i]).padStart(3)}`).join('  |  ')
+                                                        + `\nSuma=${sum}  Resto=${rem}  DV=${result.checkDigit}`
+                                                })()}
+                                            </code>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

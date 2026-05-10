@@ -644,7 +644,8 @@ function EditTenantModal({ tenant, onClose, onSaved, onError }: { tenant: Tenant
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: tenant.id, ...form }),
             })
-            if (!res.ok) throw new Error('Error al actualizar')
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data?.error || `Error ${res.status}`)
             onSaved()
         } catch (e) {
             onError(e instanceof Error ? e.message : 'Error al guardar')
@@ -729,7 +730,8 @@ function CreateClientModal({ tenants, onClose, onCreated, onError }: { tenants: 
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...form, app_modules: selectedMods.length > 0 ? selectedMods : availableMods }),
             })
-            if (!res.ok) throw new Error('Error al registrar empresa')
+            const data = await res.json()
+            if (!res.ok) throw new Error(data?.error || `Error ${res.status}`)
             onCreated(`Empresa ${form.company_name} registrada exitosamente`)
         } catch (e) {
             onError(e instanceof Error ? e.message : 'Error desconocido')
@@ -869,7 +871,8 @@ function CreateCollabModal({ onClose, onCreated, onError }: { onClose: () => voi
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
             })
-            if (!res.ok) throw new Error('Error al registrar colaborador')
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(data?.error || `Error ${res.status}`)
             onCreated(`Colaborador ${form.full_name} registrado`)
         } catch (e) {
             onError(e instanceof Error ? e.message : 'Error al registrar')

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import {
-    Building2, Plus, Edit2, Eye, Trash2, X, Save,
+    Building2, Users, Plus, Edit2, Eye, Trash2, X, Save,
     Loader2, Search, RefreshCw, CheckCircle2, XCircle,
     LayoutDashboard, AlertTriangle, Globe,
 } from 'lucide-react'
@@ -82,11 +82,25 @@ function FirmaAdminContent() {
     const [search, setSearch] = useState('')
     const [showCreate, setShowCreate] = useState(false)
     const [showLink, setShowLink] = useState(false)
+    const [assigning, setAssigning] = useState(false)
     const [editing, setEditing] = useState<ClientProfile | null>(null)
     const [deleting, setDeleting] = useState<ClientProfile | null>(null)
 
     const showToast = (type: 'success' | 'error', msg: string) => {
-        setToast({ type, msg }); setTimeout(() => setToast(null), 4000)
+        setToast({ type, msg }); setTimeout(() => setToast(null), 5000)
+    }
+
+    const handleAssignAll = async () => {
+        setAssigning(true)
+        try {
+            const res = await fetch('/api/firma/assign-all', { method: 'POST' })
+            const data = await res.json()
+            if (!res.ok) { showToast('error', data?.error || 'Error'); return }
+            showToast('success', data.message)
+            loadData()
+        } catch {
+            showToast('error', 'Error de conexión')
+        } finally { setAssigning(false) }
     }
 
     const loadData = useCallback(async () => {
@@ -162,8 +176,18 @@ function FirmaAdminContent() {
                             </div>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <button onClick={loadData} style={sty.btnSec}><RefreshCw style={{ width: 14, height: 14 }} /></button>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <button onClick={loadData} style={sty.btnSec} title="Recargar"><RefreshCw style={{ width: 14, height: 14 }} /></button>
+                        <button
+                            onClick={handleAssignAll}
+                            disabled={assigning}
+                            style={{ ...sty.btnSec, fontSize: '12px', borderColor: '#B8960C', color: '#9A7D0A' }}
+                            title="Asignar todas las cuentas de usuario a esta firma">
+                            {assigning
+                                ? <><Loader2 style={{ width: 13, height: 13, animation: 'spin 1s linear infinite' }} /> Asignando...</>
+                                : <><Users style={{ width: 13, height: 13 }} /> Asignar todas las cuentas</>
+                            }
+                        </button>
                         <Link href="/dashboard" style={{ ...sty.btn, background: accentColor, textDecoration: 'none' }}>
                             <LayoutDashboard style={{ width: 14, height: 14 }} /> Dashboard
                         </Link>

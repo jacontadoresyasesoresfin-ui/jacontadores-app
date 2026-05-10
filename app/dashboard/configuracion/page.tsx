@@ -100,7 +100,7 @@ export default function ConfiguracionPage() {
         try {
             const { error } = await supabase
                 .from('profiles')
-                .update({ google_sheet_url: sheetUrl.trim(), updated_at: new Date().toISOString() })
+                .update({ google_sheet_url: sheetUrl.trim() })
                 .eq('id', profile.id)
             if (error) throw error
             setProfile(p => p ? { ...p, google_sheet_url: sheetUrl.trim() } : p)
@@ -120,14 +120,24 @@ export default function ConfiguracionPage() {
         setTestResult(null)
         try {
             let csvUrl = sheetUrl.trim()
-            const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
-            if (match) {
-                const gidMatch = csvUrl.match(/gid=([0-9]+)/)
-                csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gidMatch?.[1] ?? '0'}`
+            // Formato publicado: /d/e/2PACX-... (ya es exportable directamente)
+            if (csvUrl.includes('/d/e/')) {
+                // Si ya tiene output=csv lo usamos directo, sino lo agregamos
+                if (!csvUrl.includes('output=csv')) {
+                    csvUrl = csvUrl.replace(/\/pub.*$/, '/pub?output=csv')
+                    if (!csvUrl.includes('pub?')) csvUrl += (csvUrl.includes('?') ? '&' : '?') + 'output=csv'
+                }
+            } else {
+                // Formato edición: /d/SHEET_ID/edit → convertir a export
+                const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                if (match) {
+                    const gidMatch = csvUrl.match(/gid=([0-9]+)/)
+                    csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gidMatch?.[1] ?? '0'}`
+                }
             }
 
             const res = await fetch(`/api/sheets-proxy?url=${encodeURIComponent(csvUrl)}`)
-            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+            if (!res.ok) throw new Error(`HTTP ${res.status}: El Sheet no es accesible. Verifica que sea público.`)
             const text = await res.text()
             if (!text || text.length < 5) throw new Error('El Sheet está vacío o no es público')
 

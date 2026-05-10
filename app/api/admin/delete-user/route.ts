@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 /**
  * POST /api/admin/delete-user
- * Elimina un usuario de Supabase Auth y su perfil
+ * Elimina un usuario de Supabase Auth y su perfil + datos relacionados
  */
 export async function POST(request: NextRequest) {
     try {
@@ -20,10 +20,31 @@ export async function POST(request: NextRequest) {
             { auth: { autoRefreshToken: false, persistSession: false } }
         )
 
-        // 1. Eliminar perfil primero (FK constraint)
-        await adminClient.from('profiles').delete().eq('id', userId)
+        // 1. Limpiar datos relacionados antes de eliminar el perfil
+        // (ignorar errores si las tablas no existen o no hay datos)
+        const cleanupTables = ['dian_invoices', 'sales', 'inventory']
+        for (const table of cleanupTables) {
+            await adminClient.from(table).delete().eq('profile_id', userId)
+        }
 
-        // 2. Eliminar usuario de Auth
+        // Limpiar referencia created_by en tenants (si aplica)
+        await adminClient
+            .from('tenants')
+            .update({ created_by: null })
+            .eq('created_by', userId)
+
+        // 2. Eliminar perfil (FK cascade)
+        const { error: profileDeleteError } = await adminClient
+            .from('profiles')
+            .delete()
+            .eq('id', userId)
+
+        if (profileDeleteError) {
+            console.error('[delete-user] Error eliminando perfil:', profileDeleteError.message)
+            // Continuar de todas formas — intentar eliminar el usuario Auth
+        }
+
+        // 3. Eliminar usuario de Auth
         const { error } = await adminClient.auth.admin.deleteUser(userId)
         if (error) {
             return NextResponse.json({ error: error.message }, { status: 400 })

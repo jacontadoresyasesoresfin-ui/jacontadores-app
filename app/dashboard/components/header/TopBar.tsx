@@ -197,8 +197,8 @@ export default function TopBar() {
                         </div>
                     )}
 
-                    {/* Link al sitio principal */}
-                    <Link href="https://jacontadores.com" target="_blank"
+                    {/* Link a Soporte Técnico */}
+                    <Link href="https://fragatanetwork.com/contacto.html" target="_blank"
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -207,16 +207,16 @@ export default function TopBar() {
                             borderRadius: '8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            color: 'rgba(255,255,255,0.55)',
+                            color: '#FFFFFF',
                             fontFamily: 'Inter, sans-serif',
                             textDecoration: 'none',
                             transition: 'all 0.15s',
-                            border: '1px solid rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.3)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
+                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.5)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#FFFFFF'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
                         <ExternalLink style={{ width: '11px', height: '11px' }} />
-                        jacontadores.com
+                        Soporte Técnico
                     </Link>
 
                     {/* Panel Maestro — solo superadmin */}
@@ -225,12 +225,12 @@ export default function TopBar() {
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '5px 10px', borderRadius: '8px', fontSize: '11px',
-                                fontWeight: 600, color: 'rgba(255,255,255,0.55)',
+                                fontWeight: 600, color: '#FFFFFF',
                                 fontFamily: 'Inter, sans-serif', textDecoration: 'none',
-                                transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.1)',
+                                transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.2)',
                             }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.3)' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.5)' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#FFFFFF'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
                             <Settings style={{ width: '11px', height: '11px' }} />
                             Panel Maestro
                         </Link>
@@ -242,12 +242,12 @@ export default function TopBar() {
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '5px 10px', borderRadius: '8px', fontSize: '11px',
-                                fontWeight: 600, color: 'rgba(255,255,255,0.55)',
+                                fontWeight: 600, color: '#FFFFFF',
                                 fontFamily: 'Inter, sans-serif', textDecoration: 'none',
-                                transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.1)',
+                                transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.2)',
                             }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.3)' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.55)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)' }}>
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.5)' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#FFFFFF'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
                             <Settings style={{ width: '11px', height: '11px' }} />
                             Panel Firma
                         </Link>

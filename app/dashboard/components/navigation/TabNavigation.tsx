@@ -100,13 +100,36 @@ export default function TabNavigation() {
             zIndex: 40,
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
         }}>
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px' }}>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '24px',
-                    height: '54px',
-                }}>
+            <style>{`
+                .tab-nav-container {
+                    max-width: 1400px; 
+                    margin: 0 auto; 
+                    padding: 0 24px;
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                    scrollbar-width: none; /* Firefox */
+                }
+                .tab-nav-container::-webkit-scrollbar {
+                    display: none; /* Safari and Chrome */
+                }
+                .tab-nav-flex {
+                    display: flex;
+                    align-items: center;
+                    gap: 24px;
+                    height: 54px;
+                    min-width: max-content;
+                }
+                @media (max-width: 768px) {
+                    .tab-nav-container {
+                        padding: 0 16px;
+                    }
+                    .tab-nav-flex {
+                        gap: 16px;
+                    }
+                }
+            `}</style>
+            <div className="tab-nav-container">
+                <div className="tab-nav-flex">
                     {visibleCategories.map((category) => {
                         const isActiveCategory = category.items.some(item => pathname === item.href)
                         const isOpen = openCategory === category.name

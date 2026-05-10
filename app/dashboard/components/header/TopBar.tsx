@@ -30,15 +30,41 @@ export default function TopBar() {
             top: 0,
             zIndex: 50,
         }}>
-            <div style={{
-                maxWidth: '1400px',
-                margin: '0 auto',
-                padding: '0 20px',
-                height: '60px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-            }}>
+            <style>{`
+                .topbar-container {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 0 20px;
+                    height: 60px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                }
+                .badge-portal {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    background: rgba(184,150,12,0.12);
+                    border: 1px solid rgba(184,150,12,0.28);
+                }
+                @media (max-width: 768px) {
+                    .topbar-container {
+                        padding: 0 10px;
+                    }
+                    .hide-mobile {
+                        display: none !important;
+                    }
+                    .badge-portal {
+                        display: none !important;
+                    }
+                    .topbar-btn {
+                        padding: 5px !important;
+                    }
+                }
+            `}</style>
+            <div className="topbar-container">
 
                 {/* Logo + Marca — exactamente como jacontadores.com */}
                 <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
@@ -86,15 +112,7 @@ export default function TopBar() {
                 </Link>
 
                 {/* Centro — Badge portal */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    background: 'rgba(184,150,12,0.12)',
-                    border: '1px solid rgba(184,150,12,0.28)',
-                }}>
+                <div className="badge-portal">
                     <div style={{
                         width: '6px', height: '6px',
                         borderRadius: '50%',
@@ -199,6 +217,7 @@ export default function TopBar() {
 
                     {/* Link a Soporte Técnico */}
                     <Link href="https://fragatanetwork.com/contacto.html" target="_blank"
+                        className="topbar-btn"
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -215,13 +234,14 @@ export default function TopBar() {
                         }}
                         onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.5)' }}
                         onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#FFFFFF'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
-                        <ExternalLink style={{ width: '11px', height: '11px' }} />
-                        Soporte Técnico
+                        <ExternalLink style={{ width: '11px', height: '11px', color: '#D4A843' }} />
+                        <span className="hide-mobile">Soporte Técnico</span>
                     </Link>
 
                     {/* Panel Maestro — solo superadmin */}
                     {profile?.role === 'superadmin' && (
                         <Link href="/admin"
+                            className="topbar-btn"
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '5px 10px', borderRadius: '8px', fontSize: '11px',
@@ -231,14 +251,15 @@ export default function TopBar() {
                             }}
                             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.5)' }}
                             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#FFFFFF'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
-                            <Settings style={{ width: '11px', height: '11px' }} />
-                            Panel Maestro
+                            <Settings style={{ width: '11px', height: '11px', color: '#D4A843' }} />
+                            <span className="hide-mobile">Panel Maestro</span>
                         </Link>
                     )}
 
                     {/* Panel Firma — solo firma_admin */}
                     {profile?.role === 'firma_admin' && (
                         <Link href="/firma-admin"
+                            className="topbar-btn"
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '5px 10px', borderRadius: '8px', fontSize: '11px',
@@ -248,8 +269,8 @@ export default function TopBar() {
                             }}
                             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#D4A843'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(184,150,12,0.5)' }}
                             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#FFFFFF'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.2)' }}>
-                            <Settings style={{ width: '11px', height: '11px' }} />
-                            Panel Firma
+                            <Settings style={{ width: '11px', height: '11px', color: '#D4A843' }} />
+                            <span className="hide-mobile">Panel Firma</span>
                         </Link>
                     )}
 

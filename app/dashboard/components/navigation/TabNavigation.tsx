@@ -141,7 +141,9 @@ export default function TabNavigation() {
                                 onMouseLeave={handleMouseLeave}
                                 style={{ height: '100%', position: 'relative', display: 'flex', alignItems: 'center' }}
                             >
-                                <button style={{
+                                <button 
+                                    onClick={() => setOpenCategory(isOpen ? null : category.name)}
+                                    style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
@@ -165,7 +167,7 @@ export default function TabNavigation() {
                                         width: '12px', height: '12px', 
                                         transform: isOpen ? 'rotate(180deg)' : 'none', 
                                         transition: 'transform 0.2s',
-                                        color: isActiveCategory ? JA.GOLD : JA.GREY_LT
+                                        color: isActiveCategory ? JA.GOLD : JA.GREY
                                     }} />
                                 </button>
 
@@ -211,7 +213,7 @@ export default function TabNavigation() {
                                                         if (!isActive) e.currentTarget.style.background = 'transparent'
                                                     }}
                                                 >
-                                                    <Icon style={{ width: '16px', height: '16px', color: isActive ? JA.GOLD : JA.GREY_LT }} />
+                                                    <Icon style={{ width: '16px', height: '16px', color: JA.GOLD }} />
                                                     {item.name}
                                                 </Link>
                                             )

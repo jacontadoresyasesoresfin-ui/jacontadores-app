@@ -91,7 +91,7 @@ function AdminContent({ user }: { user: User }) {
     const [collaborators, setCollaborators] = useState<Profile[]>([])
     const [tenants, setTenants] = useState<Tenant[]>([])
     const [loading, setLoading] = useState(true)
-    const [isNotAdmin, setIsNotAdmin] = useState(false)
+    const [isNotAdmin, setIsNotAdmin] = useState<{role?: string, err?: string|null} | false>(false)
     const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null)
     const [tab, setTab] = useState<TabType>('firmas')
     const [searchQuery, setSearchQuery] = useState('')
@@ -108,8 +108,8 @@ function AdminContent({ user }: { user: User }) {
 
     const fetchData = useCallback(async () => {
         setLoading(true)
-        const { data: myProfile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-        if (myProfile?.role !== 'superadmin') { setIsNotAdmin(true); setLoading(false); return }
+        const { data: myProfile, error: profileErr } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        if (myProfile?.role !== 'superadmin') { setIsNotAdmin({ role: myProfile?.role, err: profileErr?.message || null }); setLoading(false); return }
 
         const [{ data: all }, { data: tenantsData }] = await Promise.all([
             supabase.from('profiles').select('*').order('created_at', { ascending: false }),
@@ -149,6 +149,15 @@ function AdminContent({ user }: { user: User }) {
             <div style={{ textAlign: 'center' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 700, color: JA.TEXT, marginBottom: '8px' }}>Acceso No Autorizado</h2>
                 <p style={{ color: JA.GREY, fontSize: '14px' }}>Este panel es exclusivo para administración central.</p>
+                
+                {/* Debug Info */}
+                <div style={{ marginTop: '24px', padding: '16px', background: '#FEE2E2', borderRadius: '4px', textAlign: 'left', fontSize: '12px', color: '#991B1B', border: '1px solid #F87171', maxWidth: '400px', width: '100%' }}>
+                    <p><strong>Debug Info:</strong></p>
+                    <p>User ID: {user?.id}</p>
+                    <p>User Email: {user?.email}</p>
+                    <p>Fetched Role: {isNotAdmin.role || 'null'}</p>
+                    <p>Fetch Error: {isNotAdmin.err || 'none'}</p>
+                </div>
             </div>
             <Link href="/dashboard" style={{ ...styles.buttonPrimary, textDecoration: 'none' }}>Regresar al Portal</Link>
         </div>

@@ -784,7 +784,13 @@ function EditClientModal({ client, tenants, onClose, onSaved, onError, supabase 
         sheet_url: client.google_sheet_url || '',
         phone: client.phone || '',
         tenant_id: client.tenant_id || '',
-        app_modules: client.app_modules || ALL_MODS.map(m => m.id),
+        app_modules: (() => {
+            const existing = client.app_modules || []
+            if (existing.length === 0) return ALL_MODS.map(m => m.id)
+            const NEW_MODS = ['nomina', 'nit', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
+            const isLegacy = !existing.some(m => NEW_MODS.includes(m))
+            return isLegacy ? [...existing, ...NEW_MODS] : existing
+        })(),
     })
     const [saving, setSaving] = useState(false)
 

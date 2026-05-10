@@ -392,7 +392,13 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
     const [form, setForm] = useState({
         company_name: client.company_name || '',
         sheet_url: client.google_sheet_url || '',
-        app_modules: client.app_modules || availableMods,
+        app_modules: (() => {
+            const existing = client.app_modules || []
+            if (existing.length === 0) return availableMods
+            const NEW_MODS = ['nomina', 'nit', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
+            const isLegacy = !existing.some(m => NEW_MODS.includes(m))
+            return isLegacy ? [...existing, ...NEW_MODS.filter(m => availableMods.includes(m))] : existing
+        })(),
     })
     const [saving, setSaving] = useState(false)
 

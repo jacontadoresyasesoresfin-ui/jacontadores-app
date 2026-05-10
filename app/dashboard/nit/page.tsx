@@ -95,11 +95,12 @@ function InfoRow({ label, value, mono = false, highlight = false }: { label: str
 }
 
 export default function NitPage() {
-    const [input,   setInput]   = useState('')
-    const [result,  setResult]  = useState<NitResult | null>(null)
-    const [loading, setLoading] = useState(false)
-    const [copied,  setCopied]  = useState(false)
-    const [showCalc, setShowCalc] = useState(false)
+    const [input,      setInput]      = useState('')
+    const [result,     setResult]     = useState<NitResult | null>(null)
+    const [loading,    setLoading]    = useState(false)
+    const [copied,     setCopied]     = useState(false)
+    const [showCalc,   setShowCalc]   = useState(false)
+    const [autoCalc,   setAutoCalc]   = useState(false)
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const verify = useCallback(async (value: string) => {
@@ -136,8 +137,22 @@ export default function NitPage() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value.replace(/[^0-9\-]/g, '')
         setInput(val)
+        setAutoCalc(false)
         if (debounceRef.current) clearTimeout(debounceRef.current)
-        debounceRef.current = setTimeout(() => verify(val), 500)
+        debounceRef.current = setTimeout(() => {
+            const cleaned = val.replace(/\D/g, '')
+            if (cleaned.length < 2) { setResult(null); return }
+            if (!val.includes('-') && cleaned.length >= 5) {
+                // Sin guión: calcular DV automáticamente y completar el campo
+                const dv   = calcCheckDigit(cleaned)
+                const full = cleaned + '-' + dv
+                setInput(full)
+                setAutoCalc(true)
+                verify(full)
+            } else {
+                verify(val)
+            }
+        }, 600)
     }
 
     const handleCalcDV = () => {
@@ -146,11 +161,13 @@ export default function NitPage() {
         const digit    = calcCheckDigit(cleaned)
         const newInput = cleaned + '-' + digit
         setInput(newInput)
+        setAutoCalc(true)
         verify(newInput)
     }
 
     const handleExample = (nit: string) => {
         setInput(nit)
+        setAutoCalc(false)
         verify(nit)
     }
 
@@ -181,26 +198,28 @@ export default function NitPage() {
             {/* ── Search box ── */}
             <div style={{ ...CARD, padding: '20px' }}>
                 <label style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '10px' }}>
-                    Ingresa NIT (con o sin dígito de verificación)
+                    Ingresa NIT — con o sin dígito de verificación
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', border: `2px solid ${result ? (result.valid ? JA.GREEN : JA.RED) : JA.BORDER}`, borderRadius: '2px', transition: 'border-color 0.2s', background: '#FAFAFA' }}>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', border: `2px solid ${result ? (autoCalc ? JA.GOLD : result.valid ? JA.GREEN : JA.RED) : JA.BORDER}`, borderRadius: '2px', transition: 'border-color 0.2s', background: '#FAFAFA' }}>
                         {loading
                             ? <div style={{ width: 18, height: 18, border: `2px solid ${JA.BORDER}`, borderTopColor: JA.NAVY, borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
                             : <Search style={{ width: 18, height: 18, color: JA.GREY_LT, flexShrink: 0 }} />
                         }
                         <input
                             type="text"
-                            placeholder="Ej: 900123456-7 · 8009012345 · 12345678"
+                            placeholder="Ej: 900123456  →  DV se calcula solo"
                             value={input}
                             onChange={handleChange}
                             autoFocus
                             style={{ border: 'none', outline: 'none', fontSize: '18px', fontWeight: 700, color: JA.NAVY, background: 'none', flex: 1, fontFamily: 'monospace', letterSpacing: '0.05em' }}
                         />
                         {result && (
-                            result.valid
-                                ? <CheckCircle style={{ width: 20, height: 20, color: JA.GREEN, flexShrink: 0 }} />
-                                : <XCircle    style={{ width: 20, height: 20, color: JA.RED,   flexShrink: 0 }} />
+                            autoCalc
+                                ? <CheckCircle style={{ width: 20, height: 20, color: JA.GOLD,  flexShrink: 0 }} />
+                                : result.valid
+                                    ? <CheckCircle style={{ width: 20, height: 20, color: JA.GREEN, flexShrink: 0 }} />
+                                    : <XCircle    style={{ width: 20, height: 20, color: JA.RED,   flexShrink: 0 }} />
                         )}
                     </div>
                     <button onClick={handleCalcDV}
@@ -209,7 +228,7 @@ export default function NitPage() {
                     </button>
                 </div>
                 <p style={{ fontSize: '10px', color: JA.GREY_LT, margin: '8px 0 0' }}>
-                    Ingresa solo la base numérica → "Calcular DV" para obtener el dígito · O ingresa el NIT completo para validar en tiempo real
+                    Escribe solo la base → el dígito de verificación se calcula automáticamente · Escribe con guión (ej: 900123456-<strong>7</strong>) para validar un DV conocido
                 </p>
             </div>
 
@@ -234,21 +253,25 @@ export default function NitPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
                     {/* Validation header */}
-                    <div style={{ ...CARD, padding: '18px 20px', borderLeft: `4px solid ${result.valid ? JA.GREEN : JA.RED}` }}>
+                    <div style={{ ...CARD, padding: '18px 20px', borderLeft: `4px solid ${autoCalc ? JA.GOLD : result.valid ? JA.GREEN : JA.RED}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                {result.valid
-                                    ? <CheckCircle style={{ width: 26, height: 26, color: JA.GREEN }} />
-                                    : <XCircle    style={{ width: 26, height: 26, color: JA.RED   }} />
+                                {autoCalc
+                                    ? <CheckCircle style={{ width: 26, height: 26, color: JA.GOLD  }} />
+                                    : result.valid
+                                        ? <CheckCircle style={{ width: 26, height: 26, color: JA.GREEN }} />
+                                        : <XCircle    style={{ width: 26, height: 26, color: JA.RED   }} />
                                 }
                                 <div>
-                                    <p style={{ fontSize: '15px', fontWeight: 900, color: result.valid ? JA.GREEN : JA.RED, margin: 0 }}>
-                                        {result.valid ? 'DÍGITO VÁLIDO' : 'DÍGITO INCORRECTO'}
+                                    <p style={{ fontSize: '15px', fontWeight: 900, color: autoCalc ? JA.GOLD : result.valid ? JA.GREEN : JA.RED, margin: 0 }}>
+                                        {autoCalc ? `DV CALCULADO: ${result.checkDigit}` : result.valid ? 'DÍGITO VÁLIDO' : 'DÍGITO INCORRECTO'}
                                     </p>
                                     <p style={{ fontSize: '11px', color: JA.GREY, margin: '3px 0 0' }}>
-                                        {result.valid
-                                            ? `Dígito de verificación ${result.checkDigit} es correcto`
-                                            : `Se esperaba ${result.checkDigit}, se recibió ${result.providedDigit}`
+                                        {autoCalc
+                                            ? `El dígito de verificación para ${result.base} es ${result.checkDigit}`
+                                            : result.valid
+                                                ? `Dígito de verificación ${result.checkDigit} es correcto`
+                                                : `Se esperaba ${result.checkDigit}, se recibió ${result.providedDigit}`
                                         }
                                     </p>
                                 </div>

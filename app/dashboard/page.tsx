@@ -1,6 +1,7 @@
 'use client'
 
-import { useClient } from './ClientContext'
+import React from 'react'
+import { useClient, Profile } from './ClientContext'
 import {
     ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
     ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell
@@ -139,75 +140,56 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            <style>{`
-                .module-card {
-                    background: #FFFFFF;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 2px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-                    padding: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    text-decoration: none;
-                    transition: all 0.2s ease;
-                }
-                .module-card:hover {
-                    border-color: ${JA.GOLD};
-                    box-shadow: 0 4px 12px rgba(184,150,12,0.1);
-                    transform: translateY(-1px);
-                }
-                .module-card-icon {
-                    width: 32px;
-                    height: 32px;
-                    background: ${JA.BG};
-                    border: 1px solid ${JA.BORDER};
-                    border-radius: 2px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    flex-shrink: 0;
-                    transition: background 0.2s;
-                }
-                .module-card:hover .module-card-icon {
-                    background: #FFFBEB;
-                    border-color: ${JA.GOLD}40;
-                }
-            `}</style>
 
-            {/* ── Módulos Corporativos ───────────────────── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.NAVY, margin: '8px 0 0' }}>Accesos Rápidos a Módulos</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
-                    {Object.entries({
-                        analytics:      { name: 'Analytics',         href: '/dashboard/analytics',      icon: TrendingUp },
-                        reports:        { name: 'Reportes',          href: '/dashboard/reports',        icon: FileText },
-                        sales:          { name: 'Ventas',            href: '/dashboard/sales',          icon: ShoppingCart },
-                        ecommerce:      { name: 'Ecommerce',         href: '/dashboard/ecommerce',      icon: Store },
-                        portfolio:      { name: 'Cartera',           href: '/dashboard/portfolio',      icon: Wallet },
-                        inventory:      { name: 'Inventario',        href: '/dashboard/inventory',      icon: Package },
-                        siigo_bi:       { name: 'Siigo BI',          href: '/dashboard/siigo',          icon: FileSpreadsheet },
-                        reconciliation: { name: 'Conciliación',      href: '/dashboard/reconciliation', icon: FileCheck },
-                        taxes:          { name: 'Impuestos',         href: '/dashboard/taxes',          icon: Receipt },
-                        nomina:         { name: 'Nómina PILA',       href: '/dashboard/nomina',         icon: Calculator },
-                        nit:            { name: 'Verificar NIT',     href: '/dashboard/nit',            icon: Search },
-                    }).filter(([key]) => modules?.[key] || key === 'nit' || key === 'nomina' || key === 'portfolio') 
-                      .map(([key, mod]) => {
-                        const Icon = mod.icon
-                        return (
-                            <Link key={key} href={mod.href} className="module-card">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div className="module-card-icon">
-                                        <Icon style={{ width: 16, height: 16, color: JA.GOLD }} />
+
+            {/* ── Accesos Rápidos a Módulos ──────────────── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <h3 style={{ fontSize: '12px', fontWeight: 700, color: JA.NAVY, margin: '4px 0 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Módulos Disponibles
+                    </h3>
+                    {/* Enlace Panel Firma sólo para firma_admin y superadmin */}
+                    {(activeProfile as Profile & { role: string })?.role === 'firma_admin' && (
+                        <Link href="/firma-admin" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: JA.GOLD, textDecoration: 'none', padding: '4px 10px', border: `1px solid ${JA.GOLD}40`, borderRadius: '2px', background: '#FFFBEB' }}>
+                            <Users style={{ width: 12, height: 12 }} /> Gestionar Empresas
+                        </Link>
+                    )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                    {([
+                        { key: 'analytics',      name: 'Analytics',         href: '/dashboard/analytics',      icon: TrendingUp },
+                        { key: 'reports',        name: 'Reportes',          href: '/dashboard/reports',        icon: FileText },
+                        { key: 'sales',          name: 'Ventas',            href: '/dashboard/sales',          icon: ShoppingCart },
+                        { key: 'ecommerce',      name: 'Ecommerce',         href: '/dashboard/ecommerce',      icon: Store },
+                        { key: 'portfolio',      name: 'Cartera',           href: '/dashboard/portfolio',      icon: Wallet },
+                        { key: 'inventory',      name: 'Inventario',        href: '/dashboard/inventory',      icon: Package },
+                        { key: 'siigo_bi',       name: 'Siigo BI',          href: '/dashboard/siigo',          icon: FileSpreadsheet },
+                        { key: 'reconciliation', name: 'Conciliación',      href: '/dashboard/reconciliation', icon: FileCheck },
+                        { key: 'taxes',          name: 'Impuestos',         href: '/dashboard/taxes',          icon: Receipt },
+                        { key: 'nomina',         name: 'Nómina PILA',       href: '/dashboard/nomina',         icon: Calculator },
+                        { key: 'nit',            name: 'Verificar NIT',     href: '/dashboard/nit',            icon: Search },
+                    ] as { key: string; name: string; href: string; icon: React.ElementType }[])
+                        .filter(m => modules?.[m.key])
+                        .map(mod => {
+                            const Icon = mod.icon
+                            return (
+                                <Link key={mod.key} href={mod.href} className="module-card">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div className="module-card-icon">
+                                            <Icon style={{ width: 15, height: 15, color: JA.GOLD }} />
+                                        </div>
+                                        <span style={{ fontSize: '12px', fontWeight: 600, color: JA.NAVY, fontFamily: 'Inter, sans-serif' }}>
+                                            {mod.name}
+                                        </span>
                                     </div>
-                                    <span style={{ fontSize: '13px', fontWeight: 600, color: JA.NAVY, fontFamily: 'Inter, sans-serif' }}>{mod.name}</span>
-                                </div>
-                                <ChevronRight style={{ width: 14, height: 14, color: JA.GREY_LT }} />
-                            </Link>
-                        )
-                    })}
+                                    <ChevronRight style={{ width: 13, height: 13, color: '#9CA3AF' }} />
+                                </Link>
+                            )
+                        })
+                    }
                 </div>
             </div>
+
 
             {/* ── KPIs Fila 1 — Financieros ──────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>

@@ -134,8 +134,8 @@ export default function TopBar() {
                 {/* Derecha — Links + Usuario */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
 
-                    {/* Selector de Cliente para Superadmins */}
-                    {profile?.role === 'superadmin' && (
+                    {/* Selector de Cliente para Superadmins y Firma Admins */}
+                    {(profile?.role === 'superadmin' || profile?.role === 'firma_admin') && (
                         <div style={{ position: 'relative' }}>
                             <button
                                 onClick={() => setClientSelectorOpen(v => !v)}

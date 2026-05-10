@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(npm list *)",
+      "Bash(npm install *)",
+      "Bash(ls app/dashboard/)",
+      "Bash(dir app\\\\dashboard /b)",
+      "WebFetch(domain:www.rues.org.co)"
+    ]
+  }
+}

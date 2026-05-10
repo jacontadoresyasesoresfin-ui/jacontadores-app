@@ -35,19 +35,21 @@ export async function POST(request: NextRequest) {
 
         const userId = authData.user.id
 
-        // 2. Crear o actualizar perfil con company_name (lo diferencia como cliente)
+        // 2. Actualizar el perfil que el trigger ya creó automáticamente
         const { tenant_id, app_modules } = body
-        const { error: profileError } = await adminClient.from('profiles').upsert({
-            id: userId,
-            company_name,
-            google_sheet_url: sheet_url || null,
-            phone: phone || null,
-            role: 'user',
-            tenant_id: tenant_id || null,
-            app_modules: app_modules || null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        })
+        // Wait a moment for the trigger to complete
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const { error: profileError } = await adminClient
+            .from('profiles')
+            .update({
+                company_name,
+                google_sheet_url: sheet_url || null,
+                phone: phone || null,
+                role: 'user',
+                tenant_id: tenant_id || null,
+                app_modules: app_modules || null,
+            })
+            .eq('id', userId)
 
         if (profileError) {
             // Si falla el perfil, intentar eliminar el usuario Auth para no dejar basura

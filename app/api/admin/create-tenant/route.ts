@@ -56,18 +56,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: `Error creando usuario: ${authError.message}` }, { status: 500 })
         }
 
-        // 3. Crear el perfil del firma_admin ligado al tenant
+        // 3. Actualizar el perfil que el trigger creó automáticamente
+        await new Promise(resolve => setTimeout(resolve, 500))
         const { error: profileError } = await supabaseAdmin
             .from('profiles')
-            .upsert({
-                id: authUser.user.id,
+            .update({
                 role: 'firma_admin',
                 full_name: admin_full_name || name,
                 tenant_id: tenant.id,
                 app_modules: available_modules || tenant.available_modules,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
             })
+            .eq('id', authUser.user.id)
 
         if (profileError) {
             return NextResponse.json({ error: `Error creando perfil admin: ${profileError.message}` }, { status: 500 })

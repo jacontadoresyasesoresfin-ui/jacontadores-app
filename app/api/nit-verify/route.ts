@@ -138,17 +138,14 @@ export async function GET(req: NextRequest) {
     const expected  = calcCheckDigit(base)
     const valid     = givenDig === expected
 
-    /* ── Consultar RUES / datos.gov.co (máx 6 segundos) ── */
+    /* ── Consultar RUES / datos.gov.co ── */
     let registros: Record<string, string>[] = []
     try {
-        const ctrl = new AbortController()
-        const tid  = setTimeout(() => ctrl.abort(), 6000)
-        const url  = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${base}&$limit=5&$order=ultimo_ano_renovado%20DESC`
-        const res  = await fetch(url, { signal: ctrl.signal, next: { revalidate: 3600 } })
-        clearTimeout(tid)
+        const url = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${base}&$limit=5&$order=ultimo_ano_renovado%20DESC`
+        const res = await fetch(url, { next: { revalidate: 3600 } })
         if (res.ok) registros = await res.json()
     } catch {
-        // Timeout o red no disponible — se retornan al menos los datos locales (DV, tipo, rango)
+        // Red no disponible — continuar con datos locales
     }
 
     /* ── Preparar respuesta ── */

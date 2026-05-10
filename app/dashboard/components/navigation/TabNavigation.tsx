@@ -86,63 +86,6 @@ export default function TabNavigation() {
             zIndex: 40,
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
         }}>
-            <style>{`
-                .tab-nav-container {
-                    max-width: 1400px; 
-                    margin: 0 auto; 
-                    padding: 0 24px;
-                    overflow-x: auto;
-                    -webkit-overflow-scrolling: touch;
-                    scrollbar-width: none;
-                }
-                .tab-nav-container::-webkit-scrollbar {
-                    display: none;
-                }
-                .tab-nav-flex {
-                    display: flex;
-                    align-items: center;
-                    gap: 24px;
-                    height: 54px;
-                    min-width: max-content;
-                }
-                .dropdown-menu {
-                    display: none;
-                    position: absolute;
-                    top: 100%;
-                    left: 0;
-                    min-width: 220px;
-                    background: #FFFFFF;
-                    border: 1px solid ${JA.BORDER};
-                    border-radius: 0 0 4px 4px;
-                    box-shadow: 0 10px 25px rgba(19,33,60,0.1);
-                    padding: 8px 0;
-                    z-index: 50;
-                    animation: fadeIn 0.15s ease-out;
-                }
-                .nav-group:hover .dropdown-menu,
-                .nav-group:focus-within .dropdown-menu {
-                    display: block;
-                }
-                .chevron-icon {
-                    transition: transform 0.2s;
-                }
-                .nav-group:hover .chevron-icon,
-                .nav-group:focus-within .chevron-icon {
-                    transform: rotate(180deg);
-                }
-                @media (max-width: 768px) {
-                    .tab-nav-container {
-                        padding: 0 16px;
-                    }
-                    .tab-nav-flex {
-                        gap: 16px;
-                    }
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-4px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
             <div className="tab-nav-container">
                 <div className="tab-nav-flex">
                     {visibleCategories.map((category) => {
@@ -152,6 +95,7 @@ export default function TabNavigation() {
                             <div 
                                 key={category.name}
                                 className="nav-group"
+                                tabIndex={0}
                                 style={{ height: '100%', position: 'relative', display: 'flex', alignItems: 'center' }}
                             >
                                 <button style={{

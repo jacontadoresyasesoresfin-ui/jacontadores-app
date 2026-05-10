@@ -116,6 +116,13 @@ const MENU_CATEGORIES = [
                 icon: Search,
                 moduleKey: 'nit',
             },
+            {
+                name: 'Causación',
+                desc: 'Automatización de causación de facturas',
+                href: '/dashboard/causacion',
+                icon: FileCheck,
+                moduleKey: 'causacion',
+            },
         ],
     },
     {

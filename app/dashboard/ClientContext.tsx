@@ -36,7 +36,7 @@ export interface Profile {
 export const ALL_MODULES = [
     'analytics', 'siigo_bi', 'reconciliation', 'sales', 'ecommerce',
     'portfolio', 'inventory', 'reports', 'team', 'taxes', 'configuracion',
-    'nomina', 'nit',
+    'nomina', 'nit', 'causacion',
     'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas',
 ]
 
@@ -44,7 +44,7 @@ export const DEFAULT_MODULES: Record<string, boolean> = {
     analytics: true, siigo_bi: true, reconciliation: true,
     sales: true, ecommerce: true, portfolio: true,
     inventory: true, reports: true, team: true,
-    taxes: true, configuracion: true, nomina: true, nit: true,
+    taxes: true, configuracion: true, nomina: true, nit: true, causacion: true,
     ml_pagos: true, ml_comisiones: true, ml_devoluciones: true, ml_costos: true, ml_alertas: true,
 }
 

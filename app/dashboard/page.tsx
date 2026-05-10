@@ -5,9 +5,12 @@ import {
     ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
     ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell
 } from 'recharts'
+import Link from 'next/link'
 import {
     DollarSign, Users, FileText, AlertTriangle, TrendingUp, TrendingDown,
-    CheckCircle2, Calendar, ArrowUpRight, ArrowDownRight, Clock
+    CheckCircle2, Calendar, ArrowUpRight, ArrowDownRight, Clock,
+    ShoppingCart, Store, Wallet, Package, FileSpreadsheet, FileCheck, Receipt, Calculator, Search,
+    ChevronRight
 } from 'lucide-react'
 
 /* ── Paleta corporativa ────────────────────────────────── */
@@ -63,7 +66,7 @@ const TT_STYLE  = {
 }
 
 export default function DashboardPage() {
-    const { data: clientData, loading, activeProfile } = useClient()
+    const { data: clientData, loading, activeProfile, modules } = useClient()
 
     if (loading || !clientData) {
         return (
@@ -133,6 +136,76 @@ export default function DashboardPage() {
                     <div style={{ fontSize: '10px', color: JA.GREY, background: JA.BG, border: `1px solid ${JA.BORDER}`, padding: '6px 10px', borderRadius: '2px', fontWeight: 600 }}>
                         {taxData.regimenSugerido}
                     </div>
+                </div>
+            </div>
+
+            <style>{`
+                .module-card {
+                    background: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 2px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                    padding: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    text-decoration: none;
+                    transition: all 0.2s ease;
+                }
+                .module-card:hover {
+                    border-color: ${JA.GOLD};
+                    box-shadow: 0 4px 12px rgba(184,150,12,0.1);
+                    transform: translateY(-1px);
+                }
+                .module-card-icon {
+                    width: 32px;
+                    height: 32px;
+                    background: ${JA.BG};
+                    border: 1px solid ${JA.BORDER};
+                    border-radius: 2px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                    transition: background 0.2s;
+                }
+                .module-card:hover .module-card-icon {
+                    background: #FFFBEB;
+                    border-color: ${JA.GOLD}40;
+                }
+            `}</style>
+
+            {/* ── Módulos Corporativos ───────────────────── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 700, color: JA.NAVY, margin: '8px 0 0' }}>Accesos Rápidos a Módulos</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
+                    {Object.entries({
+                        analytics:      { name: 'Analytics',         href: '/dashboard/analytics',      icon: TrendingUp },
+                        reports:        { name: 'Reportes',          href: '/dashboard/reports',        icon: FileText },
+                        sales:          { name: 'Ventas',            href: '/dashboard/sales',          icon: ShoppingCart },
+                        ecommerce:      { name: 'Ecommerce',         href: '/dashboard/ecommerce',      icon: Store },
+                        portfolio:      { name: 'Cartera',           href: '/dashboard/portfolio',      icon: Wallet },
+                        inventory:      { name: 'Inventario',        href: '/dashboard/inventory',      icon: Package },
+                        siigo_bi:       { name: 'Siigo BI',          href: '/dashboard/siigo',          icon: FileSpreadsheet },
+                        reconciliation: { name: 'Conciliación',      href: '/dashboard/reconciliation', icon: FileCheck },
+                        taxes:          { name: 'Impuestos',         href: '/dashboard/taxes',          icon: Receipt },
+                        nomina:         { name: 'Nómina PILA',       href: '/dashboard/nomina',         icon: Calculator },
+                        nit:            { name: 'Verificar NIT',     href: '/dashboard/nit',            icon: Search },
+                    }).filter(([key]) => modules?.[key] || key === 'nit' || key === 'nomina' || key === 'portfolio') 
+                      .map(([key, mod]) => {
+                        const Icon = mod.icon
+                        return (
+                            <Link key={key} href={mod.href} className="module-card">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div className="module-card-icon">
+                                        <Icon style={{ width: 16, height: 16, color: JA.GOLD }} />
+                                    </div>
+                                    <span style={{ fontSize: '13px', fontWeight: 600, color: JA.NAVY, fontFamily: 'Inter, sans-serif' }}>{mod.name}</span>
+                                </div>
+                                <ChevronRight style={{ width: 14, height: 14, color: JA.GREY_LT }} />
+                            </Link>
+                        )
+                    })}
                 </div>
             </div>
 

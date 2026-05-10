@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useRef, useEffect } from 'react'
 import {
     LayoutDashboard, TrendingUp, ShoppingCart, Wallet, Package, FileText,
     Users, Receipt, Store, CreditCard, Percent, RotateCcw, DollarSign,
@@ -71,19 +70,6 @@ const MENU_CATEGORIES = [
 export default function TabNavigation() {
     const pathname = usePathname()
     const { modules } = useClient()
-    const [openCategory, setOpenCategory] = useState<string | null>(null)
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-    const handleMouseEnter = (catName: string) => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current)
-        setOpenCategory(catName)
-    }
-
-    const handleMouseLeave = () => {
-        timeoutRef.current = setTimeout(() => {
-            setOpenCategory(null)
-        }, 150)
-    }
 
     // Filter categories based on available modules
     const visibleCategories = MENU_CATEGORIES.map(cat => ({
@@ -107,10 +93,10 @@ export default function TabNavigation() {
                     padding: 0 24px;
                     overflow-x: auto;
                     -webkit-overflow-scrolling: touch;
-                    scrollbar-width: none; /* Firefox */
+                    scrollbar-width: none;
                 }
                 .tab-nav-container::-webkit-scrollbar {
-                    display: none; /* Safari and Chrome */
+                    display: none;
                 }
                 .tab-nav-flex {
                     display: flex;
@@ -118,6 +104,31 @@ export default function TabNavigation() {
                     gap: 24px;
                     height: 54px;
                     min-width: max-content;
+                }
+                .dropdown-menu {
+                    display: none;
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    min-width: 220px;
+                    background: #FFFFFF;
+                    border: 1px solid ${JA.BORDER};
+                    border-radius: 0 0 4px 4px;
+                    box-shadow: 0 10px 25px rgba(19,33,60,0.1);
+                    padding: 8px 0;
+                    z-index: 50;
+                    animation: fadeIn 0.15s ease-out;
+                }
+                .nav-group:hover .dropdown-menu,
+                .nav-group:focus-within .dropdown-menu {
+                    display: block;
+                }
+                .chevron-icon {
+                    transition: transform 0.2s;
+                }
+                .nav-group:hover .chevron-icon,
+                .nav-group:focus-within .chevron-icon {
+                    transform: rotate(180deg);
                 }
                 @media (max-width: 768px) {
                     .tab-nav-container {
@@ -127,23 +138,23 @@ export default function TabNavigation() {
                         gap: 16px;
                     }
                 }
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(-4px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
             `}</style>
             <div className="tab-nav-container">
                 <div className="tab-nav-flex">
                     {visibleCategories.map((category) => {
                         const isActiveCategory = category.items.some(item => pathname === item.href)
-                        const isOpen = openCategory === category.name
 
                         return (
                             <div 
                                 key={category.name}
-                                onMouseEnter={() => handleMouseEnter(category.name)}
-                                onMouseLeave={handleMouseLeave}
+                                className="nav-group"
                                 style={{ height: '100%', position: 'relative', display: 'flex', alignItems: 'center' }}
                             >
-                                <button 
-                                    onClick={() => setOpenCategory(isOpen ? null : category.name)}
-                                    style={{
+                                <button style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
@@ -163,74 +174,51 @@ export default function TabNavigation() {
                                 }}>
                                     {category.isSub && <span style={{ color: JA.GOLD }}>ML</span>}
                                     {!category.isSub && category.name}
-                                    <ChevronDown style={{ 
+                                    <ChevronDown className="chevron-icon" style={{ 
                                         width: '12px', height: '12px', 
-                                        transform: isOpen ? 'rotate(180deg)' : 'none', 
-                                        transition: 'transform 0.2s',
                                         color: isActiveCategory ? JA.GOLD : JA.GREY
                                     }} />
                                 </button>
 
                                 {/* Dropdown Menu */}
-                                {isOpen && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        left: 0,
-                                        minWidth: '220px',
-                                        background: '#FFFFFF',
-                                        border: `1px solid ${JA.BORDER}`,
-                                        borderRadius: '0 0 4px 4px',
-                                        boxShadow: '0 10px 25px rgba(19,33,60,0.1)',
-                                        padding: '8px 0',
-                                        zIndex: 50,
-                                        animation: 'fadeIn 0.15s ease-out'
-                                    }}>
-                                        {category.items.map(item => {
-                                            const isActive = pathname === item.href
-                                            const Icon = item.icon
-                                            return (
-                                                <Link 
-                                                    key={item.href} 
-                                                    href={item.href}
-                                                    onClick={() => setOpenCategory(null)}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        padding: '10px 16px',
-                                                        fontSize: '13px',
-                                                        fontWeight: isActive ? 700 : 500,
-                                                        color: isActive ? JA.NAVY : JA.TEXT,
-                                                        textDecoration: 'none',
-                                                        background: isActive ? JA.BG : 'transparent',
-                                                        transition: 'background 0.1s',
-                                                    }}
-                                                    onMouseOver={(e) => {
-                                                        if (!isActive) e.currentTarget.style.background = '#F8FAFC'
-                                                    }}
-                                                    onMouseOut={(e) => {
-                                                        if (!isActive) e.currentTarget.style.background = 'transparent'
-                                                    }}
-                                                >
-                                                    <Icon style={{ width: '16px', height: '16px', color: JA.GOLD }} />
-                                                    {item.name}
-                                                </Link>
-                                            )
-                                        })}
-                                    </div>
-                                )}
+                                <div className="dropdown-menu">
+                                    {category.items.map(item => {
+                                        const isActive = pathname === item.href
+                                        const Icon = item.icon
+                                        return (
+                                            <Link 
+                                                key={item.href} 
+                                                href={item.href}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '10px',
+                                                    padding: '10px 16px',
+                                                    fontSize: '13px',
+                                                    fontWeight: isActive ? 700 : 500,
+                                                    color: isActive ? JA.NAVY : JA.TEXT,
+                                                    textDecoration: 'none',
+                                                    background: isActive ? JA.BG : 'transparent',
+                                                    transition: 'background 0.1s',
+                                                }}
+                                                onMouseOver={(e) => {
+                                                    if (!isActive) e.currentTarget.style.background = '#F8FAFC'
+                                                }}
+                                                onMouseOut={(e) => {
+                                                    if (!isActive) e.currentTarget.style.background = 'transparent'
+                                                }}
+                                            >
+                                                <Icon style={{ width: '16px', height: '16px', color: JA.GOLD }} />
+                                                {item.name}
+                                            </Link>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         )
                     })}
                 </div>
             </div>
-            <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-4px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
         </nav>
     )
 }

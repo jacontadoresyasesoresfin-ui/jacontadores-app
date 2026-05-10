@@ -315,25 +315,37 @@ function ModalBase({ title, onClose, children }: { title: string; onClose: () =>
 }
 
 function CreateClientForFirmaModal({ tenantId, availableMods, onClose, onCreated, onError }: { tenantId: string; availableMods: string[]; onClose: () => void; onCreated: (msg: string) => void; onError: (msg: string) => void }) {
-    const [form, setForm] = useState({ email: '', password: '', company_name: '', sheet_url: '' })
+    const [form, setForm] = useState({ email: '', password: '', company_name: '', sheet_url: '', siigo_url: '', drive_invoices_url: '' })
     const [selectedMods, setSelectedMods] = useState<string[]>(availableMods)
     const [saving, setSaving] = useState(false)
+    const [errorMsg, setErrorMsg] = useState('')
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        setErrorMsg('')
         setSaving(true)
         try {
             const res = await fetch('/api/admin/create-client', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...form, sheet_url: form.sheet_url, tenant_id: tenantId, app_modules: selectedMods }),
+                body: JSON.stringify({
+                    email: form.email,
+                    password: form.password,
+                    company_name: form.company_name,
+                    sheet_url: form.sheet_url,
+                    siigo_url: form.siigo_url,
+                    drive_invoices_url: form.drive_invoices_url,
+                    tenant_id: tenantId,
+                    app_modules: selectedMods,
+                }),
             })
+            const data = await res.json()
             if (!res.ok) {
-                const errData = await res.json().catch(() => null)
-                throw new Error(errData?.error || 'Error al registrar empresa')
+                setErrorMsg(data?.error || 'Error al registrar la empresa')
+                return
             }
-            onCreated(`Empresa ${form.company_name} registrada`)
+            onCreated(`Empresa "${form.company_name}" registrada exitosamente`)
         } catch (e) {
-            onError(e instanceof Error ? e.message : 'Error')
+            setErrorMsg(e instanceof Error ? e.message : 'Error de conexión')
         } finally { setSaving(false) }
     }
 
@@ -344,27 +356,44 @@ function CreateClientForFirmaModal({ tenantId, availableMods, onClose, onCreated
     return (
         <ModalBase title="Nueva Empresa Cliente" onClose={onClose}>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                {errorMsg && (
+                    <div style={{ padding: '10px 14px', background: '#FEF2F2', border: `1px solid ${JA.RED}`, borderRadius: '2px', fontSize: '12px', color: JA.RED, fontWeight: 600 }}>
+                        {errorMsg}
+                    </div>
+                )}
+
                 <div>
                     <span style={sty.label}>Razón Social *</span>
-                    <input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} style={sty.input} required />
+                    <input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} style={sty.input} required placeholder="Nombre de la empresa" />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div>
                         <span style={sty.label}>Email *</span>
-                        <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={sty.input} required />
+                        <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={sty.input} required placeholder="empresa@correo.com" />
                     </div>
                     <div>
-                        <span style={sty.label}>Password *</span>
-                        <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} style={sty.input} required />
+                        <span style={sty.label}>Contraseña * (mín. 6 caracteres)</span>
+                        <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} style={sty.input} required minLength={6} />
                     </div>
                 </div>
                 <div>
-                    <span style={sty.label}>URL Google Sheets</span>
-                    <input value={form.sheet_url} onChange={e => setForm({ ...form, sheet_url: e.target.value })} style={sty.input} placeholder="https://docs.google.com/..." />
+                    <span style={sty.label}>Google Sheets (datos BI)</span>
+                    <input value={form.sheet_url} onChange={e => setForm({ ...form, sheet_url: e.target.value })} style={sty.input} placeholder="https://docs.google.com/spreadsheets/..." />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                        <span style={sty.label}>URL Siigo</span>
+                        <input value={form.siigo_url} onChange={e => setForm({ ...form, siigo_url: e.target.value })} style={sty.input} placeholder="https://..." />
+                    </div>
+                    <div>
+                        <span style={sty.label}>Drive Facturas</span>
+                        <input value={form.drive_invoices_url} onChange={e => setForm({ ...form, drive_invoices_url: e.target.value })} style={sty.input} placeholder="https://drive.google.com/..." />
+                    </div>
                 </div>
                 <div>
                     <span style={sty.label}>Módulos a activar</span>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', padding: '10px', background: JA.BG, border: `1px solid ${JA.BORDER}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', padding: '10px', background: JA.BG, border: `1px solid ${JA.BORDER}` }}>
                         {ALL_MODS.filter(m => availableMods.includes(m.id)).map(mod => (
                             <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
                                 <input type="checkbox" checked={selectedMods.includes(mod.id)} onChange={() => toggleMod(mod.id)} />
@@ -376,8 +405,7 @@ function CreateClientForFirmaModal({ tenantId, availableMods, onClose, onCreated
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                     <button type="button" onClick={onClose} style={sty.btnSec}>Cancelar</button>
                     <button type="submit" disabled={saving} style={sty.btn}>
-                        {saving ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : <Save style={{ width: 14, height: 14 }} />}
-                        Registrar
+                        {saving ? <><Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> Registrando...</> : <><Save style={{ width: 14, height: 14 }} /> Registrar Empresa</>}
                     </button>
                 </div>
             </form>

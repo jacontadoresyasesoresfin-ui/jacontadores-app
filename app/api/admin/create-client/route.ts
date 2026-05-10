@@ -5,20 +5,28 @@ import { cookies } from 'next/headers'
 
 /**
  * POST /api/admin/create-client
- * Crea un cliente (empresa) en Supabase Auth + perfil
- * Puede ser llamado por superadmin o firma_admin autenticados.
- * Un firma_admin solo puede crear clientes dentro de su propio tenant.
+ * Crea una empresa cliente en Supabase Auth + perfil.
+ * Llamado por superadmin o firma_admin autenticados.
  */
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
-        const { email, password, company_name, sheet_url, phone, app_modules } = body
+        const { email, password, company_name, sheet_url, phone, app_modules, siigo_url, drive_invoices_url } = body
 
         if (!email || !password || !company_name) {
-            return NextResponse.json({ error: 'Email, password y company_name son requeridos' }, { status: 400 })
+            return NextResponse.json(
+                { error: 'Email, contraseña y nombre de empresa son requeridos' },
+                { status: 400 }
+            )
         }
 
-        // Cliente admin para operaciones privilegiadas
+        if (password.length < 6) {
+            return NextResponse.json(
+                { error: 'La contraseña debe tener al menos 6 caracteres' },
+                { status: 400 }
+            )
+        }
+
         const adminClient = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -48,12 +56,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Sin permisos para crear empresas' }, { status: 403 })
         }
 
-        // firma_admin siempre usa su propio tenant_id (seguridad de aislamiento)
+        // firma_admin siempre asigna su propio tenant (aislamiento de seguridad)
         const tenantId = callerProfile.role === 'firma_admin'
             ? callerProfile.tenant_id
             : (body.tenant_id || null)
 
-        // 1. Crear usuario en Auth
+        // 1. Crear usuario en Supabase Auth
         const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
             email,
             password,
@@ -61,30 +69,68 @@ export async function POST(request: NextRequest) {
         })
 
         if (authError) {
-            return NextResponse.json({ error: authError.message }, { status: 400 })
+            // Traducir errores comunes a español
+            let msg = authError.message
+            if (msg.includes('already registered') || msg.includes('already been registered')) {
+                msg = `El email "${email}" ya está registrado en el sistema`
+            } else if (msg.includes('invalid email')) {
+                msg = 'El email no es válido'
+            } else if (msg.includes('Password')) {
+                msg = 'La contraseña no cumple los requisitos mínimos'
+            }
+            return NextResponse.json({ error: msg }, { status: 400 })
         }
 
         const userId = authData.user.id
 
-        // 2. Esperar al trigger de creación de perfil
-        await new Promise(resolve => setTimeout(resolve, 600))
+        // 2. Upsert del perfil (no depende del trigger de DB)
+        // Intentamos inmediatamente, luego con retry si el trigger tarda
+        const profileData = {
+            id: userId,
+            company_name,
+            google_sheet_url: sheet_url || null,
+            siigo_url: siigo_url || null,
+            drive_invoices_url: drive_invoices_url || null,
+            phone: phone || null,
+            role: 'user',
+            tenant_id: tenantId || null,
+            app_modules: app_modules || null,
+        }
 
-        const { error: profileError } = await adminClient
-            .from('profiles')
-            .update({
-                company_name,
-                google_sheet_url: sheet_url || null,
-                phone: phone || null,
-                role: 'user',
-                tenant_id: tenantId || null,
-                app_modules: app_modules || null,
-            })
-            .eq('id', userId)
+        let profileError = null
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) {
+                await new Promise(resolve => setTimeout(resolve, 600))
+            }
+
+            const { error } = await adminClient
+                .from('profiles')
+                .upsert(profileData, { onConflict: 'id' })
+
+            if (!error) { profileError = null; break }
+            profileError = error
+        }
 
         if (profileError) {
-            // Revertir la creación del usuario si el perfil falla
+            // Revertir usuario si el perfil no se pudo crear
             await adminClient.auth.admin.deleteUser(userId)
-            return NextResponse.json({ error: profileError.message }, { status: 500 })
+            return NextResponse.json(
+                { error: `Usuario creado pero perfil falló: ${profileError.message}` },
+                { status: 500 }
+            )
+        }
+
+        // 3. Verificar que el perfil quedó guardado con los datos correctos
+        const { data: verifyProfile } = await adminClient
+            .from('profiles')
+            .select('id, company_name, tenant_id, role')
+            .eq('id', userId)
+            .maybeSingle()
+
+        if (!verifyProfile?.company_name) {
+            // Último intento forzado
+            await adminClient.from('profiles').upsert(profileData, { onConflict: 'id' })
         }
 
         return NextResponse.json({

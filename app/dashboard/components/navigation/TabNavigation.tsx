@@ -32,7 +32,7 @@ const tabs = [
     { name: 'Impuestos',    href: '/dashboard/taxes',           icon: Receipt,         moduleKey: 'taxes'     },
     { name: 'Configuración',href: '/dashboard/configuracion',   icon: Settings,        moduleKey: 'configuracion' },
     { name: 'Nómina PILA', href: '/dashboard/nomina',          icon: Calculator,      moduleKey: 'nomina'        },
-    { name: 'Verificar NIT',href: '/dashboard/nit',            icon: Search,          moduleKey: null            },
+    { name: 'Verificar NIT',href: '/dashboard/nit',            icon: Search,          moduleKey: 'nit'           },
 ]
 
 const mlTabs = [

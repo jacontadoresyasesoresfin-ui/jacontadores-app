@@ -493,12 +493,24 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
 
 /* ── Crear Firma Contable ─────────────────────────────── */
 const ALL_MODS = [
-    { id: 'analytics', name: 'Analytics' }, { id: 'sales', name: 'Ventas' },
-    { id: 'taxes', name: 'Impuestos' }, { id: 'inventory', name: 'Inventario' },
-    { id: 'reports', name: 'Reportes' }, { id: 'reconciliation', name: 'Conciliación' },
-    { id: 'portfolio', name: 'Cartera' }, { id: 'nomina', name: 'Nómina PILA' },
-    { id: 'siigo_bi', name: 'Siigo BI' }, { id: 'ecommerce', name: 'E-commerce' },
-    { id: 'team', name: 'Equipo' }, { id: 'configuracion', name: 'Configuración' },
+    { id: 'analytics', name: 'Analytics' },
+    { id: 'siigo_bi', name: 'Siigo BI' },
+    { id: 'reconciliation', name: 'Conciliación' },
+    { id: 'sales', name: 'Ventas' },
+    { id: 'ecommerce', name: 'E-commerce' },
+    { id: 'portfolio', name: 'Cartera' },
+    { id: 'inventory', name: 'Inventario' },
+    { id: 'reports', name: 'Reportes' },
+    { id: 'team', name: 'Equipo' },
+    { id: 'taxes', name: 'Impuestos' },
+    { id: 'configuracion', name: 'Configuración' },
+    { id: 'nomina', name: 'Nómina PILA' },
+    { id: 'nit', name: 'Verificar NIT' },
+    { id: 'ml_pagos', name: 'ML Pagos' },
+    { id: 'ml_comisiones', name: 'ML Comisiones' },
+    { id: 'ml_devoluciones', name: 'ML Devoluciones' },
+    { id: 'ml_costos', name: 'ML Costos' },
+    { id: 'ml_alertas', name: 'ML Alertas' },
 ]
 
 function CreateTenantModal({ onClose, onCreated, onError }: { onClose: () => void; onCreated: (msg: string) => void; onError: (msg: string) => void }) {

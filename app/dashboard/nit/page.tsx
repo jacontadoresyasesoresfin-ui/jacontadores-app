@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy, ExternalLink, ChevronDown, ChevronUp, Clock, Info } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy, ExternalLink, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 
 const JA = {
     NAVY:    '#13213C', GOLD:    '#B8960C', GOLD_PALE: '#F5E9C0',

@@ -5,7 +5,8 @@ import {
     FileText, BookOpen, History, Plus, Trash2, Download, Upload,
     CheckCircle2, AlertCircle, ChevronDown, ChevronRight, RefreshCw,
     Filter, Search, FolderOpen, ExternalLink, Shield, X, Check,
-    AlertTriangle, Eye, Zap, BarChart3, Clock,
+    AlertTriangle, Eye, Zap, Clock, Settings, Inbox, List, Brain, Save,
+    Play, Key, Globe, TestTube2,
 } from 'lucide-react'
 import { useClient } from '../ClientContext'
 
@@ -388,7 +389,27 @@ export default function CausacionPage() {
     const clientName = activeProfile?.company_name || 'Cliente'
     const driveUrl = activeProfile?.drive_invoices_url || ''
 
-    const [tab, setTab] = useState<'bandeja' | 'carga' | 'manual' | 'asientos' | 'drive' | 'guia'>('bandeja')
+    const [tab, setTab] = useState<'bandeja' | 'carga' | 'manual' | 'asientos' | 'drive' | 'guia' | 'config' | 'inbox' | 'reglas'>('bandeja')
+
+    // DIAN config state
+    const [dianCfg, setDianCfg] = useState<Record<string, unknown>>({
+        proveedor_tecnologico: 'manual', api_key: '', api_secret: '',
+        nit_empresa: '', ambiente: 'prueba', activo: false, config_extra: {},
+    })
+    const [dianCfgLoading, setDianCfgLoading] = useState(false)
+    const [dianTestResult, setDianTestResult] = useState<{ ok: boolean; message: string; empresa?: string } | null>(null)
+    const [dianSaving, setDianSaving] = useState(false)
+
+    // Facturas recibidas (DIAN inbox)
+    const [facturasRecibidas, setFacturasRecibidas] = useState<Record<string, unknown>[]>([])
+    const [inboxLoading, setInboxLoading] = useState(false)
+    const [inboxSelected, setInboxSelected] = useState<Set<string>>(new Set())
+    const [syncing, setSyncing] = useState(false)
+    const [syncMsg, setSyncMsg] = useState('')
+    const [causandoIds, setCausandoIds] = useState<Set<string>>(new Set())
+
+    // Reglas de causación
+    const [reglas, setReglas] = useState<Record<string, unknown>>({})
     const [facturas, setFacturas] = useState<Factura[]>([])
     const [loading, setLoading] = useState(false)
     const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -600,6 +621,132 @@ export default function CausacionPage() {
         a.click(); URL.revokeObjectURL(url)
     }
 
+    // ── DIAN Config loaders ──────────────────────────────────
+    const loadDianCfg = useCallback(async () => {
+        if (!profileId) return
+        setDianCfgLoading(true)
+        const res = await fetch(`/api/causacion/dian-config?profile_id=${profileId}`)
+        const data = await res.json()
+        if (data.config) setDianCfg({ ...dianCfg, ...data.config })
+        setDianCfgLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profileId])
+
+    useEffect(() => { if (tab === 'config') loadDianCfg() }, [tab, loadDianCfg])
+
+    async function saveDianCfg() {
+        setDianSaving(true)
+        const res = await fetch('/api/causacion/dian-config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...dianCfg, profile_id: profileId }),
+        })
+        const data = await res.json()
+        if (data.ok) setDianTestResult(null)
+        setDianSaving(false)
+    }
+
+    async function testDianCfg() {
+        setDianSaving(true); setDianTestResult(null)
+        await saveDianCfg()
+        const res = await fetch('/api/causacion/dian-config/test', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...dianCfg, profile_id: profileId }),
+        })
+        const data = await res.json()
+        setDianTestResult(data)
+        setDianSaving(false)
+    }
+
+    // ── DIAN Inbox loaders ────────────────────────────────────
+    const loadInbox = useCallback(async () => {
+        if (!profileId) return
+        setInboxLoading(true)
+        const res = await fetch(`/api/causacion/facturas-recibidas?profile_id=${profileId}&limit=100`)
+        const data = await res.json()
+        setFacturasRecibidas(data.facturas || [])
+        setInboxLoading(false)
+    }, [profileId])
+
+    useEffect(() => { if (tab === 'inbox') loadInbox() }, [tab, loadInbox])
+
+    async function syncDianPT() {
+        setSyncing(true); setSyncMsg('')
+        const res = await fetch('/api/causacion/sincronizar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile_id: profileId }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+            setSyncMsg(`✅ ${data.nuevas} facturas nuevas descargadas de ${data.total_descargadas} en el PT.`)
+            loadInbox()
+        } else {
+            setSyncMsg(`❌ ${data.error}`)
+        }
+        setSyncing(false)
+    }
+
+    async function causarFacturasRecibidas(ids: string[]) {
+        setCausandoIds(new Set(ids))
+        const res = await fetch('/api/causacion/causar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile_id: profileId, ids, fuente: 'recibida' }),
+        })
+        const data = await res.json()
+        if (res.ok) {
+            setSyncMsg(`✅ ${data.exitosos} facturas causadas.${data.errores > 0 ? ` ${data.errores} con error.` : ''}`)
+            setInboxSelected(new Set())
+            loadInbox()
+        }
+        setCausandoIds(new Set())
+    }
+
+    // ── Reglas loaders ────────────────────────────────────────
+    const [reglasJson, setReglasJson] = useState('')
+    const [reglasError, setReglasError] = useState('')
+    const [reglasSaving, setReglasSaving] = useState(false)
+
+    const loadReglas = useCallback(async () => {
+        if (!profileId) return
+        const res = await fetch(`/api/causacion/reglas?profile_id=${profileId}`)
+        const data = await res.json()
+        const r = data.reglas?.[0]?.reglas || data.defaults || {}
+        setReglas(r)
+        setReglasJson(JSON.stringify(r, null, 2))
+    }, [profileId])
+
+    useEffect(() => { if (tab === 'reglas') loadReglas() }, [tab, loadReglas])
+
+    async function saveReglas() {
+        setReglasError(''); setReglasSaving(true)
+        try {
+            const parsed = JSON.parse(reglasJson)
+            const res = await fetch('/api/causacion/reglas', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile_id: profileId, reglas: parsed }),
+            })
+            const data = await res.json()
+            if (!res.ok) setReglasError(data.error)
+            else setReglas(parsed)
+        } catch {
+            setReglasError('JSON inválido. Revisa la sintaxis.')
+        }
+        setReglasSaving(false)
+    }
+
+    async function triggerManual() {
+        setSyncing(true); setSyncMsg('')
+        const res = await fetch('/api/causacion/trigger', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile_id: profileId, mode: 'single' }),
+        })
+        const data = await res.json()
+        setSyncMsg(res.ok
+            ? `✅ Trigger completado: ${data.nuevas_sincronizadas} nuevas, ${data.causadas} causadas, ${data.errores} errores (${data.duration_ms}ms).`
+            : `❌ ${data.error}`)
+        if (res.ok) { loadFacturas(); loadInbox() }
+        setSyncing(false)
+    }
+
     /* ── Estilos comunes ── */
     const tabBtn = (active: boolean) => ({
         padding: '8px 16px', borderRadius: 6, border: 'none',
@@ -611,11 +758,14 @@ export default function CausacionPage() {
 
     const TABS = [
         { id: 'bandeja', label: 'Bandeja', icon: <History size={14} /> },
+        { id: 'inbox', label: 'DIAN Inbox', icon: <Inbox size={14} /> },
         { id: 'carga', label: 'Cargar PDFs', icon: <Upload size={14} /> },
         { id: 'manual', label: 'Manual', icon: <Plus size={14} /> },
         { id: 'asientos', label: 'Asientos', icon: <FileText size={14} /> },
+        { id: 'reglas', label: 'Reglas IA', icon: <Brain size={14} /> },
         { id: 'drive', label: 'Drive Sync', icon: <FolderOpen size={14} /> },
-        { id: 'guia', label: 'Guía de Uso', icon: <BookOpen size={14} /> },
+        { id: 'config', label: 'Config DIAN', icon: <Settings size={14} /> },
+        { id: 'guia', label: 'Guía', icon: <BookOpen size={14} /> },
     ] as const
 
     return (
@@ -1235,6 +1385,362 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                     <div style={{ background: JA.GOLD_LT + '22', border: `1px solid ${JA.GOLD}`, borderRadius: 10, padding: 16, marginTop: 20 }}>
                         <p style={{ margin: 0, fontSize: 13, color: JA.NAVY }}>
                             <strong>💡 Tip profesional:</strong> Establece con cada cliente una carpeta Drive compartida dedicada exclusivamente a facturas de proveedores del mes. Pídeles que suban las facturas electrónicas (PDF de la DIAN) directamente ahí. Al final del mes, un solo clic en "Sincronizar Drive" procesa todo el lote sin que tengas que descargar ningún archivo manualmente.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── TAB: CONFIG DIAN ─────────────────────── */}
+            {tab === 'config' && (
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>⚙️ Configuración DIAN — Proveedor Tecnológico</h2>
+                            <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GREY }}>
+                                Conecta tu PT (Factus, Siigo, Nortserver, etc.) para descargar facturas recibidas automáticamente.
+                            </p>
+                        </div>
+                        <button onClick={triggerManual} disabled={syncing}
+                            style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: JA.GREEN, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Play size={14} /> {syncing ? 'Ejecutando...' : 'Trigger Manual'}
+                        </button>
+                    </div>
+
+                    {syncMsg && (
+                        <div style={{ background: syncMsg.startsWith('✅') ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${syncMsg.startsWith('✅') ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: syncMsg.startsWith('✅') ? JA.GREEN : JA.RED }}>
+                            {syncMsg}
+                        </div>
+                    )}
+
+                    {dianCfgLoading ? (
+                        <div style={{ padding: 40, textAlign: 'center', color: JA.GREY }}><RefreshCw size={20} /> Cargando...</div>
+                    ) : (
+                        <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 10, padding: 24 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                                <div>
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Proveedor Tecnológico</label>
+                                    <select value={String(dianCfg.proveedor_tecnologico || 'manual')}
+                                        onChange={e => setDianCfg(p => ({ ...p, proveedor_tecnologico: e.target.value }))}
+                                        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${JA.BORDER}`, borderRadius: 6, fontSize: 13 }}>
+                                        <option value="manual">Manual (sin PT)</option>
+                                        <option value="factus">Factus</option>
+                                        <option value="siigo">Siigo</option>
+                                        <option value="nortserver">Nortserver</option>
+                                        <option value="edicom">Edicom</option>
+                                        <option value="custom">API Personalizada</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Ambiente</label>
+                                    <select value={String(dianCfg.ambiente || 'prueba')}
+                                        onChange={e => setDianCfg(p => ({ ...p, ambiente: e.target.value }))}
+                                        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${JA.BORDER}`, borderRadius: 6, fontSize: 13 }}>
+                                        <option value="prueba">Habilitación / Prueba</option>
+                                        <option value="produccion">Producción</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                                        <Key size={11} style={{ display: 'inline', marginRight: 4 }} />API Key / Usuario
+                                    </label>
+                                    <input type="password" value={String(dianCfg.api_key || '')}
+                                        onChange={e => setDianCfg(p => ({ ...p, api_key: e.target.value }))}
+                                        placeholder={String(dianCfg.has_api_key || false) === 'true' ? '(guardada — escribe para cambiar)' : 'Ingresa API Key...'}
+                                        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${JA.BORDER}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                                        <Shield size={11} style={{ display: 'inline', marginRight: 4 }} />API Secret / Contraseña
+                                    </label>
+                                    <input type="password" value={String(dianCfg.api_secret || '')}
+                                        onChange={e => setDianCfg(p => ({ ...p, api_secret: e.target.value }))}
+                                        placeholder={String(dianCfg.has_api_secret || false) === 'true' ? '(guardada — escribe para cambiar)' : 'Ingresa API Secret...'}
+                                        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${JA.BORDER}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>NIT Empresa</label>
+                                    <input value={String(dianCfg.nit_empresa || '')}
+                                        onChange={e => setDianCfg(p => ({ ...p, nit_empresa: e.target.value }))}
+                                        placeholder="9001234567"
+                                        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${JA.BORDER}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                                        <input type="checkbox" checked={!!dianCfg.activo}
+                                            onChange={e => setDianCfg(p => ({ ...p, activo: e.target.checked }))} />
+                                        <span>Sincronización automática activa</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {String(dianCfg.proveedor_tecnologico) === 'custom' && (
+                                <div style={{ marginBottom: 16, padding: 14, background: JA.BG, borderRadius: 8 }}>
+                                    <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}>Configuración API personalizada</p>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        {[
+                                            { key: 'base_url', label: 'URL Base', placeholder: 'https://api.mipt.com/v1' },
+                                            { key: 'received_endpoint', label: 'Endpoint facturas recibidas', placeholder: '/documents/received' },
+                                            { key: 'test_endpoint', label: 'Endpoint de prueba', placeholder: '/ping' },
+                                            { key: 'partner_id', label: 'Partner ID (si aplica)', placeholder: 'opcional' },
+                                        ].map(({ key, label, placeholder }) => (
+                                            <div key={key}>
+                                                <label style={{ fontSize: 10, color: JA.GREY, fontWeight: 600, display: 'block', marginBottom: 2 }}>{label}</label>
+                                                <input value={String((dianCfg.config_extra as Record<string, string> || {})[key] || '')}
+                                                    onChange={e => setDianCfg(p => ({ ...p, config_extra: { ...(p.config_extra as Record<string, string> || {}), [key]: e.target.value } }))}
+                                                    placeholder={placeholder}
+                                                    style={{ width: '100%', padding: '6px 8px', border: `1px solid ${JA.BORDER}`, borderRadius: 5, fontSize: 12, boxSizing: 'border-box' }} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {dianTestResult && (
+                                <div style={{ background: dianTestResult.ok ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${dianTestResult.ok ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
+                                    <p style={{ margin: 0, fontWeight: 700, color: dianTestResult.ok ? JA.GREEN : JA.RED }}>
+                                        {dianTestResult.ok ? '✅' : '❌'} {dianTestResult.message}
+                                    </p>
+                                    {dianTestResult.empresa && <p style={{ margin: '4px 0 0', fontSize: 12, color: JA.TEXT }}>Empresa: {dianTestResult.empresa}</p>}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={saveDianCfg} disabled={dianSaving}
+                                    style={{ padding: '9px 18px', borderRadius: 6, border: 'none', background: JA.NAVY, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Save size={13} /> {dianSaving ? 'Guardando...' : 'Guardar configuración'}
+                                </button>
+                                <button onClick={testDianCfg} disabled={dianSaving}
+                                    style={{ padding: '9px 18px', borderRadius: 6, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <TestTube2 size={13} /> Guardar y probar conexión
+                                </button>
+                            </div>
+
+                            <div style={{ marginTop: 20, padding: 14, background: JA.BG, borderRadius: 8 }}>
+                                <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}>🕐 Configuración del Cron Job (causación automática)</p>
+                                <p style={{ margin: '0 0 8px', fontSize: 12, color: JA.GREY }}>
+                                    Configura en cPanel → Cron Jobs → cada 4 horas:
+                                </p>
+                                <code style={{ display: 'block', background: JA.NAVY, color: '#6EE7B7', padding: '10px 14px', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                    {`curl -X POST ${typeof window !== 'undefined' ? window.location.origin : 'https://tuapp.com'}/api/causacion/trigger -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d '{"mode":"all_active"}'`}
+                                </code>
+                                <p style={{ margin: '8px 0 0', fontSize: 11, color: JA.GREY_LT }}>
+                                    Agrega <code>CRON_SECRET=tu-clave-secreta</code> en las variables de entorno del servidor.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ─── TAB: DIAN INBOX ──────────────────────── */}
+            {tab === 'inbox' && (
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>📥 Bandeja DIAN — Facturas recibidas del PT</h2>
+                            <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GREY }}>
+                                Facturas descargadas de tu Proveedor Tecnológico · {clientName}
+                            </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            {inboxSelected.size > 0 && (
+                                <button onClick={() => causarFacturasRecibidas(Array.from(inboxSelected))}
+                                    disabled={causandoIds.size > 0}
+                                    style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: JA.GREEN, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Zap size={13} /> Causar {inboxSelected.size} seleccionadas
+                                </button>
+                            )}
+                            <button onClick={syncDianPT} disabled={syncing}
+                                style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: JA.NAVY, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {syncing ? <RefreshCw size={13} /> : <RefreshCw size={13} />}
+                                {syncing ? 'Sincronizando...' : 'Sincronizar PT'}
+                            </button>
+                            <button onClick={loadInbox} style={{ padding: '8px 12px', borderRadius: 6, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, cursor: 'pointer' }}>
+                                <RefreshCw size={13} color={JA.GREY} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {syncMsg && (
+                        <div style={{ background: syncMsg.startsWith('✅') ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${syncMsg.startsWith('✅') ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: syncMsg.startsWith('✅') ? JA.GREEN : JA.RED }}>
+                            {syncMsg} <button onClick={() => setSyncMsg('')} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                        </div>
+                    )}
+
+                    <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 10, overflow: 'hidden' }}>
+                        {inboxLoading ? (
+                            <div style={{ padding: 40, textAlign: 'center', color: JA.GREY }}><RefreshCw size={20} /> Cargando...</div>
+                        ) : facturasRecibidas.length === 0 ? (
+                            <div style={{ padding: 60, textAlign: 'center' }}>
+                                <Inbox size={40} color={JA.GREY_LT} style={{ display: 'block', margin: '0 auto 12px' }} />
+                                <p style={{ color: JA.GREY, margin: 0 }}>No hay facturas descargadas del PT.</p>
+                                <p style={{ color: JA.GREY_LT, fontSize: 13, margin: '6px 0 16px' }}>Configura tu PT en "Config DIAN" y haz clic en "Sincronizar PT".</p>
+                                <button onClick={() => setTab('config')} style={{ padding: '8px 18px', borderRadius: 6, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, cursor: 'pointer', fontSize: 13 }}>
+                                    Ir a Configuración
+                                </button>
+                            </div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                    <tr style={{ background: JA.BG, borderBottom: `2px solid ${JA.BORDER}` }}>
+                                        <th style={{ padding: '10px 12px', width: 32 }}>
+                                            <input type="checkbox"
+                                                checked={inboxSelected.size === facturasRecibidas.filter(f => f.estado === 'pendiente').length && facturasRecibidas.filter(f => f.estado === 'pendiente').length > 0}
+                                                onChange={e => setInboxSelected(e.target.checked ? new Set(facturasRecibidas.filter(f => f.estado === 'pendiente').map(f => String(f.id))) : new Set())} />
+                                        </th>
+                                        {['Fecha', 'N° Factura', 'Proveedor / NIT', 'Subtotal', 'IVA', 'Total', 'Estado', 'CUFE', 'Asiento IA'].map(h => (
+                                            <th key={h} style={{ padding: '10px 8px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: JA.GREY, textTransform: 'uppercase' }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {facturasRecibidas.map(f => {
+                                        const fId = String(f.id)
+                                        const isPending = f.estado === 'pendiente'
+                                        const isCausando = causandoIds.has(fId)
+                                        const asiento = f.asiento_contable as { metodo_causacion?: string; ia_sugerencia?: string; balanceado?: boolean } | null
+                                        return (
+                                            <tr key={fId} style={{ borderBottom: `1px solid ${JA.BORDER}`, background: inboxSelected.has(fId) ? JA.BLUE_LT : JA.WHITE }}>
+                                                <td style={{ padding: '10px 12px' }}>
+                                                    {isPending && (
+                                                        <input type="checkbox" checked={inboxSelected.has(fId)}
+                                                            onChange={e => {
+                                                                const s = new Set(inboxSelected)
+                                                                e.target.checked ? s.add(fId) : s.delete(fId)
+                                                                setInboxSelected(s)
+                                                            }} />
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '10px 8px', whiteSpace: 'nowrap' }}>{String(f.fecha_emision || '—')}</td>
+                                                <td style={{ padding: '10px 8px', fontFamily: 'monospace', color: JA.NAVY, fontWeight: 600 }}>{String(f.numero_factura || '—')}</td>
+                                                <td style={{ padding: '10px 8px' }}>
+                                                    <div style={{ fontWeight: 600 }}>{String(f.proveedor_nombre || '—')}</div>
+                                                    <div style={{ fontSize: 11, color: JA.GREY }}>{String(f.proveedor_nit || '')}</div>
+                                                </td>
+                                                <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 600 }}>{fmt(Number(f.subtotal) || 0)}</td>
+                                                <td style={{ padding: '10px 8px', textAlign: 'right', color: JA.GOLD }}>{fmt(Number(f.iva) || 0)}</td>
+                                                <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, color: JA.NAVY }}>{fmt(Number(f.total) || 0)}</td>
+                                                <td style={{ padding: '10px 8px' }}><EstadoBadge estado={String(f.estado || 'pendiente')} /></td>
+                                                <td style={{ padding: '10px 8px' }}>
+                                                    {f.cufe ? (
+                                                        <a href={`https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${f.cufe}`}
+                                                            target="_blank" rel="noopener noreferrer"
+                                                            style={{ color: JA.BLUE, fontSize: 11, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                            <ExternalLink size={10} /> DIAN
+                                                        </a>
+                                                    ) : <span style={{ color: JA.GREY_LT, fontSize: 11 }}>—</span>}
+                                                </td>
+                                                <td style={{ padding: '10px 8px' }}>
+                                                    {isCausando ? (
+                                                        <span style={{ color: JA.GOLD, fontSize: 11 }}><RefreshCw size={11} style={{ display: 'inline', marginRight: 3 }} />Causando...</span>
+                                                    ) : f.estado === 'causada' && asiento ? (
+                                                        <div>
+                                                            <span style={{ color: JA.GREEN, fontSize: 11 }}>
+                                                                {asiento.metodo_causacion === 'ia' ? '🤖 IA' : asiento.metodo_causacion === 'regla_nit' ? '📋 NIT' : asiento.metodo_causacion === 'regla_keyword' ? '🔑 Keyword' : '⚙️ Default'}
+                                                                {asiento.balanceado ? ' ✓' : ' ⚠️'}
+                                                            </span>
+                                                            {asiento.ia_sugerencia && <div style={{ fontSize: 10, color: JA.GREY, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={asiento.ia_sugerencia}>{asiento.ia_sugerencia}</div>}
+                                                        </div>
+                                                    ) : isPending ? (
+                                                        <button onClick={() => causarFacturasRecibidas([fId])}
+                                                            style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: JA.NAVY, color: JA.WHITE, cursor: 'pointer', fontSize: 11 }}>
+                                                            Causar
+                                                        </button>
+                                                    ) : null}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ─── TAB: REGLAS IA ───────────────────────── */}
+            {tab === 'reglas' && (
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>🧠 Motor de Causación — Reglas Inteligentes</h2>
+                            <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GREY }}>
+                                Define cómo el sistema asigna cuentas PUC y retefuente a cada factura. Las reglas se aplican en orden de prioridad.
+                            </p>
+                        </div>
+                        <button onClick={loadReglas} style={{ padding: '7px 12px', borderRadius: 6, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, cursor: 'pointer' }}>
+                            <RefreshCw size={13} color={JA.GREY} />
+                        </button>
+                    </div>
+
+                    {/* Prioridad explicada */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+                        {[
+                            { num: '1', label: 'Por NIT', desc: 'Proveedor frecuente → cuenta fija', color: JA.GREEN, icon: '🏢' },
+                            { num: '2', label: 'Por Keyword', desc: 'Descripción del ítem → cuenta PUC', color: JA.BLUE, icon: '🔑' },
+                            { num: '3', label: 'Sugerencia IA', desc: 'Claude analiza y sugiere la cuenta', color: JA.PURPLE, icon: '🤖' },
+                            { num: '4', label: 'Default', desc: 'Cuenta predeterminada si no hay match', color: JA.GREY, icon: '⚙️' },
+                        ].map(({ num, label, desc, color, icon }) => (
+                            <div key={num} style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 8, padding: 12 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    <span style={{ background: color, color: JA.WHITE, borderRadius: 99, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{num}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700 }}>{icon} {label}</span>
+                                </div>
+                                <p style={{ margin: 0, fontSize: 12, color: JA.GREY }}>{desc}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Editor JSON */}
+                    <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ padding: '12px 16px', background: JA.BG, borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 600, fontSize: 13 }}>
+                                <List size={14} style={{ display: 'inline', marginRight: 6 }} />
+                                Reglas en formato JSON (editable)
+                            </span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setReglasJson(JSON.stringify(reglas, null, 2))}
+                                    style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, cursor: 'pointer', fontSize: 12 }}>
+                                    Restablecer
+                                </button>
+                                <button onClick={saveReglas} disabled={reglasSaving}
+                                    style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: JA.NAVY, color: JA.WHITE, cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <Save size={12} /> {reglasSaving ? 'Guardando...' : 'Guardar reglas'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {reglasError && (
+                            <div style={{ padding: '8px 16px', background: JA.RED_LT, borderBottom: `1px solid ${JA.RED}`, fontSize: 12, color: JA.RED }}>
+                                <AlertCircle size={12} style={{ display: 'inline', marginRight: 4 }} />{reglasError}
+                            </div>
+                        )}
+
+                        <textarea value={reglasJson} onChange={e => { setReglasJson(e.target.value); setReglasError('') }}
+                            style={{ width: '100%', minHeight: 420, padding: '16px', fontFamily: '"Fira Code", "Cascadia Code", monospace', fontSize: 12, border: 'none', resize: 'vertical', outline: 'none', lineHeight: 1.6, color: JA.TEXT, boxSizing: 'border-box' }} />
+                    </div>
+
+                    {/* Referencia rápida */}
+                    <div style={{ background: JA.BG, borderRadius: 10, padding: 16, marginTop: 16 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}>📖 Estructura de reglas — referencia rápida</p>
+                        <pre style={{ margin: 0, fontSize: 11, color: JA.TEXT, lineHeight: 1.7, overflow: 'auto' }}>{`{
+  "keywords": [
+    { "keywords": ["internet", "hosting"], "cuenta_puc": "530515", "descripcion_cuenta": "Telecomunicaciones", "concepto_retefuente": "servicios" }
+  ],
+  "nit_proveedor": [
+    { "nit": "900123456", "cuenta_puc": "519595", "nombre_proveedor": "Mi Proveedor S.A.S.", "concepto_retefuente": "honorarios_pj" }
+  ],
+  "defaults": {
+    "cuenta_gasto": "519595",
+    "cuenta_proveedor": "220501",
+    "concepto_retefuente": "servicios",
+    "tasa_reteiva": 15,
+    "tasa_reteica": 0
+  },
+  "usar_ia": true
+}`}</pre>
+                        <p style={{ margin: '10px 0 0', fontSize: 11, color: JA.GREY }}>
+                            <strong>usar_ia: true</strong> → cuando no haya match de NIT ni keyword, Claude analiza la descripción del ítem y sugiere la cuenta PUC automáticamente. Requiere <code>ANTHROPIC_API_KEY</code> en las variables de entorno del servidor.
                         </p>
                     </div>
                 </div>

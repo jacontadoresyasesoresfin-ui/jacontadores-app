@@ -6,7 +6,7 @@ import {
     CheckCircle2, AlertCircle, ChevronDown, ChevronRight, RefreshCw,
     Filter, Search, FolderOpen, ExternalLink, Shield, X, Check,
     AlertTriangle, Eye, Zap, Clock, Settings, Inbox, List, Brain, Save,
-    Play, Key, Globe, TestTube2,
+    Play, Key, Globe, TestTube2, Activity
 } from 'lucide-react'
 import { useClient } from '../ClientContext'
 
@@ -389,7 +389,7 @@ export default function CausacionPage() {
     const clientName = activeProfile?.company_name || 'Cliente'
     const driveUrl = activeProfile?.drive_invoices_url || ''
 
-    const [tab, setTab] = useState<'bandeja' | 'carga' | 'manual' | 'asientos' | 'drive' | 'guia' | 'config' | 'inbox' | 'reglas'>('bandeja')
+    const [tab, setTab] = useState<'bandeja' | 'carga' | 'manual' | 'asientos' | 'drive' | 'guia' | 'config' | 'inbox' | 'reglas' | 'flujo'>('bandeja')
 
     // DIAN config state
     const [dianCfg, setDianCfg] = useState<Record<string, unknown>>({
@@ -765,6 +765,7 @@ export default function CausacionPage() {
         { id: 'reglas', label: 'Reglas IA', icon: <Brain size={14} /> },
         { id: 'drive', label: 'Drive Sync', icon: <FolderOpen size={14} /> },
         { id: 'config', label: 'Config DIAN', icon: <Settings size={14} /> },
+        { id: 'flujo', label: 'Flujo', icon: <Activity size={14} /> },
         { id: 'guia', label: 'Guía', icon: <BookOpen size={14} /> },
     ] as const
 
@@ -1742,6 +1743,87 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                         <p style={{ margin: '10px 0 0', fontSize: 11, color: JA.GREY }}>
                             <strong>usar_ia: true</strong> → cuando no haya match de NIT ni keyword, Claude analiza la descripción del ítem y sugiere la cuenta PUC automáticamente. Requiere <code>ANTHROPIC_API_KEY</code> en las variables de entorno del servidor.
                         </p>
+                    </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── TAB: FLUJO AUTOMATIZADO ──────────────── */}
+            {tab === 'flujo' && (
+                <div style={{ padding: '32px 24px', background: JA.WHITE, borderRadius: 12, border: `1px solid ${JA.BORDER}` }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: JA.NAVY, margin: '0 0 8px', textAlign: 'center' }}>
+                        Diagrama de Flujo Automático
+                    </h2>
+                    <p style={{ textAlign: 'center', color: JA.GREY, fontSize: 13, marginBottom: 40 }}>
+                        Ciclo de vida de la causación desatendida vía API o Cron
+                    </p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'Inter, sans-serif' }}>
+                        {/* Node A */}
+                        <div style={{ background: JA.NAVY, color: JA.WHITE, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 320, textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>Trigger: Cron cada 2 horas</div>
+                        <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                        {/* Node B */}
+                        <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 320, textAlign: 'center', background: JA.WHITE }}>Conectar a Proveedor Tecnológico o Siigo API</div>
+                        <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                        {/* Node C */}
+                        <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 320, textAlign: 'center', background: JA.WHITE }}>Consultar Documentos Recibidos últimos X días</div>
+                        <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                        {/* Node D (Decision) */}
+                        <div style={{ background: JA.PURPLE_LT, color: JA.PURPLE, border: `2px solid ${JA.PURPLE}`, padding: '12px 24px', borderRadius: 8, fontWeight: 700, fontSize: 13, width: 320, textAlign: 'center' }}>¿Hay facturas nuevas sin procesar?</div>
+                        
+                        {/* Branching container */}
+                        <div style={{ display: 'flex', width: '100%', maxWidth: 700, justifyContent: 'center', position: 'relative', marginTop: 16 }}>
+                            {/* Horizontal Line connecting branches */}
+                            <div style={{ position: 'absolute', top: -8, left: '25%', right: '25%', height: 2, background: JA.BORDER }}></div>
+                            
+                            {/* Branch NO */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ width: 2, height: 16, background: JA.BORDER, position: 'absolute', top: -8, left: '25%' }}></div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: JA.RED, marginBottom: 8, background: JA.WHITE, padding: '0 4px', zIndex: 1, marginTop: -6 }}>NO</div>
+                                <div style={{ background: JA.BG, color: JA.GREY, border: `1px dashed ${JA.BORDER}`, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 240, textAlign: 'center' }}>Finalizar ciclo</div>
+                            </div>
+
+                            {/* Branch SI */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ width: 2, height: 16, background: JA.BORDER, position: 'absolute', top: -8, right: '25%' }}></div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: JA.GREEN, marginBottom: 8, background: JA.WHITE, padding: '0 4px', zIndex: 1, marginTop: -6 }}>SÍ</div>
+                                <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 280, textAlign: 'center', background: JA.WHITE }}>Descargar XML + PDF masivamente</div>
+                                <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 280, textAlign: 'center', background: JA.WHITE }}>Parsear XML UBL</div>
+                                <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                <div style={{ background: JA.GOLD_LT + '22', border: `2px solid ${JA.GOLD}`, color: JA.GOLD, padding: '12px 24px', borderRadius: 8, fontWeight: 700, fontSize: 13, width: 280, textAlign: 'center' }}>Aplicar Causación Automática</div>
+                                <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 280, textAlign: 'center', background: JA.WHITE }}>Generar Asiento Contable</div>
+                                <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 280, textAlign: 'center', background: JA.WHITE }}>Validar retenciones e impuestos</div>
+                                <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                
+                                {/* Inner Branching J */}
+                                <div style={{ background: JA.PURPLE_LT, color: JA.PURPLE, border: `2px solid ${JA.PURPLE}`, padding: '12px 24px', borderRadius: 8, fontWeight: 700, fontSize: 13, width: 280, textAlign: 'center' }}>¿Error en causación?</div>
+                                
+                                <div style={{ display: 'flex', width: '100%', maxWidth: 560, justifyContent: 'center', position: 'relative', marginTop: 16 }}>
+                                    <div style={{ position: 'absolute', top: -8, left: '25%', right: '25%', height: 2, background: JA.BORDER }}></div>
+                                    {/* SI Error */}
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                        <div style={{ width: 2, height: 16, background: JA.BORDER, position: 'absolute', top: -8, left: '25%' }}></div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: JA.RED, marginBottom: 8, background: JA.WHITE, padding: '0 4px', zIndex: 1, marginTop: -6 }}>SÍ</div>
+                                        <div style={{ background: JA.RED_LT, color: JA.RED, border: `2px solid ${JA.RED}`, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 220, textAlign: 'center' }}>Guardar en Pendientes + Enviar alerta</div>
+                                    </div>
+                                    {/* NO Error */}
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                        <div style={{ width: 2, height: 16, background: JA.BORDER, position: 'absolute', top: -8, right: '25%' }}></div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: JA.GREEN, marginBottom: 8, background: JA.WHITE, padding: '0 4px', zIndex: 1, marginTop: -6 }}>NO</div>
+                                        <div style={{ border: `2px solid ${JA.GREEN}`, color: JA.GREEN, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 220, textAlign: 'center', background: JA.GREEN_LT }}>Guardar en Libro Mayor</div>
+                                        <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                        <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 220, textAlign: 'center', background: JA.WHITE }}>Enviar Acuse de Recibo a DIAN</div>
+                                        <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                        <div style={{ border: `2px solid ${JA.NAVY}`, color: JA.NAVY, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 220, textAlign: 'center', background: JA.WHITE }}>Marcar como Procesada</div>
+                                        <ChevronDown size={20} color={JA.GOLD} style={{ margin: '8px 0' }} />
+                                        <div style={{ background: JA.BG, color: JA.GREY, border: `1px dashed ${JA.BORDER}`, padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, width: 220, textAlign: 'center' }}>Notificar al contador por email</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

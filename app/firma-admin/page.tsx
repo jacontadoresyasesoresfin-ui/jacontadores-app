@@ -53,6 +53,7 @@ const ALL_MODS = [
     { id: 'configuracion', name: 'Configuración' },
     { id: 'nomina', name: 'Nómina PILA' },
     { id: 'nit', name: 'Verificar NIT' },
+    { id: 'causacion', name: 'Causación DIAN' },
     { id: 'ml_pagos', name: 'ML Pagos' },
     { id: 'ml_comisiones', name: 'ML Comisiones' },
     { id: 'ml_devoluciones', name: 'ML Devoluciones' },
@@ -134,7 +135,10 @@ function FirmaAdminContent() {
         c.email?.toLowerCase().includes(search.toLowerCase())
     )
 
-    const activeMods = tenant?.available_modules || ALL_MODS.map(m => m.id)
+    // Si el tenant no tiene `available_modules` configurado en BD, se exponen todos los módulos conocidos
+    const activeMods = (tenant?.available_modules && tenant.available_modules.length > 0)
+        ? tenant.available_modules
+        : ALL_MODS.map(m => m.id)
 
     if (loading) return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 12, color: JA.GREY }}>
@@ -512,7 +516,7 @@ function CreateClientForFirmaModal({ tenantId, availableMods, onClose, onCreated
                 <div>
                     <span style={sty.label}>Módulos a activar</span>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', padding: '10px', background: JA.BG, border: `1px solid ${JA.BORDER}` }}>
-                        {ALL_MODS.filter(m => availableMods.includes(m.id)).map(mod => (
+                        {ALL_MODS.map(mod => (
                             <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
                                 <input type="checkbox" checked={selectedMods.includes(mod.id)} onChange={() => toggleMod(mod.id)} />
                                 {mod.name}
@@ -540,7 +544,7 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
         app_modules: (() => {
             const existing = client.app_modules || []
             if (existing.length === 0) return availableMods
-            const NEW_MODS = ['nomina', 'nit', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
+            const NEW_MODS = ['nomina', 'nit', 'causacion', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
             const isLegacy = !existing.some(m => NEW_MODS.includes(m))
             return isLegacy ? [...existing, ...NEW_MODS.filter(m => availableMods.includes(m))] : existing
         })(),
@@ -601,10 +605,14 @@ function EditClientForFirmaModal({ client, availableMods, onClose, onSaved, onEr
                 <div>
                     <span style={sty.label}>Módulos</span>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', padding: '10px', background: JA.BG, border: `1px solid ${JA.BORDER}` }}>
-                        {ALL_MODS.filter(m => availableMods.includes(m.id)).map(mod => (
-                            <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        {ALL_MODS.map(mod => (
+                            <label key={mod.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer',
+                                opacity: availableMods.includes(mod.id) ? 1 : 0.5 }}>
                                 <input type="checkbox" checked={form.app_modules.includes(mod.id)} onChange={() => toggleMod(mod.id)} />
                                 {mod.name}
+                                {!availableMods.includes(mod.id) && (
+                                    <span style={{ fontSize: '10px', color: JA.GREY_LT, marginLeft: 2 }}>(no en plan)</span>
+                                )}
                             </label>
                         ))}
                     </div>

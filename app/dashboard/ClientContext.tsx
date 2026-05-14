@@ -61,7 +61,7 @@ export function getModules(profile: Profile | null, tenant?: Tenant | null): Rec
     }
 
     if (profile.app_modules && Array.isArray(profile.app_modules) && profile.app_modules.length > 0) {
-        const NEW_MODS = ['nomina', 'nit', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
+        const NEW_MODS = ['nomina', 'nit', 'causacion', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
         const isLegacy = !profile.app_modules.some(m => NEW_MODS.includes(m))
         const mods: Record<string, boolean> = { ...base }
         for (const key of Object.keys(base)) mods[key] = false

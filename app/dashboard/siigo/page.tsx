@@ -341,7 +341,8 @@ export default function SiigoPage() {
     const { activeProfile } = useClient()
     const profileSheetUrl = activeProfile?.google_sheet_url || ''
 
-    const [sheetUrl, setSheetUrl] = useState('')
+    // Inicializar con la URL del perfil activo directamente
+    const [sheetUrl, setSheetUrl] = useState(() => activeProfile?.google_sheet_url || '')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [summary, setSummary] = useState<SiigoSummary | null>(null)
@@ -407,7 +408,9 @@ export default function SiigoPage() {
             setSheetUrl(profileSheetUrl)
             loadSheet(profileSheetUrl)
         }
-    }, [profileSheetUrl]) // eslint-disable-line react-hooks/exhaustive-deps
+    // loadSheet es estable (useCallback con []), profileSheetUrl cambia cuando cambia el cliente
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profileSheetUrl])
 
     const TABS_CONFIG = [
         { id: 'overview'  as const, label: '📊 Resumen' },

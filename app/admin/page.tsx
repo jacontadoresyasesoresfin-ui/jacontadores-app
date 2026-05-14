@@ -506,6 +506,7 @@ const ALL_MODS = [
     { id: 'configuracion', name: 'Configuración' },
     { id: 'nomina', name: 'Nómina PILA' },
     { id: 'nit', name: 'Verificar NIT' },
+    { id: 'causacion', name: 'Causación DIAN' },
     { id: 'ml_pagos', name: 'ML Pagos' },
     { id: 'ml_comisiones', name: 'ML Comisiones' },
     { id: 'ml_devoluciones', name: 'ML Devoluciones' },
@@ -789,7 +790,7 @@ function EditClientModal({ client, tenants, onClose, onSaved, onError, supabase 
         app_modules: (() => {
             const existing = client.app_modules || []
             if (existing.length === 0) return ALL_MODS.map(m => m.id)
-            const NEW_MODS = ['nomina', 'nit', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
+            const NEW_MODS = ['nomina', 'nit', 'causacion', 'ml_pagos', 'ml_comisiones', 'ml_devoluciones', 'ml_costos', 'ml_alertas']
             const isLegacy = !existing.some(m => NEW_MODS.includes(m))
             return isLegacy ? [...existing, ...NEW_MODS] : existing
         })(),

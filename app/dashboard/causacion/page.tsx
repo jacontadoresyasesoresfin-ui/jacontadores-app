@@ -162,10 +162,10 @@ function EstadoBadge({ estado }: { estado: string }) {
 
 function FuenteBadge({ fuente }: { fuente: string }) {
     const map: Record<string, { icon: string; label: string }> = {
-        manual: { icon: '✏️', label: 'Manual' },
-        pdf: { icon: '📄', label: 'PDF' },
-        drive: { icon: '☁️', label: 'Drive' },
-        csv: { icon: '📊', label: 'CSV' },
+        manual: { icon: '✏', label: 'Manual' },
+        pdf: { icon: '', label: 'PDF' },
+        drive: { icon: '☁', label: 'Drive' },
+        csv: { icon: '', label: 'CSV' },
     }
     const s = map[fuente] || map.manual
     return <span style={{ fontSize: 11, color: JA.GREY }}>{s.icon} {s.label}</span>
@@ -242,7 +242,7 @@ function FacturaForm({
                 {(['compra', 'venta'] as const).map(t => (
                     <button key={t} onClick={() => set('tipo', t)}
                         style={{ flex: 1, padding: '8px 0', borderRadius: 6, border: `2px solid ${f.tipo === t ? JA.GOLD : JA.BORDER}`, background: f.tipo === t ? JA.GOLD_LT + '22' : JA.WHITE, color: f.tipo === t ? JA.NAVY : JA.GREY, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize' }}>
-                        {t === 'compra' ? '🛒 Compra / Gasto' : '💰 Venta / Ingreso'}
+                        {t === 'compra' ? ' Compra / Gasto' : ' Venta / Ingreso'}
                     </button>
                 ))}
             </div>
@@ -343,7 +343,7 @@ function FacturaForm({
             {/* Asiento preview */}
             <details style={{ marginBottom: 16 }}>
                 <summary style={{ cursor: 'pointer', fontSize: 12, color: JA.GREY, fontWeight: 600, userSelect: 'none' }}>
-                    Ver asiento contable {balanced ? '✅ Balanceado' : '⚠️ Desbalanceado'}
+                    Ver asiento contable {balanced ? ' Balanceado' : ' Desbalanceado'}
                 </summary>
                 <table style={{ width: '100%', marginTop: 8, fontSize: 12, borderCollapse: 'collapse' }}>
                     <thead>
@@ -375,7 +375,7 @@ function FacturaForm({
                 <button onClick={onCancel} style={{ padding: '8px 18px', borderRadius: 6, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
                 <button onClick={handleSave} disabled={saving}
                     style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: JA.NAVY, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                    {saving ? 'Guardando...' : '💾 Causar Factura'}
+                    {saving ? 'Guardando...' : ' Causar Factura'}
                 </button>
             </div>
         </div>
@@ -677,10 +677,10 @@ export default function CausacionPage() {
         })
         const data = await res.json()
         if (res.ok) {
-            setSyncMsg(`✅ ${data.nuevas} facturas nuevas descargadas de ${data.total_descargadas} en el PT.`)
+            setSyncMsg(` ${data.nuevas} facturas nuevas descargadas de ${data.total_descargadas} en el PT.`)
             loadInbox()
         } else {
-            setSyncMsg(`❌ ${data.error}`)
+            setSyncMsg(` ${data.error}`)
         }
         setSyncing(false)
     }
@@ -693,7 +693,7 @@ export default function CausacionPage() {
         })
         const data = await res.json()
         if (res.ok) {
-            setSyncMsg(`✅ ${data.exitosos} facturas causadas.${data.errores > 0 ? ` ${data.errores} con error.` : ''}`)
+            setSyncMsg(` ${data.exitosos} facturas causadas.${data.errores > 0 ? ` ${data.errores} con error.` : ''}`)
             setInboxSelected(new Set())
             loadInbox()
         }
@@ -741,8 +741,8 @@ export default function CausacionPage() {
         })
         const data = await res.json()
         setSyncMsg(res.ok
-            ? `✅ Trigger completado: ${data.nuevas_sincronizadas} nuevas, ${data.causadas} causadas, ${data.errores} errores (${data.duration_ms}ms).`
-            : `❌ ${data.error}`)
+            ? ` Trigger completado: ${data.nuevas_sincronizadas} nuevas, ${data.causadas} causadas, ${data.errores} errores (${data.duration_ms}ms).`
+            : ` ${data.error}`)
         if (res.ok) { loadFacturas(); loadInbox() }
         setSyncing(false)
     }
@@ -772,27 +772,25 @@ export default function CausacionPage() {
     return (
         <div style={{ padding: '0 0 40px', maxWidth: 1200, margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
             {/* Header */}
-            <div style={{ background: JA.NAVY, borderRadius: '0 0 12px 12px', padding: '20px 24px 24px', marginBottom: 24, color: JA.WHITE }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                    <div>
-                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>⚡ Causación de Facturas</h1>
-                        <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GOLD_LT, opacity: 0.9 }}>
-                            {clientName} · Automatización masiva · DIAN verificado
-                        </p>
-                    </div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                        {[
-                            { label: 'Total', value: stats.total, color: JA.WHITE },
-                            { label: 'Pendientes', value: stats.pendientes, color: '#FCD34D' },
-                            { label: 'Causadas', value: stats.causadas, color: '#6EE7B7' },
-                            { label: 'Base mes', value: fmt(stats.valorMes), color: JA.GOLD_LT },
-                        ].map(({ label, value, color }) => (
-                            <div key={label} style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
-                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>{label}</div>
-                            </div>
-                        ))}
-                    </div>
+            <div style={{ borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '24px', marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                    <h1 style={{ fontSize: '28px', fontWeight: 700, color: JA.TEXT, marginBottom: '4px' }}>Causación Automática</h1>
+                    <p style={{ fontSize: '14px', color: JA.GREY }}>
+                        {clientName} · Automatización masiva · DIAN verificado
+                    </p>
+                </div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                    {[
+                        { label: 'Total', value: stats.total, color: JA.TEXT },
+                        { label: 'Pendientes', value: stats.pendientes, color: JA.GOLD },
+                        { label: 'Causadas', value: stats.causadas, color: JA.GREEN },
+                        { label: 'Base mes', value: fmt(stats.valorMes), color: JA.NAVY },
+                    ].map(({ label, value, color }) => (
+                        <div key={label} style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '18px', fontWeight: 700, color }}>{value}</div>
+                            <div style={{ fontSize: '10px', color: JA.GREY, textTransform: 'uppercase' }}>{label}</div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -851,7 +849,7 @@ export default function CausacionPage() {
                             </button>
                             <button onClick={() => bulkEstado('contabilizado')}
                                 style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: JA.GREEN, color: JA.WHITE, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                ✓✓ Contabilizadas
+                                 Contabilizadas
                             </button>
                             <button onClick={exportAsientos}
                                 style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: JA.GOLD, color: JA.WHITE, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
@@ -915,7 +913,7 @@ export default function CausacionPage() {
                                             </td>
                                             <td style={{ padding: '10px 8px' }}>
                                                 <span style={{ background: f.tipo === 'compra' ? JA.PURPLE_LT : JA.GREEN_LT, color: f.tipo === 'compra' ? JA.PURPLE : JA.GREEN, borderRadius: 99, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
-                                                    {f.tipo === 'compra' ? '🛒' : '💰'} {f.tipo}
+                                                    {f.tipo === 'compra' ? '' : ''} {f.tipo}
                                                 </span>
                                             </td>
                                             <td style={{ padding: '10px 8px', fontSize: 12, textAlign: 'right', fontWeight: 600 }}>{fmt(f.valor_base || 0)}</td>
@@ -954,7 +952,7 @@ export default function CausacionPage() {
             {tab === 'carga' && (
                 <div>
                     <h2 style={{ fontSize: 16, fontWeight: 700, color: JA.NAVY, margin: '0 0 16px' }}>
-                        📄 Carga masiva de facturas en PDF
+                         Carga masiva de facturas en PDF
                     </h2>
 
                     {/* Drop zone */}
@@ -1031,7 +1029,7 @@ export default function CausacionPage() {
                                         <div key={idx} style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 10, padding: 16 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                                 <span style={{ fontWeight: 600, fontSize: 13, color: JA.NAVY }}>
-                                                    📄 {item.archivo_nombre} — {item.nombre_tercero || 'Sin nombre'}
+                                                     {item.archivo_nombre} — {item.nombre_tercero || 'Sin nombre'}
                                                 </span>
                                                 <button onClick={() => setReviewItems(prev => prev.filter((_, i) => i !== idx))}
                                                     style={{ border: 'none', background: 'none', cursor: 'pointer', color: JA.RED }}>
@@ -1086,7 +1084,7 @@ export default function CausacionPage() {
                                 </button>
                                 <button onClick={saveReviewItems} disabled={savingBatch}
                                     style={{ padding: '9px 18px', borderRadius: 6, border: 'none', background: JA.GREEN, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
-                                    {savingBatch ? 'Guardando...' : `💾 Causar ${reviewItems.length} facturas`}
+                                    {savingBatch ? 'Guardando...' : ` Causar ${reviewItems.length} facturas`}
                                 </button>
                             </div>
                         </div>
@@ -1121,7 +1119,7 @@ export default function CausacionPage() {
             {tab === 'asientos' && (
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>📋 Asientos contables generados</h2>
+                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}> Asientos contables generados</h2>
                         <button onClick={exportAsientos}
                             style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: JA.GOLD, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Download size={14} /> Exportar CSV
@@ -1162,7 +1160,7 @@ export default function CausacionPage() {
             {/* ─── TAB: DRIVE SYNC ──────────────────────── */}
             {tab === 'drive' && (
                 <div>
-                    <h2 style={{ fontSize: 16, fontWeight: 700, color: JA.NAVY, margin: '0 0 8px' }}>☁️ Sincronización con Google Drive</h2>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, color: JA.NAVY, margin: '0 0 8px' }}>☁ Sincronización con Google Drive</h2>
                     <p style={{ fontSize: 13, color: JA.GREY, margin: '0 0 20px' }}>
                         Conecta la carpeta Drive del cliente donde llegan sus facturas de proveedor. El sistema las descarga y extrae los datos automáticamente.
                     </p>
@@ -1228,7 +1226,7 @@ export default function CausacionPage() {
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                 <button onClick={saveDriveResults} disabled={savingBatch}
                                     style={{ padding: '9px 20px', borderRadius: 6, border: 'none', background: JA.GREEN, color: JA.WHITE, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
-                                    {savingBatch ? 'Guardando...' : `💾 Causar ${driveResults.length} facturas de Drive`}
+                                    {savingBatch ? 'Guardando...' : ` Causar ${driveResults.length} facturas de Drive`}
                                 </button>
                             </div>
                         </div>
@@ -1236,7 +1234,7 @@ export default function CausacionPage() {
 
                     {/* Instrucciones de configuración */}
                     <div style={{ marginTop: 24, background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 10, padding: 20 }}>
-                        <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: JA.NAVY }}>⚙️ Configuración de Drive API</h3>
+                        <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: JA.NAVY }}> Configuración de Drive API</h3>
                         <p style={{ fontSize: 13, color: JA.GREY, margin: '0 0 8px' }}>Para sincronizar automáticamente con Drive, un administrador debe:</p>
                         <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: JA.TEXT, lineHeight: 1.8 }}>
                             <li>Ir a <strong>Google Cloud Console</strong> → Crear proyecto → Habilitar Drive API</li>
@@ -1253,7 +1251,7 @@ export default function CausacionPage() {
             {tab === 'guia' && (
                 <div>
                     <div style={{ background: `linear-gradient(135deg, ${JA.NAVY} 0%, #1e3a5f 100%)`, borderRadius: 12, padding: 28, color: JA.WHITE, marginBottom: 24 }}>
-                        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700 }}>📘 Guía práctica: Causación masiva de facturas</h2>
+                        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700 }}> Guía práctica: Causación masiva de facturas</h2>
                         <p style={{ margin: 0, opacity: 0.8, fontSize: 14 }}>
                             Cómo un contador colombiano puede procesar 100 facturas en minutos con este módulo.
                         </p>
@@ -1262,7 +1260,7 @@ export default function CausacionPage() {
                     {[
                         {
                             titulo: '¿Qué es la causación y por qué hacerla bien?',
-                            icono: '📌',
+                            icono: '',
                             contenido: `La causación es el registro contable de una factura en el momento en que se genera la obligación económica, independientemente del pago (principio de devengado — NIIF).
 
 Una causación correcta incluye:
@@ -1277,7 +1275,7 @@ El saldo neto que pagas al proveedor = Base + IVA − Retefuente − Reteiva −
                         },
                         {
                             titulo: 'Flujo recomendado para el contador',
-                            icono: '🔄',
+                            icono: '',
                             contenido: `Flujo mensual con este módulo (ejemplo: 80 facturas de un cliente):
 
 SEMANA 1-4 (durante el mes):
@@ -1297,7 +1295,7 @@ RESULTADO: 80 facturas procesadas en ~30 minutos, no en 2 días.`,
                         },
                         {
                             titulo: 'Retefuente 2025: cuándo y cuánto retener',
-                            icono: '💰',
+                            icono: '',
                             contenido: `La retención en la fuente la aplicas TÚ como empresa compradora (agente retenedor) al pagar al proveedor.
 
 Reglas clave:
@@ -1321,7 +1319,7 @@ El módulo calcula automáticamente si aplica la base mínima.`,
                         },
                         {
                             titulo: 'Verificación con la DIAN',
-                            icono: '🛡️',
+                            icono: '',
                             contenido: `Todas las facturas electrónicas colombianas tienen un CUFE (Código Único de Factura Electrónica), un hash de 96 caracteres hexadecimales generado por la DIAN.
 
 ¿Para qué sirve verificar el CUFE?
@@ -1339,7 +1337,7 @@ Las facturas cargadas por PDF: si el PDF contiene el CUFE, el sistema lo extrae 
                         },
                         {
                             titulo: 'Aislamiento de datos por cliente',
-                            icono: '🔒',
+                            icono: '',
                             contenido: `Cada factura que registras queda vinculada únicamente al cliente activo en ese momento.
 
 Cómo funciona:
@@ -1355,7 +1353,7 @@ Buenas prácticas:
                         },
                         {
                             titulo: 'Exportar e importar a software contable',
-                            icono: '📤',
+                            icono: '',
                             contenido: `El módulo genera asientos compatibles con los principales software colombianos.
 
 Exportación CSV de asientos:
@@ -1385,7 +1383,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
 
                     <div style={{ background: JA.GOLD_LT + '22', border: `1px solid ${JA.GOLD}`, borderRadius: 10, padding: 16, marginTop: 20 }}>
                         <p style={{ margin: 0, fontSize: 13, color: JA.NAVY }}>
-                            <strong>💡 Tip profesional:</strong> Establece con cada cliente una carpeta Drive compartida dedicada exclusivamente a facturas de proveedores del mes. Pídeles que suban las facturas electrónicas (PDF de la DIAN) directamente ahí. Al final del mes, un solo clic en "Sincronizar Drive" procesa todo el lote sin que tengas que descargar ningún archivo manualmente.
+                            <strong> Tip profesional:</strong> Establece con cada cliente una carpeta Drive compartida dedicada exclusivamente a facturas de proveedores del mes. Pídeles que suban las facturas electrónicas (PDF de la DIAN) directamente ahí. Al final del mes, un solo clic en "Sincronizar Drive" procesa todo el lote sin que tengas que descargar ningún archivo manualmente.
                         </p>
                     </div>
                 </div>
@@ -1396,7 +1394,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>⚙️ Configuración DIAN — Proveedor Tecnológico</h2>
+                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}> Configuración DIAN — Proveedor Tecnológico</h2>
                             <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GREY }}>
                                 Conecta tu PT (Factus, Siigo, Nortserver, etc.) para descargar facturas recibidas automáticamente.
                             </p>
@@ -1408,7 +1406,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                     </div>
 
                     {syncMsg && (
-                        <div style={{ background: syncMsg.startsWith('✅') ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${syncMsg.startsWith('✅') ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: syncMsg.startsWith('✅') ? JA.GREEN : JA.RED }}>
+                        <div style={{ background: syncMsg.startsWith('') ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${syncMsg.startsWith('') ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: syncMsg.startsWith('') ? JA.GREEN : JA.RED }}>
                             {syncMsg}
                         </div>
                     )}
@@ -1499,7 +1497,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                             {dianTestResult && (
                                 <div style={{ background: dianTestResult.ok ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${dianTestResult.ok ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
                                     <p style={{ margin: 0, fontWeight: 700, color: dianTestResult.ok ? JA.GREEN : JA.RED }}>
-                                        {dianTestResult.ok ? '✅' : '❌'} {dianTestResult.message}
+                                        {dianTestResult.ok ? '' : ''} {dianTestResult.message}
                                     </p>
                                     {dianTestResult.empresa && <p style={{ margin: '4px 0 0', fontSize: 12, color: JA.TEXT }}>Empresa: {dianTestResult.empresa}</p>}
                                 </div>
@@ -1517,7 +1515,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                             </div>
 
                             <div style={{ marginTop: 20, padding: 14, background: JA.BG, borderRadius: 8 }}>
-                                <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}>🕐 Configuración del Cron Job (causación automática)</p>
+                                <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}> Configuración del Cron Job (causación automática)</p>
                                 <p style={{ margin: '0 0 8px', fontSize: 12, color: JA.GREY }}>
                                     Configura en cPanel → Cron Jobs → cada 4 horas:
                                 </p>
@@ -1538,7 +1536,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>📥 Bandeja DIAN — Facturas recibidas del PT</h2>
+                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}> Bandeja DIAN — Facturas recibidas del PT</h2>
                             <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GREY }}>
                                 Facturas descargadas de tu Proveedor Tecnológico · {clientName}
                             </p>
@@ -1563,7 +1561,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                     </div>
 
                     {syncMsg && (
-                        <div style={{ background: syncMsg.startsWith('✅') ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${syncMsg.startsWith('✅') ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: syncMsg.startsWith('✅') ? JA.GREEN : JA.RED }}>
+                        <div style={{ background: syncMsg.startsWith('') ? JA.GREEN_LT : JA.RED_LT, border: `1px solid ${syncMsg.startsWith('') ? JA.GREEN : JA.RED}`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: syncMsg.startsWith('') ? JA.GREEN : JA.RED }}>
                             {syncMsg} <button onClick={() => setSyncMsg('')} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
                         </div>
                     )}
@@ -1637,8 +1635,8 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                                                     ) : f.estado === 'causada' && asiento ? (
                                                         <div>
                                                             <span style={{ color: JA.GREEN, fontSize: 11 }}>
-                                                                {asiento.metodo_causacion === 'ia' ? '🤖 IA' : asiento.metodo_causacion === 'regla_nit' ? '📋 NIT' : asiento.metodo_causacion === 'regla_keyword' ? '🔑 Keyword' : '⚙️ Default'}
-                                                                {asiento.balanceado ? ' ✓' : ' ⚠️'}
+                                                                {asiento.metodo_causacion === 'ia' ? ' IA' : asiento.metodo_causacion === 'regla_nit' ? ' NIT' : asiento.metodo_causacion === 'regla_keyword' ? ' Keyword' : ' Default'}
+                                                                {asiento.balanceado ? ' ' : ' '}
                                                             </span>
                                                             {asiento.ia_sugerencia && <div style={{ fontSize: 10, color: JA.GREY, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={asiento.ia_sugerencia}>{asiento.ia_sugerencia}</div>}
                                                         </div>
@@ -1664,7 +1662,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}>🧠 Motor de Causación — Reglas Inteligentes</h2>
+                            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: JA.NAVY }}> Motor de Causación — Reglas Inteligentes</h2>
                             <p style={{ margin: '4px 0 0', fontSize: 13, color: JA.GREY }}>
                                 Define cómo el sistema asigna cuentas PUC y retefuente a cada factura. Las reglas se aplican en orden de prioridad.
                             </p>
@@ -1677,10 +1675,10 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                     {/* Prioridad explicada */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
                         {[
-                            { num: '1', label: 'Por NIT', desc: 'Proveedor frecuente → cuenta fija', color: JA.GREEN, icon: '🏢' },
-                            { num: '2', label: 'Por Keyword', desc: 'Descripción del ítem → cuenta PUC', color: JA.BLUE, icon: '🔑' },
-                            { num: '3', label: 'Sugerencia IA', desc: 'Claude analiza y sugiere la cuenta', color: JA.PURPLE, icon: '🤖' },
-                            { num: '4', label: 'Default', desc: 'Cuenta predeterminada si no hay match', color: JA.GREY, icon: '⚙️' },
+                            { num: '1', label: 'Por NIT', desc: 'Proveedor frecuente → cuenta fija', color: JA.GREEN, icon: '' },
+                            { num: '2', label: 'Por Keyword', desc: 'Descripción del ítem → cuenta PUC', color: JA.BLUE, icon: '' },
+                            { num: '3', label: 'Sugerencia IA', desc: 'Claude analiza y sugiere la cuenta', color: JA.PURPLE, icon: '' },
+                            { num: '4', label: 'Default', desc: 'Cuenta predeterminada si no hay match', color: JA.GREY, icon: '' },
                         ].map(({ num, label, desc, color, icon }) => (
                             <div key={num} style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 8, padding: 12 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -1723,7 +1721,7 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
 
                     {/* Referencia rápida */}
                     <div style={{ background: JA.BG, borderRadius: 10, padding: 16, marginTop: 16 }}>
-                        <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}>📖 Estructura de reglas — referencia rápida</p>
+                        <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: JA.NAVY }}> Estructura de reglas — referencia rápida</p>
                         <pre style={{ margin: 0, fontSize: 11, color: JA.TEXT, lineHeight: 1.7, overflow: 'auto' }}>{`{
   "keywords": [
     { "keywords": ["internet", "hosting"], "cuenta_puc": "530515", "descripcion_cuenta": "Telecomunicaciones", "concepto_retefuente": "servicios" }

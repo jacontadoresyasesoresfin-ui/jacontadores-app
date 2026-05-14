@@ -140,6 +140,40 @@ const parseNum = (val: unknown): number => {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   CONVIERTE CUALQUIER URL DE GOOGLE SHEETS A FORMATO CSV
+   Soporta:
+     - /edit, /view, /htmlview  → /export?format=csv
+     - /pub?output=csv          → pasa sin cambio
+     - /pub (sin output)        → agrega output=csv
+     - /d/e/2PACX-... (publicado)→ /pub?output=csv
+   ───────────────────────────────────────────────────────────── */
+function convertSheetUrl(url: string): string {
+    const u = url.trim()
+    if (!u) return u
+
+    // Ya es un export CSV válido — no tocar
+    if (u.includes('output=csv') || u.includes('format=csv')) return u
+
+    // Formato publicado como web: /d/e/2PACX-...
+    if (u.includes('/d/e/')) {
+        const base = u.replace(/\/pub.*$/, '/pub')
+        return `${base}?output=csv`
+    }
+
+    // Formato edición o vista normal: /d/SHEET_ID/edit o /d/SHEET_ID/view etc.
+    const idMatch = u.match(/\/d\/([a-zA-Z0-9_-]+)/)
+    if (idMatch) {
+        const gidMatch = u.match(/[?&]gid=([0-9]+)/)
+        const gid = gidMatch?.[1] ?? '0'
+        return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv&gid=${gid}`
+    }
+
+    // Cualquier otra cosa — devolver sin cambio
+    return u
+}
+
+
+/* ─────────────────────────────────────────────────────────────
    FETCH + PARSE DATA FROM GOOGLE SHEETS
    ───────────────────────────────────────────────────────────── */
 export const fetchClientData = async (
@@ -153,7 +187,9 @@ export const fetchClientData = async (
         }
 
         try {
-            const res = await fetch(`/api/sheets-proxy?url=${encodeURIComponent(googleSheetUrl)}`)
+            // Convertir la URL al formato CSV exportable antes de enviar al proxy
+            const csvUrl = convertSheetUrl(googleSheetUrl)
+            const res = await fetch(`/api/sheets-proxy?url=${encodeURIComponent(csvUrl)}`)
             if (!res.ok) throw new Error(`Proxy error: ${res.status} ${res.statusText}`)
             const csvText = await res.text()
 

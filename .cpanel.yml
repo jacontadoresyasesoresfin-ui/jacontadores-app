@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - echo "Despliegue iniciado"
+    - echo "Los archivos ya están en el destino (repositorio en raíz)"

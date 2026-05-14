@@ -201,10 +201,11 @@ export default function ConfiguracionPage() {
         try {
             let csvUrl = url
             if (csvUrl.includes('/d/e/')) {
-                if (!csvUrl.includes('output=csv')) {
-                    csvUrl = csvUrl.replace(/\/pub.*$/, '/pub?output=csv')
-                    if (!csvUrl.includes('pub?')) csvUrl += (csvUrl.includes('?') ? '&' : '?') + 'output=csv'
-                }
+                // Extraer el ID 2PACX-... y reconstruir la URL correcta con /pub?output=csv en el PATH
+                const eMatch = csvUrl.match(/\/d\/e\/([^/?#]+)/)
+                csvUrl = eMatch
+                    ? `https://docs.google.com/spreadsheets/d/e/${eMatch[1]}/pub?output=csv`
+                    : csvUrl + (csvUrl.includes('?') ? '&' : '?') + 'output=csv'
             } else {
                 const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
                 if (match) {

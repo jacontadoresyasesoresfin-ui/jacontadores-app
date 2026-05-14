@@ -155,9 +155,14 @@ function convertSheetUrl(url: string): string {
     if (u.includes('output=csv') || u.includes('format=csv')) return u
 
     // Formato publicado como web: /d/e/2PACX-...
+    // La URL puede ser:  .../d/e/ID  o  .../d/e/ID/pub  o  .../d/e/ID/pubhtml
+    // En todos los casos la forma correcta es:  .../d/e/ID/pub?output=csv
     if (u.includes('/d/e/')) {
-        const base = u.replace(/\/pub.*$/, '/pub')
-        return `${base}?output=csv`
+        // Extraer el ID 2PACX-... (todo hasta /pub, /?, o fin)
+        const eMatch = u.match(/\/d\/e\/([^/?#]+)/)
+        if (eMatch) {
+            return `https://docs.google.com/spreadsheets/d/e/${eMatch[1]}/pub?output=csv`
+        }
     }
 
     // Formato edición o vista normal: /d/SHEET_ID/edit o /d/SHEET_ID/view etc.

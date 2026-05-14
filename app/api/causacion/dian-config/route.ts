@@ -1,88 +1,64 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { encrypt, decrypt, maskKey } from '@/lib/causacion/encryption'
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
-function adminSupa() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-    )
-}
-
-async function getUser() {
-    const cookieStore = await cookies()
-    const client = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    )
-    const { data: { user } } = await client.auth.getUser()
-    return user
-}
-
-export async function GET(request: NextRequest) {
-    const user = await getUser()
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-
-    const profileId = request.nextUrl.searchParams.get('profile_id') || user.id
-
-    const { data, error } = await adminSupa()
-        .from('user_dian_config')
-        .select('*')
-        .eq('profile_id', profileId)
-        .maybeSingle()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    if (!data) return NextResponse.json({ config: null })
-
-    // Devolver con API keys enmascaradas (no en claro)
-    return NextResponse.json({
-        config: {
-            ...data,
-            api_key_enc: data.api_key_enc ? maskKey(decrypt(data.api_key_enc)) : '',
-            api_secret_enc: data.api_secret_enc ? maskKey(decrypt(data.api_secret_enc)) : '',
-            has_api_key: !!data.api_key_enc,
-            has_api_secret: !!data.api_secret_enc,
+export async function GET(req: Request) {
+    try {
+        const supabase = await createClient();
+        const { searchParams } = new URL(req.url);
+        const profile_id = searchParams.get('profile_id');
+        
+        if (!profile_id) {
+            return NextResponse.json({ error: 'profile_id es requerido' }, { status: 400 });
         }
-    })
+
+        const { data, error } = await supabase
+            .from('user_dian_config')
+            .select('*')
+            .eq('profile_id', profile_id)
+            .maybeSingle();
+
+        if (error) throw error;
+
+        return NextResponse.json({ config: data || null });
+    } catch (error: any) {
+        console.error('Error fetching DIAN config:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 }
 
-export async function POST(request: NextRequest) {
-    const user = await getUser()
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+export async function POST(req: Request) {
+    try {
+        const supabase = await createClient();
+        const body = await req.json();
+        const { profile_id, proveedor_tecnologico, nit_empresa, ambiente, api_key, api_secret, activo } = body;
 
-    const body = await request.json()
-    const profileId = body.profile_id || user.id
+        if (!profile_id || !proveedor_tecnologico || !nit_empresa) {
+            return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
+        }
 
-    const {
-        proveedor_tecnologico, api_key, api_secret,
-        nit_empresa, ambiente, activo, config_extra,
-    } = body
+        const payload: any = {
+            profile_id,
+            proveedor_tecnologico,
+            nit_empresa,
+            ambiente: ambiente || 'pruebas',
+            activo: activo !== undefined ? activo : false,
+            updated_at: new Date().toISOString()
+        };
 
-    // Solo encriptar si se envió un valor nuevo (no la máscara)
-    const toUpsert: Record<string, unknown> = {
-        profile_id: profileId,
-        proveedor_tecnologico: proveedor_tecnologico || 'manual',
-        nit_empresa: nit_empresa || '',
-        ambiente: ambiente || 'prueba',
-        activo: activo ?? false,
-        config_extra: config_extra || {},
-        updated_at: new Date().toISOString(),
+        if (api_key) payload.api_key = api_key;
+        if (api_secret) payload.api_secret = api_secret;
+
+        const { data, error } = await supabase
+            .from('user_dian_config')
+            .upsert(payload, { onConflict: 'profile_id' })
+            .select('*')
+            .single();
+
+        if (error) throw error;
+
+        return NextResponse.json({ ok: true, config: data });
+    } catch (error: any) {
+        console.error('Error saving DIAN config:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
-    if (api_key && !api_key.includes('****')) toUpsert.api_key_enc = encrypt(api_key)
-    if (api_secret && !api_secret.includes('****')) toUpsert.api_secret_enc = encrypt(api_secret)
-
-    const { data, error } = await adminSupa()
-        .from('user_dian_config')
-        .upsert(toUpsert, { onConflict: 'profile_id' })
-        .select()
-        .maybeSingle()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true, config: data })
 }

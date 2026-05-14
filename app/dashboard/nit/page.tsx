@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy, ExternalLink, ChevronDown, ChevronUp, Clock } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy,
+         ExternalLink, ChevronDown, ChevronUp, Clock, FileDown, Layers, Hash, AlertCircle } from 'lucide-react'
 
 const JA = {
-    NAVY:    '#13213C', GOLD:    '#B8960C', GOLD_PALE: '#F5E9C0',
-    TEXT:    '#1C2B45', GREY:    '#4B5563', GREY_LT: '#9CA3AF',
-    BORDER:  '#E5E7EB', BG:      '#F8FAFC',
-    GREEN:   '#10B981', RED:     '#EF4444', ORANGE: '#F59E0B', TEAL: '#0D9488',
+    NAVY: '#13213C', GOLD: '#B8960C', GOLD_PALE: '#F5E9C0',
+    TEXT: '#1C2B45', GREY: '#4B5563', GREY_LT: '#9CA3AF',
+    BORDER: '#E5E7EB', BG: '#F8FAFC',
+    GREEN: '#10B981', RED: '#EF4444', ORANGE: '#F59E0B', TEAL: '#0D9488',
 } as const
 
 const CARD: React.CSSProperties = {
@@ -17,7 +18,7 @@ const CARD: React.CSSProperties = {
 
 const MULTIPLIERS = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71]
 
-function calcCheckDigit(base: string): number {
+function calcDV(base: string): number {
     const digits = base.replace(/\D/g, '').slice(-9).padStart(9, '0')
     const sum = digits.split('').reverse().reduce((acc, d, i) => acc + parseInt(d) * MULTIPLIERS[i], 0)
     const rem = sum % 11
@@ -52,22 +53,39 @@ interface NitResult {
     ciuuPrincipal: string | null
     ciuuSecundario: string | null
     ciuu3: string | null
+    ciuu4: string | null
     representanteLegal: string | null
     idRepresentante: string | null
     claseIdRL: string | null
     digitoVerificacion: string | null
+    municipio: string | null
+    departamento: string | null
+    direccion: string | null
+    telefono: string | null
+    email: string | null
+    tamanoEmpresa: string | null
+    codigoPostal: string | null
     otrasMatriculas: { camara: string; matricula: string; estado: string; renovado: string }[]
 }
 
+type BatchStatus = 'pending' | 'loading' | 'done' | 'error'
+interface BatchItem {
+    id: number
+    raw: string
+    status: BatchStatus
+    result: NitResult | null
+    errorMsg?: string
+}
+
 const KNOWN_NITS = [
-    { label: 'DIAN',             nit: '800197268-4' },
-    { label: 'Bancolombia',      nit: '890903938-8' },
-    { label: 'Grupo Éxito',      nit: '860002137-4' },
-    { label: 'EPM',              nit: '890904996-1' },
-    { label: 'Ecopetrol',        nit: '899999068-1' },
-    { label: 'Davivienda',       nit: '860034313-7' },
-    { label: 'Claro Colombia',   nit: '800153993-6' },
-    { label: 'Colpatria',        nit: '860007538-1' },
+    { label: 'DIAN',           nit: '800197268-4' },
+    { label: 'Bancolombia',    nit: '890903938-8' },
+    { label: 'Grupo Éxito',    nit: '860002137-4' },
+    { label: 'EPM',            nit: '890904996-1' },
+    { label: 'Ecopetrol',      nit: '899999068-1' },
+    { label: 'Davivienda',     nit: '860034313-7' },
+    { label: 'Claro Colombia', nit: '800153993-6' },
+    { label: 'Colpatria',      nit: '860007538-1' },
 ]
 
 function StatusBadge({ estado }: { estado: string | null }) {
@@ -96,34 +114,344 @@ function InfoRow({ label, value, mono = false, highlight = false }: { label: str
     )
 }
 
-export default function NitPage() {
-    const [input,      setInput]      = useState('')
-    const [result,     setResult]     = useState<NitResult | null>(null)
-    const [loading,    setLoading]    = useState(false)
-    const [copied,     setCopied]     = useState(false)
-    const [showCalc,   setShowCalc]   = useState(false)
-    const [autoCalc,   setAutoCalc]   = useState(false)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const ANON_KEY    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_ANON_KEY || ''
+
+async function callVerify(nit: string): Promise<NitResult> {
+    const cleaned = nit.replace(/\D/g, '')
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/nit-verify?nit=${cleaned}`, {
+        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+}
+
+function parseNitList(raw: string): string[] {
+    const parts = raw.split(/[\n\r,;|\t]+/)
+        .map(s => s.trim().replace(/[^0-9\-]/g, ''))
+        .filter(s => s.replace(/\D/g, '').length >= 2)
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const p of parts) {
+        const key = p.replace(/\D/g, '')
+        if (!seen.has(key)) { seen.add(key); result.push(p) }
+        if (result.length >= 300) break
+    }
+    return result
+}
+
+function exportCSV(items: BatchItem[]) {
+    const headers = [
+        'NIT', 'Base', 'DV', 'NIT Formateado', 'DV Válido', 'Tipo Rango', 'Subtipo',
+        'Es Jurídica', 'Encontrado RUES', 'Razón Social', 'Estado Matrícula',
+        'Organización Jurídica', 'Tipo Sociedad', 'Categoría Matrícula',
+        'Cámara de Comercio', 'Matrícula', 'Fecha Matrícula', 'Fecha Renovación',
+        'Último Año Renovado', 'Fecha Vigencia', 'Fecha Cancelación',
+        'CIUU Principal', 'CIUU Secundario', 'CIUU 3', 'CIUU 4',
+        'Representante Legal', 'ID Representante', 'Clase ID RL',
+        'Municipio', 'Departamento', 'Dirección', 'Teléfono', 'Email',
+        'Tamaño Empresa', 'Estado Procesamiento',
+    ]
+    const esc = (v: unknown) => {
+        const s = v == null ? '' : String(v)
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = items.map(item => {
+        const r = item.result
+        if (!r) return [item.raw, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', item.errorMsg || item.status].map(esc).join(',')
+        return [
+            r.nit, r.base, r.checkDigit, r.formatted, r.valid ? 'Sí' : 'No',
+            r.tipoRango, r.subtipo, r.esJuridica ? 'Sí' : 'No',
+            r.encontrado ? 'Sí' : 'No', r.razonSocial, r.estadoMatricula,
+            r.organizacionJuridica, r.tipoSociedad, r.categoriaMatricula,
+            r.camaraComercio, r.matricula, r.fechaMatricula, r.fechaRenovacion,
+            r.ultimoAnoRenovado, r.fechaVigencia, r.fechaCancelacion,
+            r.ciuuPrincipal, r.ciuuSecundario, r.ciuu3, r.ciuu4,
+            r.representanteLegal, r.idRepresentante, r.claseIdRL,
+            r.municipio, r.departamento, r.direccion, r.telefono, r.email,
+            r.tamanoEmpresa, 'OK',
+        ].map(esc).join(',')
+    })
+    const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `nits_verificados_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
+function BatchDetail({ r }: { r: NitResult }) {
+    return (
+        <div style={{ padding: '12px 16px', background: JA.BG, borderTop: `1px solid ${JA.BORDER}`, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px 24px' }}>
+            {[
+                { label: 'Organización', value: r.organizacionJuridica },
+                { label: 'Tipo Sociedad', value: r.tipoSociedad },
+                { label: 'Categoría', value: r.categoriaMatricula },
+                { label: 'Cámara', value: r.camaraComercio },
+                { label: 'Matrícula', value: r.matricula },
+                { label: 'F. Matrícula', value: r.fechaMatricula },
+                { label: 'Renovación', value: r.fechaRenovacion },
+                { label: 'Municipio', value: r.municipio },
+                { label: 'Departamento', value: r.departamento },
+                { label: 'Dirección', value: r.direccion },
+                { label: 'Teléfono', value: r.telefono },
+                { label: 'Email', value: r.email },
+                { label: 'CIUU Principal', value: r.ciuuPrincipal },
+                { label: 'CIUU Secundario', value: r.ciuuSecundario },
+                { label: 'Tamaño', value: r.tamanoEmpresa },
+                { label: 'Rep. Legal', value: r.representanteLegal },
+                { label: 'ID Rep. Legal', value: r.idRepresentante },
+                { label: 'Clase ID', value: r.claseIdRL },
+            ].filter(x => x.value).map(({ label, value }) => (
+                <div key={label}>
+                    <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', margin: '0 0 2px' }}>{label}</p>
+                    <p style={{ fontSize: '11px', fontWeight: 600, color: JA.TEXT, margin: 0 }}>{value}</p>
+                </div>
+            ))}
+        </div>
+    )
+}
+
+/* ──────────────────────────── BATCH MODE ──────────────────────────── */
+function LoteMode() {
+    const [raw, setRaw]           = useState('')
+    const [items, setItems]       = useState<BatchItem[]>([])
+    const [running, setRunning]   = useState(false)
+    const [expanded, setExpanded] = useState<Set<number>>(new Set())
+    const abortRef = useRef(false)
+
+    const toggleExpand = (id: number) => {
+        setExpanded(prev => {
+            const next = new Set(prev)
+            next.has(id) ? next.delete(id) : next.add(id)
+            return next
+        })
+    }
+
+    const startBatch = useCallback(async () => {
+        const nits = parseNitList(raw)
+        if (!nits.length) return
+        abortRef.current = false
+        const queue: BatchItem[] = nits.map((r, i) => ({ id: i, raw: r, status: 'pending', result: null }))
+        setItems(queue)
+        setRunning(true)
+
+        const idx = { current: 0 }
+        const work = async () => {
+            while (idx.current < queue.length) {
+                if (abortRef.current) break
+                const i = idx.current++
+                setItems(prev => prev.map(it => it.id === i ? { ...it, status: 'loading' } : it))
+                try {
+                    const result = await callVerify(queue[i].raw)
+                    setItems(prev => prev.map(it => it.id === i ? { ...it, status: 'done', result } : it))
+                } catch (e) {
+                    const base = queue[i].raw.replace(/\D/g, '').slice(0, -1)
+                    const given = parseInt(queue[i].raw.replace(/\D/g, '').slice(-1))
+                    const dv = calcDV(base)
+                    const n = parseInt(base)
+                    const esJur = n >= 800_000_000 && n <= 999_999_999
+                    setItems(prev => prev.map(it => it.id === i ? {
+                        ...it, status: 'done',
+                        result: {
+                            valid: given === dv, nit: queue[i].raw.replace(/\D/g, ''),
+                            base, checkDigit: dv, providedDigit: given,
+                            formatted: base + '-' + dv,
+                            tipoRango: esJur ? 'Persona Jurídica' : 'Persona Natural',
+                            subtipo: '', esJuridica: esJur,
+                            encontrado: false,
+                            razonSocial: null, estadoMatricula: null, organizacionJuridica: null,
+                            tipoSociedad: null, categoriaMatricula: null, camaraComercio: null,
+                            matricula: null, fechaMatricula: null, fechaRenovacion: null,
+                            ultimoAnoRenovado: null, fechaVigencia: null, fechaCancelacion: null,
+                            ciuuPrincipal: null, ciuuSecundario: null, ciuu3: null, ciuu4: null,
+                            representanteLegal: null, idRepresentante: null, claseIdRL: null,
+                            digitoVerificacion: String(dv),
+                            municipio: null, departamento: null, direccion: null,
+                            telefono: null, email: null, tamanoEmpresa: null, codigoPostal: null,
+                            otrasMatriculas: [],
+                        },
+                        errorMsg: (e as Error).message,
+                    } : it))
+                }
+            }
+        }
+        await Promise.all(Array(4).fill(null).map(() => work()))
+        setRunning(false)
+    }, [raw])
+
+    const stop = () => { abortRef.current = true }
+
+    const done  = items.filter(x => x.status === 'done').length
+    const rues  = items.filter(x => x.result?.encontrado).length
+    const activos = items.filter(x => x.result?.estadoMatricula?.toUpperCase() === 'ACTIVA' || x.result?.estadoMatricula?.toUpperCase() === 'VIGENTE').length
+    const noEnc = items.filter(x => x.status === 'done' && !x.result?.encontrado).length
+    const errors = items.filter(x => x.status === 'error').length
+    const total = items.length
+    const pct = total ? Math.round(done / total * 100) : 0
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Input */}
+            <div style={{ ...CARD, padding: '20px' }}>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '10px' }}>
+                    Pega la lista de NITs — hasta 300 · separados por enter, coma, punto y coma, pipe o tab
+                </label>
+                <textarea
+                    value={raw}
+                    onChange={e => setRaw(e.target.value)}
+                    disabled={running}
+                    placeholder={'800197268\n890903938-8\n899999068,860002137\n...'}
+                    style={{ width: '100%', height: '120px', padding: '10px 14px', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', resize: 'vertical', fontSize: '12px', fontFamily: 'monospace', color: JA.TEXT, background: running ? JA.BG : '#FFF', outline: 'none', boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                    <span style={{ fontSize: '10px', color: JA.GREY_LT }}>
+                        {parseNitList(raw).length} NITs detectados{parseNitList(raw).length >= 300 ? ' (límite 300)' : ''}
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {running && (
+                            <button onClick={stop}
+                                style={{ padding: '9px 16px', background: JA.RED, color: '#FFF', border: 'none', borderRadius: '2px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                                Detener
+                            </button>
+                        )}
+                        <button onClick={startBatch} disabled={running || !raw.trim()}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 20px', background: running || !raw.trim() ? JA.GREY_LT : JA.NAVY, color: '#FFF', border: 'none', borderRadius: '2px', fontSize: '11px', fontWeight: 700, cursor: running || !raw.trim() ? 'not-allowed' : 'pointer' }}>
+                            {running
+                                ? <><div style={{ width: 12, height: 12, border: '2px solid #FFFFFF50', borderTopColor: '#FFF', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Verificando...</>
+                                : <><Layers style={{ width: 13, height: 13 }} /> Verificar Lote</>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Progress + stats */}
+            {items.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {[
+                            { label: 'Verificados',    value: done,    color: JA.NAVY },
+                            { label: 'En RUES',        value: rues,    color: JA.TEAL },
+                            { label: 'Activos',        value: activos, color: JA.GREEN },
+                            { label: 'No encontrados', value: noEnc,   color: JA.ORANGE },
+                            { label: 'Errores',        value: errors,  color: JA.RED },
+                        ].map(({ label, value, color }) => (
+                            <div key={label} style={{ ...CARD, padding: '10px 16px', flex: '1 1 100px', minWidth: '100px' }}>
+                                <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', margin: '0 0 4px' }}>{label}</p>
+                                <p style={{ fontSize: '20px', fontWeight: 900, color, margin: 0 }}>{value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ height: '4px', background: JA.BORDER, borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: JA.GOLD, transition: 'width 0.3s', borderRadius: '2px' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '10px', color: JA.GREY_LT }}>{done}/{total} · {pct}% completado</span>
+                        {!running && done > 0 && (
+                            <button onClick={() => exportCSV(items.filter(x => x.status === 'done'))}
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: JA.GOLD, color: JA.NAVY, border: 'none', borderRadius: '2px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                                <FileDown style={{ width: 13, height: 13 }} /> Exportar CSV ({done})
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Results table */}
+            {items.length > 0 && (
+                <div style={CARD}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '48px 160px 1fr 110px 150px 1fr 36px', padding: '8px 12px', background: JA.BG, borderBottom: `1px solid ${JA.BORDER}`, gap: '0 8px' }}>
+                        {['#', 'NIT', 'Razón Social', 'Estado', 'Cámara', 'Actividad', ''].map((h, i) => (
+                            <span key={i} style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
+                        ))}
+                    </div>
+                    <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                        {items.map(item => (
+                            <div key={item.id} style={{ borderBottom: `1px solid ${JA.BG}` }}>
+                                <div
+                                    onClick={() => item.status === 'done' && item.result && toggleExpand(item.id)}
+                                    style={{ display: 'grid', gridTemplateColumns: '48px 160px 1fr 110px 150px 1fr 36px', padding: '10px 12px', gap: '0 8px', alignItems: 'center', cursor: item.result ? 'pointer' : 'default', background: expanded.has(item.id) ? '#F0F4FF' : '#FFF' }}
+                                >
+                                    <span style={{ fontSize: '10px', color: JA.GREY_LT, fontFamily: 'monospace' }}>{item.id + 1}</span>
+                                    <span style={{ fontSize: '11px', fontWeight: 700, color: JA.NAVY, fontFamily: 'monospace' }}>
+                                        {item.result?.formatted || item.raw}
+                                    </span>
+                                    <span style={{ fontSize: '11px', color: JA.TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {item.status === 'loading'
+                                            ? <span style={{ color: JA.GREY_LT }}>Verificando…</span>
+                                            : item.status === 'pending'
+                                                ? <span style={{ color: JA.GREY_LT }}>En cola</span>
+                                                : item.result?.razonSocial || <span style={{ color: JA.GREY_LT }}>—</span>
+                                        }
+                                    </span>
+                                    <span>
+                                        {item.result?.estadoMatricula
+                                            ? <StatusBadge estado={item.result.estadoMatricula} />
+                                            : item.status === 'loading'
+                                                ? <span style={{ fontSize: '9px', color: JA.GREY_LT }}>...</span>
+                                                : item.result
+                                                    ? <span style={{ fontSize: '9px', color: JA.GREY_LT }}>Sin matrícula</span>
+                                                    : null
+                                        }
+                                    </span>
+                                    <span style={{ fontSize: '10px', color: JA.GREY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {item.result?.camaraComercio || ''}
+                                    </span>
+                                    <span style={{ fontSize: '10px', color: JA.GREY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {item.result?.ciuuPrincipal
+                                            ? item.result.ciuuPrincipal.split(' ').slice(0, 4).join(' ')
+                                            : ''}
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {item.status === 'done' && item.result && (
+                                            expanded.has(item.id)
+                                                ? <ChevronUp style={{ width: 14, height: 14, color: JA.GREY_LT }} />
+                                                : <ChevronDown style={{ width: 14, height: 14, color: JA.GREY_LT }} />
+                                        )}
+                                        {item.status === 'error' && <AlertCircle style={{ width: 14, height: 14, color: JA.RED }} />}
+                                    </span>
+                                </div>
+                                {expanded.has(item.id) && item.result && (
+                                    <BatchDetail r={item.result} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ──────────────────────────── INDIVIDUAL MODE ──────────────────────────── */
+function IndividualMode() {
+    const [input,    setInput]    = useState('')
+    const [result,   setResult]   = useState<NitResult | null>(null)
+    const [loading,  setLoading]  = useState(false)
+    const [copied,   setCopied]   = useState(false)
+    const [showCalc, setShowCalc] = useState(false)
+    const [autoCalc, setAutoCalc] = useState(false)
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const verify = useCallback(async (value: string) => {
         const cleaned = value.replace(/\D/g, '')
         if (cleaned.length < 2) { setResult(null); return }
-
         setLoading(true)
         try {
-            const res  = await fetch(`/api/nit-verify?nit=${cleaned}`)
-            const data: NitResult = await res.json()
+            const data = await callVerify(cleaned)
             setResult(data)
         } catch {
-            /* fallback offline: DV local solamente */
-            const base     = cleaned.slice(0, -1)
-            const given    = parseInt(cleaned.slice(-1))
-            const expected = calcCheckDigit(base)
-            const n        = parseInt(base)
-            const esJur    = (n >= 800_000_000 && n <= 999_999_999)
+            const base  = cleaned.slice(0, -1)
+            const given = parseInt(cleaned.slice(-1))
+            const dv    = calcDV(base)
+            const n     = parseInt(base)
+            const esJur = n >= 800_000_000 && n <= 999_999_999
             setResult({
-                valid: given === expected, nit: cleaned, base,
-                checkDigit: expected, providedDigit: given,
+                valid: given === dv, nit: cleaned, base,
+                checkDigit: dv, providedDigit: given,
                 formatted: base + '-' + given,
                 tipoRango: esJur ? 'Persona Jurídica' : 'Persona Natural',
                 subtipo: '', esJuridica: esJur,
@@ -132,9 +460,12 @@ export default function NitPage() {
                 tipoSociedad: null, categoriaMatricula: null, camaraComercio: null,
                 matricula: null, fechaMatricula: null, fechaRenovacion: null,
                 ultimoAnoRenovado: null, fechaVigencia: null, fechaCancelacion: null,
-                ciuuPrincipal: null, ciuuSecundario: null, ciuu3: null,
+                ciuuPrincipal: null, ciuuSecundario: null, ciuu3: null, ciuu4: null,
                 representanteLegal: null, idRepresentante: null, claseIdRL: null,
-                digitoVerificacion: String(expected), otrasMatriculas: [],
+                digitoVerificacion: String(dv),
+                municipio: null, departamento: null, direccion: null,
+                telefono: null, email: null, tamanoEmpresa: null, codigoPostal: null,
+                otrasMatriculas: [],
             })
         } finally {
             setLoading(false)
@@ -150,8 +481,7 @@ export default function NitPage() {
             const cleaned = val.replace(/\D/g, '')
             if (cleaned.length < 2) { setResult(null); return }
             if (!val.includes('-') && cleaned.length >= 5) {
-                // Sin guión: calcular DV automáticamente y completar el campo
-                const dv   = calcCheckDigit(cleaned)
+                const dv   = calcDV(cleaned)
                 const full = cleaned + '-' + dv
                 setInput(full)
                 setAutoCalc(true)
@@ -165,7 +495,7 @@ export default function NitPage() {
     const handleCalcDV = () => {
         const cleaned = input.replace(/\D/g, '')
         if (!cleaned) return
-        const digit    = calcCheckDigit(cleaned)
+        const digit    = calcDV(cleaned)
         const newInput = cleaned + '-' + digit
         setInput(newInput)
         setAutoCalc(true)
@@ -189,20 +519,8 @@ export default function NitPage() {
     const isNatPerson = result ? !result.esJuridica : false
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingBottom: '32px', fontFamily: 'Inter, sans-serif' }}>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-            {/* ── Header ── */}
-            <div style={{ borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '18px' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 900, color: JA.NAVY, margin: 0, letterSpacing: '-0.02em' }}>
-                    Verificador <span style={{ color: JA.GOLD }}>NIT en Vivo</span>
-                </h1>
-                <p style={{ fontSize: '11px', color: JA.GREY, margin: '4px 0 0' }}>
-                    Validación DIAN · Registro Mercantil RUES · Actividad económica CIIU · Representante legal
-                </p>
-            </div>
-
-            {/* ── Search box ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {/* Search box */}
             <div style={{ ...CARD, padding: '20px' }}>
                 <label style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '10px' }}>
                     Ingresa NIT — con o sin dígito de verificación
@@ -235,11 +553,11 @@ export default function NitPage() {
                     </button>
                 </div>
                 <p style={{ fontSize: '10px', color: JA.GREY_LT, margin: '8px 0 0' }}>
-                    Escribe solo la base → el dígito de verificación se calcula automáticamente · Escribe con guión (ej: 900123456-<strong>7</strong>) para validar un DV conocido
+                    Escribe solo la base → el dígito se calcula automáticamente · Con guión (ej: 900123456-<strong>7</strong>) para validar un DV conocido
                 </p>
             </div>
 
-            {/* ── Examples ── */}
+            {/* Examples */}
             {!result && (
                 <div style={{ ...CARD, padding: '16px 20px' }}>
                     <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>NITs de referencia</p>
@@ -255,10 +573,9 @@ export default function NitPage() {
                 </div>
             )}
 
-            {/* ── Result ── */}
+            {/* Result */}
             {result && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
                     {/* Validation header */}
                     <div style={{ ...CARD, padding: '18px 20px', borderLeft: `4px solid ${autoCalc ? JA.GOLD : result.valid ? JA.GREEN : JA.RED}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
@@ -296,27 +613,17 @@ export default function NitPage() {
                     </div>
 
                     {result.encontrado ? (
-                        /* ── Full company data ── */
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '14px' }}>
-
                             {/* Main card */}
                             <div style={CARD}>
-                                {/* Company name + status */}
                                 <div style={{ padding: '20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                                         <div style={{ width: 40, height: 40, borderRadius: '4px', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            {isNatPerson
-                                                ? <User      style={{ width: 20, height: 20, color: JA.NAVY }} />
-                                                : <Building2 style={{ width: 20, height: 20, color: JA.NAVY }} />
-                                            }
+                                            {isNatPerson ? <User style={{ width: 20, height: 20, color: JA.NAVY }} /> : <Building2 style={{ width: 20, height: 20, color: JA.NAVY }} />}
                                         </div>
                                         <div>
-                                            <h2 style={{ fontSize: '16px', fontWeight: 900, color: JA.NAVY, margin: '0 0 4px', lineHeight: 1.2 }}>
-                                                {result.razonSocial}
-                                            </h2>
-                                            <p style={{ fontSize: '11px', color: JA.GREY, margin: '0 0 8px' }}>
-                                                {result.organizacionJuridica} · {result.categoriaMatricula}
-                                            </p>
+                                            <h2 style={{ fontSize: '16px', fontWeight: 900, color: JA.NAVY, margin: '0 0 4px', lineHeight: 1.2 }}>{result.razonSocial}</h2>
+                                            <p style={{ fontSize: '11px', color: JA.GREY, margin: '0 0 8px' }}>{result.organizacionJuridica} · {result.categoriaMatricula}</p>
                                             <StatusBadge estado={result.estadoMatricula} />
                                         </div>
                                     </div>
@@ -325,36 +632,38 @@ export default function NitPage() {
                                         <p style={{ fontSize: '16px', fontWeight: 900, color: JA.NAVY, margin: 0, fontFamily: 'monospace' }}>{result.formatted}</p>
                                     </div>
                                 </div>
-
-                                {/* Info rows */}
                                 <div style={{ padding: '0 20px 8px' }}>
-                                    <InfoRow label="Cámara de Comercio"   value={result.camaraComercio}     highlight />
-                                    <InfoRow label="Matrícula Mercantil"  value={result.matricula}          mono />
-                                    <InfoRow label="Tipo de Sociedad"     value={result.tipoSociedad}       />
-                                    <InfoRow label="Organización Jurídica"value={result.organizacionJuridica}/>
-                                    <InfoRow label="Actividad Principal"  value={result.ciuuPrincipal}      />
+                                    <InfoRow label="Cámara de Comercio"    value={result.camaraComercio}      highlight />
+                                    <InfoRow label="Municipio"             value={result.municipio}           />
+                                    <InfoRow label="Departamento"          value={result.departamento}        />
+                                    <InfoRow label="Dirección"             value={result.direccion}           />
+                                    <InfoRow label="Teléfono"              value={result.telefono}            mono />
+                                    <InfoRow label="Email"                 value={result.email}               />
+                                    <InfoRow label="Matrícula Mercantil"   value={result.matricula}           mono />
+                                    <InfoRow label="Tipo de Sociedad"      value={result.tipoSociedad}        />
+                                    <InfoRow label="Organización Jurídica" value={result.organizacionJuridica}/>
+                                    <InfoRow label="Tamaño Empresa"        value={result.tamanoEmpresa}       />
+                                    <InfoRow label="Actividad Principal"   value={result.ciuuPrincipal}       />
                                     {result.ciuuSecundario && !result.ciuuSecundario.includes('No clasificada') && (
                                         <InfoRow label="Actividad Secundaria" value={result.ciuuSecundario} />
                                     )}
                                     {result.ciuu3 && !result.ciuu3.includes('No clasificada') && (
                                         <InfoRow label="Actividad Terciaria" value={result.ciuu3} />
                                     )}
-                                    <InfoRow label="Fecha Matrícula"      value={result.fechaMatricula}     mono />
-                                    <InfoRow label="Última Renovación"    value={result.fechaRenovacion}    mono />
+                                    <InfoRow label="Fecha Matrícula"      value={result.fechaMatricula}      mono />
+                                    <InfoRow label="Última Renovación"    value={result.fechaRenovacion}     mono />
                                     {result.ultimoAnoRenovado && result.ultimoAnoRenovado !== '0' && (
-                                        <InfoRow label="Año Renovado"     value={result.ultimoAnoRenovado}  mono />
+                                        <InfoRow label="Año Renovado" value={result.ultimoAnoRenovado} mono />
                                     )}
                                     {result.fechaCancelacion && result.fechaCancelacion !== '—' && (
-                                        <InfoRow label="Fecha Cancelación" value={result.fechaCancelacion}  mono />
+                                        <InfoRow label="Fecha Cancelación" value={result.fechaCancelacion} mono />
                                     )}
-                                    <InfoRow label="Tipo de Entidad"      value={result.tipoRango}          />
+                                    <InfoRow label="Tipo de Entidad" value={result.tipoRango} />
                                 </div>
                             </div>
 
-                            {/* Right column: Rep legal + otras matrículas */}
+                            {/* Right column */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-                                {/* Representante legal */}
                                 {result.representanteLegal && (
                                     <div style={{ ...CARD, padding: '16px' }}>
                                         <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>Representante Legal</p>
@@ -376,7 +685,6 @@ export default function NitPage() {
                                     </div>
                                 )}
 
-                                {/* Otras matrículas */}
                                 {result.otrasMatriculas.length > 0 && (
                                     <div style={CARD}>
                                         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${JA.BG}` }}>
@@ -400,7 +708,6 @@ export default function NitPage() {
                                     </div>
                                 )}
 
-                                {/* Check digit detail */}
                                 <div style={{ ...CARD, padding: '14px 16px' }}>
                                     <button onClick={() => setShowCalc(!showCalc)}
                                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
@@ -416,16 +723,13 @@ export default function NitPage() {
                                                     const sum = d.reduce((acc, ch, i) => acc + parseInt(ch) * MULTIPLIERS[i], 0)
                                                     const rem = sum % 11
                                                     return d.map((ch, i) => `${ch} × ${String(MULTIPLIERS[i]).padStart(2)} = ${String(parseInt(ch)*MULTIPLIERS[i]).padStart(3)}`).join('  |  ')
-                                                        + `\nSuma = ${result.base.replace(/\D/g,'').slice(-9).padStart(9,'0').split('').reverse().reduce((a,c,i)=>a+parseInt(c)*MULTIPLIERS[i],0)}`
-                                                        + `    Resto = ${result.base.replace(/\D/g,'').slice(-9).padStart(9,'0').split('').reverse().reduce((a,c,i)=>a+parseInt(c)*MULTIPLIERS[i],0) % 11}`
-                                                        + `    DV = ${result.checkDigit}`
+                                                        + `\nSuma = ${sum}    Resto = ${rem}    DV = ${result.checkDigit}`
                                                 })()}
                                             </code>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Source */}
                                 <div style={{ padding: '10px 14px', background: JA.BG, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <Clock style={{ width: 11, height: 11, color: JA.GREY_LT, flexShrink: 0 }} />
                                     <p style={{ fontSize: '9px', color: JA.GREY_LT, margin: 0, lineHeight: 1.5 }}>
@@ -434,37 +738,25 @@ export default function NitPage() {
                                 </div>
                             </div>
                         </div>
-
                     ) : (
-                        /* ── No en RUES: mostrar todo lo que se puede calcular localmente ── */
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '14px' }}>
-
-                            {/* Datos calculados localmente */}
                             <div style={CARD}>
-                                {/* Header tipo persona */}
                                 <div style={{ padding: '16px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     <div style={{ width: 40, height: 40, borderRadius: '4px', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                        {result.esJuridica
-                                            ? <Building2 style={{ width: 20, height: 20, color: JA.NAVY }} />
-                                            : <User      style={{ width: 20, height: 20, color: JA.NAVY }} />
-                                        }
+                                        {result.esJuridica ? <Building2 style={{ width: 20, height: 20, color: JA.NAVY }} /> : <User style={{ width: 20, height: 20, color: JA.NAVY }} />}
                                     </div>
                                     <div>
                                         <p style={{ fontSize: '15px', fontWeight: 900, color: JA.NAVY, margin: 0 }}>{result.tipoRango}</p>
                                         {result.subtipo && <p style={{ fontSize: '11px', color: JA.GREY, margin: '2px 0 0' }}>{result.subtipo}</p>}
-                                        <p style={{ fontSize: '10px', color: JA.GREY_LT, margin: '4px 0 0' }}>
-                                            Sin registro en Cámara de Comercio · El DV fue calculado correctamente
-                                        </p>
+                                        <p style={{ fontSize: '10px', color: JA.GREY_LT, margin: '4px 0 0' }}>Sin registro en Cámara de Comercio · DV calculado correctamente</p>
                                     </div>
                                 </div>
-
-                                {/* Datos clave para contabilidad */}
                                 <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                     {[
-                                        { label: 'NIT / RUT completo',        value: result.formatted,          mono: true,  big: true  },
-                                        { label: 'Dígito de Verificación',    value: String(result.checkDigit), mono: true,  big: true  },
-                                        { label: 'Base numérica',             value: result.base,               mono: true,  big: false },
-                                        { label: 'Tipo de contribuyente',     value: result.tipoRango,          mono: false, big: false },
+                                        { label: 'NIT / RUT completo',     value: result.formatted,          mono: true,  big: true  },
+                                        { label: 'Dígito de Verificación', value: String(result.checkDigit), mono: true,  big: true  },
+                                        { label: 'Base numérica',          value: result.base,               mono: true,  big: false },
+                                        { label: 'Tipo de contribuyente',  value: result.tipoRango,          mono: false, big: false },
                                         ...(result.subtipo ? [{ label: 'Clasificación DIAN', value: result.subtipo, mono: false, big: false }] : []),
                                     ].map(({ label, value, mono, big }) => (
                                         <div key={label} style={{ padding: '12px 14px', background: JA.BG, borderRadius: '2px', border: `1px solid ${JA.BORDER}` }}>
@@ -473,27 +765,24 @@ export default function NitPage() {
                                         </div>
                                     ))}
                                 </div>
-
-                                {/* Aviso */}
                                 <div style={{ margin: '0 20px 16px', padding: '10px 14px', background: JA.GOLD_PALE, border: `1px solid ${JA.GOLD}40`, borderRadius: '2px', display: 'flex', gap: '8px' }}>
                                     <span style={{ fontSize: '14px', color: JA.GOLD, flexShrink: 0, fontWeight: 900, lineHeight: 1 }}>ℹ</span>
                                     <p style={{ fontSize: '10px', color: JA.TEXT, margin: 0, lineHeight: 1.5 }}>
                                         {result.esJuridica
-                                            ? 'Esta empresa no aparece en el Registro Mercantil público (RUES). Puede ser una entidad del Estado, cooperativa, o no tener matrícula mercantil vigente. Verifícala directamente en la DIAN o en el RUES.'
-                                            : 'Las personas naturales no aparecen en el Registro Mercantil. El NIT y el DV son correctos. Para nombre y datos del RUT, consulta en el portal de la DIAN con la cédula del contribuyente.'
+                                            ? 'Esta empresa no aparece en el Registro Mercantil público (RUES). Puede ser una entidad del Estado, cooperativa, o no tener matrícula mercantil vigente.'
+                                            : 'Las personas naturales no aparecen en el Registro Mercantil. NIT y DV son correctos. Para nombre y datos del RUT, consulta en el portal DIAN con la cédula.'
                                         }
                                     </p>
                                 </div>
                             </div>
 
-                            {/* Fuentes oficiales */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 <div style={{ ...CARD, padding: '16px' }}>
                                     <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>Verificar en fuentes oficiales</p>
                                     {[
-                                        { label: 'DIAN — Consulta RUT',        url: 'https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces' },
-                                        { label: 'RUES — Registro Mercantil',  url: 'https://www.rues.org.co' },
-                                        { label: 'Cámaras de Comercio',        url: 'https://confecamaras.org.co' },
+                                        { label: 'DIAN — Consulta RUT',       url: 'https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces' },
+                                        { label: 'RUES — Registro Mercantil', url: 'https://www.rues.org.co' },
+                                        { label: 'Cámaras de Comercio',       url: 'https://confecamaras.org.co' },
                                     ].map(({ label, url }) => (
                                         <a key={url} href={url} target="_blank" rel="noopener noreferrer"
                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '2px', border: `1px solid ${JA.BORDER}`, marginBottom: '8px', textDecoration: 'none', background: '#FFF' }}>
@@ -503,7 +792,6 @@ export default function NitPage() {
                                     ))}
                                 </div>
 
-                                {/* Cálculo DV */}
                                 <div style={{ ...CARD, padding: '14px 16px' }}>
                                     <button onClick={() => setShowCalc(!showCalc)}
                                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
@@ -530,6 +818,42 @@ export default function NitPage() {
                     )}
                 </div>
             )}
+        </div>
+    )
+}
+
+/* ──────────────────────────── PAGE ROOT ──────────────────────────── */
+export default function NitPage() {
+    const [mode, setMode] = useState<'individual' | 'lote'>('individual')
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingBottom: '32px', fontFamily: 'Inter, sans-serif' }}>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+            {/* Header */}
+            <div style={{ borderBottom: `1px solid ${JA.BORDER}`, paddingBottom: '18px' }}>
+                <h1 style={{ fontSize: '20px', fontWeight: 900, color: JA.NAVY, margin: 0, letterSpacing: '-0.02em' }}>
+                    Verificador <span style={{ color: JA.GOLD }}>NIT en Vivo</span>
+                </h1>
+                <p style={{ fontSize: '11px', color: JA.GREY, margin: '4px 0 0' }}>
+                    Validación DIAN · Registro Mercantil RUES · Actividad económica CIIU · Representante legal
+                </p>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '2px', background: JA.BG, border: `1px solid ${JA.BORDER}`, borderRadius: '3px', padding: '3px', width: 'fit-content' }}>
+                <button onClick={() => setMode('individual')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 18px', border: 'none', borderRadius: '2px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: mode === 'individual' ? '#FFF' : 'transparent', color: mode === 'individual' ? JA.NAVY : JA.GREY, boxShadow: mode === 'individual' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.15s' }}>
+                    <Hash style={{ width: 13, height: 13 }} /> Individual
+                </button>
+                <button onClick={() => setMode('lote')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 18px', border: 'none', borderRadius: '2px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: mode === 'lote' ? '#FFF' : 'transparent', color: mode === 'lote' ? JA.NAVY : JA.GREY, boxShadow: mode === 'lote' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.15s' }}>
+                    <Layers style={{ width: 13, height: 13 }} /> Verificación en Lote
+                    <span style={{ fontSize: '9px', fontWeight: 700, background: JA.GOLD, color: '#FFF', padding: '1px 6px', borderRadius: '8px' }}>hasta 300</span>
+                </button>
+            </div>
+
+            {mode === 'individual' ? <IndividualMode /> : <LoteMode />}
         </div>
     )
 }

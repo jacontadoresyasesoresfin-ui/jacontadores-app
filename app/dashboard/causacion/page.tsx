@@ -1744,7 +1744,6 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                             <strong>usar_ia: true</strong> → cuando no haya match de NIT ni keyword, Claude analiza la descripción del ítem y sugiere la cuenta PUC automáticamente. Requiere <code>ANTHROPIC_API_KEY</code> en las variables de entorno del servidor.
                         </p>
                     </div>
-                    </div>
                 </div>
             )}
 
@@ -1830,3 +1829,4 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
         </div>
     )
 }
+

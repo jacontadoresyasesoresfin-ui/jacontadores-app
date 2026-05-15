@@ -121,6 +121,22 @@ export async function POST(req: Request) {
         // 2. Descargar y parsear cada PDF
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const pdfParse = require('pdf-parse')
+
+        // Renderer personalizado: extrae texto sin usar canvas/DOMMatrix (browser API)
+        // Evita el error "DOMMatrix is not defined" en el entorno Node.js de Next.js
+        const pagerender = async (pageData: any): Promise<string> => {
+            const content = await pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
+            let lastY = ''
+            let text = ''
+            for (const item of content.items as Array<{ str: string; transform?: number[] }>) {
+                if (!item.str) continue
+                const y = String(item.transform?.[5] ?? '')
+                text += (lastY && lastY !== y) ? '\n' + item.str : item.str
+                lastY = y
+            }
+            return text
+        }
+
         const invoicesData = []
 
         for (const file of files) {
@@ -135,7 +151,7 @@ export async function POST(req: Request) {
 
                 const arrayBuffer = await fileRes.arrayBuffer()
                 const pdfBuffer = Buffer.from(arrayBuffer)
-                const pdfData = await pdfParse(pdfBuffer)
+                const pdfData = await pdfParse(pdfBuffer, { pagerender })
                 const text = pdfData.text
 
                 const cufe  = extractCufe(text)

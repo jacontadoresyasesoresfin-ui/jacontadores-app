@@ -118,7 +118,18 @@ export async function POST(request: NextRequest) {
                 const buffer = Buffer.from(streamRes.data as unknown as ArrayBuffer)
                 const pdfMod = await import('pdf-parse')
                 const pdfFn = ((pdfMod as unknown as { default?: unknown }).default ?? pdfMod) as unknown as (b: Buffer, o?: object) => Promise<{ text: string }>
-                const parsed = await pdfFn(buffer, { max: 0 })
+                const pagerender = async (pageData: any): Promise<string> => {
+                    const content = await pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
+                    let lastY = '', text = ''
+                    for (const item of content.items as Array<{ str: string; transform?: number[] }>) {
+                        if (!item.str) continue
+                        const y = String(item.transform?.[5] ?? '')
+                        text += (lastY && lastY !== y) ? '\n' + item.str : item.str
+                        lastY = y
+                    }
+                    return text
+                }
+                const parsed = await pdfFn(buffer, { pagerender })
                 const extracted = extractFromText(parsed.text, file.name)
                 results.push({ filename: file.name, ok: true, data: extracted as unknown as Record<string, unknown> })
             } catch {

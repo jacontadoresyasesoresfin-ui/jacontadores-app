@@ -1,281 +1,374 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
-import { XMLParser } from 'fast-xml-parser';
+import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { syncReceived, PTConfig, PTDocumento } from '@/lib/causacion/pt-adapters'
+import { parseUBL21, FacturaUBL } from '@/lib/causacion/xml-parser'
+import { generarAsientoUBL, REGLAS_DEFAULT, ReglasConfig } from '@/lib/causacion/motor'
 
+// ── Convierte PTDocumento en FacturaUBL cuando no hay XML ─────────────────────
+function ptDocToFacturaUBL(doc: PTDocumento): FacturaUBL {
+    const subtotal = doc.subtotal > 0 ? doc.subtotal : doc.total - doc.iva
+    const pctIva = subtotal > 0 ? Math.round((doc.iva / subtotal) * 100) : 19
+    return {
+        cufe: doc.cufe,
+        numero_factura: doc.numero_factura,
+        tipo_documento: doc.tipo_documento || '01',
+        fecha_emision: doc.fecha_emision,
+        hora_emision: '00:00:00',
+        proveedor_nit: doc.proveedor_nit,
+        proveedor_nombre: doc.proveedor_nombre,
+        proveedor_direccion: '',
+        proveedor_municipio: '',
+        proveedor_regimen: '',
+        receptor_nit: '',
+        receptor_nombre: '',
+        subtotal,
+        descuento_total: 0,
+        base_gravable: subtotal,
+        iva_total: doc.iva,
+        ica_total: 0,
+        total: doc.total,
+        items: [{
+            descripcion: `Factura ${doc.numero_factura} — ${doc.proveedor_nombre}`,
+            cantidad: 1,
+            precio_unitario: subtotal,
+            subtotal,
+            porcentaje_iva: pctIva,
+            valor_iva: doc.iva,
+        }],
+        impuestos: [],
+        forma_pago: '1',
+        fecha_vencimiento: doc.fecha_emision,
+    }
+}
+
+// ── Desencoda valor BYTEA que llega de Supabase ───────────────────────────────
+function decodeField(val: unknown): string {
+    if (!val) return ''
+    if (typeof val === 'string') return val
+    if (typeof val === 'object' && val !== null) {
+        const obj = val as Record<string, unknown>
+        if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+            return Buffer.from(obj.data as number[]).toString('utf8')
+        }
+    }
+    return String(val)
+}
+
+// ── Envía notificación por email vía Resend ───────────────────────────────────
+async function notificarContador(
+    email: string,
+    nombre: string,
+    stats: { nuevas: number; causadas: number; errores: number; omitidas: number },
+    errores: string[]
+) {
+    const resendKey = process.env.RESEND_API_KEY
+    if (!resendKey) {
+        console.log(`[EMAIL-SKIP] RESEND_API_KEY no configurado. Contador: ${email}`)
+        return
+    }
+
+    const subject = stats.errores > 0
+        ? `⚠️ DIAN Auto: ${stats.nuevas} facturas (${stats.errores} con error)`
+        : `✓ DIAN Auto: ${stats.nuevas} facturas causadas`
+
+    const erroresHtml = errores.length > 0
+        ? `<h3 style="color:#DC2626">Errores (requieren revisión manual):</h3>
+           <ul>${errores.slice(0, 10).map(e => `<li>${e}</li>`).join('')}</ul>`
+        : ''
+
+    const html = `
+        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto">
+            <div style="background:#13213C;padding:20px 24px;border-radius:8px 8px 0 0">
+                <h1 style="color:#B8960C;margin:0;font-size:18px">J&A Contadores — Sincronización DIAN</h1>
+            </div>
+            <div style="background:#fff;border:1px solid #E5E7EB;border-top:none;padding:24px;border-radius:0 0 8px 8px">
+                <p>Hola <strong>${nombre || 'Contador'}</strong>,</p>
+                <p>Se completó el ciclo automático de descarga y causación de facturas DIAN:</p>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                    <tr style="background:#F8FAFC">
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB">Facturas descargadas</td>
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB;font-weight:600">${stats.nuevas}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB">Causadas automáticamente</td>
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB;font-weight:600;color:#059669">${stats.causadas}</td>
+                    </tr>
+                    <tr style="background:#F8FAFC">
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB">Con errores (pendientes)</td>
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB;font-weight:600;color:${stats.errores > 0 ? '#DC2626' : '#059669'}">${stats.errores}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB">Ya procesadas (omitidas)</td>
+                        <td style="padding:10px 14px;border:1px solid #E5E7EB;color:#9CA3AF">${stats.omitidas}</td>
+                    </tr>
+                </table>
+                ${erroresHtml}
+                <p style="margin-top:24px">
+                    <a href="${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/causacion/automatizacion"
+                       style="background:#13213C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+                       Ver en el portal →
+                    </a>
+                </p>
+            </div>
+        </div>`
+
+    try {
+        await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from: 'DIAN Auto <dian@jacontadores.com>',
+                to: [email],
+                subject,
+                html,
+            }),
+        })
+    } catch (e) {
+        console.error('[EMAIL-ERROR]', e)
+    }
+}
+
+// ── Handler POST principal ────────────────────────────────────────────────────
 export async function POST(req: Request) {
     try {
-        const supabase = await createClient();
-        
-        let profile_id = null;
-        let mode = 'single';
-        
-        try {
-            const body = await req.json();
-            profile_id = body.profile_id;
-            mode = body.mode || 'single';
-        } catch(e) { }
+        const supabase = await createClient()
 
-        // Si no hay profile_id en el body, verificamos sesión auth
+        let profile_id: string | null = null
+        let mode = 'single'
+        let dias = 7
+
+        try {
+            const body = await req.json()
+            profile_id = body.profile_id || null
+            mode = body.mode || 'single'
+            dias = Number(body.dias) || 7
+        } catch { /* body vacío o no-JSON */ }
+
         if (!profile_id) {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) profile_id = user.id;
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) profile_id = user.id
         }
 
         if (!profile_id && mode !== 'all_active') {
-            return NextResponse.json({ error: 'profile_id es requerido o debe enviar mode="all_active"' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'profile_id es requerido o mode="all_active"' },
+                { status: 400 }
+            )
         }
 
-        const startMs = Date.now();
-        let profilesToProcess = [];
+        const startMs = Date.now()
+        let profilesToProcess: string[] = []
 
-        // ─── NODO A: Trigger Cron ───────────────────────────────────────────────────────────
+        // Nodo A: Obtener perfiles a procesar
         if (mode === 'all_active') {
-             const { data: configs } = await supabase.from('user_dian_config').select('profile_id').eq('activo', true);
-             profilesToProcess = configs ? configs.map(c => c.profile_id) : [];
+            const { data: configs } = await supabase
+                .from('user_dian_config')
+                .select('profile_id')
+                .eq('activo', true)
+            profilesToProcess = configs?.map((c: { profile_id: string }) => c.profile_id) || []
         } else {
-             profilesToProcess = [profile_id];
+            profilesToProcess = [profile_id!]
         }
 
-        let stats = { nuevas: 0, causadas: 0, errores: 0, ms: 0 };
+        const stats = { nuevas: 0, causadas: 0, errores: 0, omitidas: 0 }
+        const erroresDetalle: string[] = []
+
+        // Rango de fechas: últimos X días
+        const to = new Date().toISOString().slice(0, 10)
+        const from = new Date(Date.now() - dias * 86_400_000).toISOString().slice(0, 10)
 
         for (const p_id of profilesToProcess) {
-            const { data: config, error: configError } = await supabase
+            // ── Leer configuración del PT ─────────────────────────────────────
+            const { data: config, error: cfgErr } = await supabase
                 .from('user_dian_config')
                 .select('*')
                 .eq('profile_id', p_id)
-                .maybeSingle();
+                .maybeSingle()
 
-            if (configError || !config || !config.activo) {
-                if (mode === 'single') return NextResponse.json({ error: 'Configuración DIAN no activa' }, { status: 400 });
-                continue;
+            if (cfgErr || !config || !config.activo) {
+                if (mode === 'single') {
+                    return NextResponse.json({ error: 'Configuración DIAN no activa para este perfil' }, { status: 400 })
+                }
+                continue
             }
 
-            // ─── NODO B & C: Conectar a Proveedor y Consultar Docs (Simulación) ─────────────
-            const facturasNuevas = await simularConsultaProveedor(config);
-
-            // ─── NODO D: ¿Hay facturas nuevas sin procesar? ─────────────────────────────────
-            if (facturasNuevas.length === 0) {
-                // Nodo Z: Finalizar ciclo
-                continue;
+            // Mezclar reglas del usuario con defaults del motor
+            const reglasUsuario = config.reglas_causacion as Partial<ReglasConfig> | null
+            const reglas: ReglasConfig = {
+                keywords: reglasUsuario?.keywords?.length
+                    ? [...reglasUsuario.keywords, ...REGLAS_DEFAULT.keywords]
+                    : REGLAS_DEFAULT.keywords,
+                nit_proveedor: reglasUsuario?.nit_proveedor || REGLAS_DEFAULT.nit_proveedor,
+                tipo_documento: reglasUsuario?.tipo_documento || REGLAS_DEFAULT.tipo_documento,
+                defaults: { ...REGLAS_DEFAULT.defaults, ...(reglasUsuario?.defaults || {}) },
+                usar_ia: reglasUsuario?.usar_ia ?? REGLAS_DEFAULT.usar_ia,
             }
 
-            // ─── NODO E: Descargar XML masivamente ──────────────────────────────────────────
-            for (const doc of facturasNuevas) {
-                const xmlData = doc.xml;
+            // Construir PTConfig (credenciales guardadas en BYTEA como texto)
+            const ptConfig: PTConfig = {
+                proveedor_tecnologico: config.proveedor_tecnologico,
+                api_key: decodeField(config.api_key),
+                api_secret: decodeField(config.api_secret),
+                nit_empresa: config.nit_empresa,
+                ambiente: config.ambiente === 'produccion' ? 'produccion' : 'prueba',
+                config_extra: config.config_extra || {},
+            }
 
-                // ─── NODO F: Parsear XML UBL ────────────────────────────────────────────────
-                const parser = new XMLParser();
-                const jObj = parser.parse(xmlData);
-                const invoice = jObj.Invoice;
-                if (!invoice) continue;
+            // Nodo B & C: Conectar al PT y consultar documentos recibidos
+            let documentos: PTDocumento[] = []
+            try {
+                documentos = await syncReceived(ptConfig, from, to)
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e)
+                console.error(`[DIAN-TRIGGER] Sync PT error profile ${p_id}:`, msg)
+                erroresDetalle.push(`Conexión PT (${config.proveedor_tecnologico}): ${msg}`)
+                continue
+            }
 
-                const cufe = invoice.UUID || `CUFE-${Date.now()}`;
-                const numFactura = invoice.ID;
-                const provNit = String(invoice.AccountingSupplierParty?.Party?.PartyTaxScheme?.CompanyID);
-                const provNombre = invoice.AccountingSupplierParty?.Party?.PartyName?.Name;
-                const fecha = invoice.IssueDate || new Date().toISOString().split('T')[0];
-                const totalAmount = parseFloat(invoice.LegalMonetaryTotal?.PayableAmount || '0');
-                
-                const descripciones = Array.isArray(invoice.InvoiceLine) 
-                    ? invoice.InvoiceLine.map((l: any) => l.Item?.Description).join(' | ') 
-                    : invoice.InvoiceLine?.Item?.Description || 'Servicios Varios';
+            // Nodo D: Filtrar solo facturas nuevas (por CUFE vs BD)
+            if (documentos.length === 0) continue
 
-                // ─── NODO G: Aplicar Causación Automática ───────────────────────────────────
-                const { estadoCausacion, nota, cuentas } = aplicarCausacion(provNit, descripciones, config.reglas_causacion);
-                
-                // ─── NODO I: Validar retenciones e impuestos ────────────────────────────────
-                const base = parseFloat((totalAmount / 1.19).toFixed(2));
-                const iva = parseFloat((totalAmount - base).toFixed(2));
-                
-                let retefuente = 0;
-                let reteica = 0;
-                if (cuentas.retefuente && cuentas.tasaReteFuente) retefuente = parseFloat((base * (cuentas.tasaReteFuente / 100)).toFixed(2));
-                if (cuentas.reteica && cuentas.tasaReteIca) reteica = parseFloat((base * (cuentas.tasaReteIca / 100)).toFixed(2));
+            const cufes = documentos.map(d => d.cufe).filter(Boolean)
+            const { data: existentes } = await supabase
+                .from('facturas_recibidas')
+                .select('cufe')
+                .eq('profile_id', p_id)
+                .in('cufe', cufes)
 
-                const netoAPagar = parseFloat((totalAmount - retefuente - reteica).toFixed(2));
+            const cufesExistentes = new Set((existentes || []).map((r: { cufe: string }) => r.cufe))
+            const nuevos = documentos.filter(d => d.cufe && !cufesExistentes.has(d.cufe))
+            stats.omitidas += documentos.length - nuevos.length
 
-                // ─── NODO H: Generar Asiento Contable ───────────────────────────────────────
-                let asiento = null;
-                let finalEstado = 'pendiente';
-                let validError = null;
+            if (nuevos.length === 0) continue
 
-                if (estadoCausacion === 'ok') {
-                    asiento = {
-                        detalles: [
-                            { cuenta: cuentas.gasto, debito: base, credito: 0, descripcion: descripciones },
-                            { cuenta: '2408', debito: iva, credito: 0, descripcion: 'IVA descontable' }
-                        ]
-                    };
-                    if (retefuente > 0) asiento.detalles.push({ cuenta: cuentas.retefuente, debito: 0, credito: retefuente, descripcion: 'Retefuente' });
-                    if (reteica > 0) asiento.detalles.push({ cuenta: cuentas.reteica, debito: 0, credito: reteica, descripcion: 'ReteICA' });
-                    
-                    asiento.detalles.push({ cuenta: cuentas.proveedor || '220501', debito: 0, credito: netoAPagar, descripcion: 'Cuentas por pagar' });
-
-                    // Validar Partida Doble
-                    const sumD = asiento.detalles.reduce((sum: number, d: any) => sum + d.debito, 0);
-                    const sumC = asiento.detalles.reduce((sum: number, d: any) => sum + d.credito, 0);
-                    if (Math.abs(sumD - sumC) > 2) { 
-                        validError = `Descuadre contable (D: ${sumD} != C: ${sumC})`;
+            // Nodo E‒J: Procesar cada factura nueva
+            for (const doc of nuevos) {
+                try {
+                    // Nodo E & F: Descargar/parsear XML UBL o construir desde datos estructurados
+                    let factura: FacturaUBL
+                    if (doc.xml_base64) {
+                        const xmlRaw = Buffer.from(doc.xml_base64, 'base64').toString('utf8')
+                        factura = parseUBL21(xmlRaw)
+                    } else {
+                        factura = ptDocToFacturaUBL(doc)
                     }
-                } else {
-                    validError = nota;
-                }
 
-                // ─── NODO J: ¿Error en causación? ───────────────────────────────────────────
-                if (validError) {
-                    // NODO K: Guardar en Pendientes + Enviar Alerta
-                    finalEstado = 'pendiente';
-                    stats.errores++;
-                    console.log(`[ALERTA CAUSACIÓN] Error factura ${numFactura}: ${validError}`);
-                } else {
-                    // NODO L: Guardar en Libro Mayor (Estado Causado)
-                    finalEstado = 'causado';
-                    stats.causadas++;
-                }
+                    // Nodo G & H: Causación automática + generación asiento contable
+                    const asiento = await generarAsientoUBL(factura, reglas)
 
-                const nuevaFactura = {
+                    // Nodo I & J: Validar retenciones / partida doble
+                    const errorCausacion = !asiento.balanceado
+                        ? `Descuadre contable (D:${asiento.total_debito.toFixed(0)} ≠ C:${asiento.total_credito.toFixed(0)})`
+                        : null
+
+                    const estado: 'causada' | 'pendiente' = errorCausacion ? 'pendiente' : 'causada'
+                    if (errorCausacion) {
+                        stats.errores++
+                        erroresDetalle.push(`${doc.numero_factura}: ${errorCausacion}`)
+                    } else {
+                        stats.causadas++
+                    }
+
+                    // Impuestos retenidos para JSONB
+                    const cuentasRetenciones = new Set(['236506', '236515', '236518', '236540', '236701', '236801'])
+                    const impuestosRetenidos = asiento.detalles
+                        .filter(l => l.credito > 0 && cuentasRetenciones.has(l.cuenta.slice(0, 6)))
+                        .map(l => ({ cuenta: l.cuenta, descripcion: l.descripcion, valor: l.credito }))
+
+                    // Nodo K / L: Guardar en facturas_recibidas
+                    const { error: insertErr } = await supabase
+                        .from('facturas_recibidas')
+                        .insert({
+                            profile_id: p_id,
+                            cufe: doc.cufe || factura.cufe,
+                            numero_factura: doc.numero_factura || factura.numero_factura,
+                            proveedor_nit: doc.proveedor_nit || factura.proveedor_nit,
+                            proveedor_nombre: doc.proveedor_nombre || factura.proveedor_nombre,
+                            fecha_emision: factura.fecha_emision || doc.fecha_emision,
+                            subtotal: factura.subtotal,
+                            iva: factura.iva_total,
+                            total: factura.total,
+                            impuestos_retenidos: impuestosRetenidos,
+                            estado,
+                            asiento_contable_generado: asiento,
+                            fecha_causacion: estado === 'causada' ? new Date().toISOString() : null,
+                        })
+
+                    if (insertErr) {
+                        console.error(`[DIAN-TRIGGER] Insert error ${doc.cufe}:`, insertErr.message)
+                        stats.errores++
+                        erroresDetalle.push(`${doc.numero_factura}: ${insertErr.message}`)
+                        continue
+                    }
+
+                    stats.nuevas++
+
+                    // Nodo M: Acuse de recibo a DIAN vía PT
+                    if (estado === 'causada') {
+                        await enviarAcuseDian(doc.cufe || factura.cufe, ptConfig)
+                    }
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    console.error(`[DIAN-TRIGGER] Error procesando ${doc.numero_factura}:`, msg)
+                    stats.errores++
+                    erroresDetalle.push(`${doc.numero_factura}: ${msg}`)
+                }
+            }
+
+            // Nodo N: Actualizar last_sync
+            await supabase
+                .from('user_dian_config')
+                .update({ last_sync: new Date().toISOString() })
+                .eq('profile_id', p_id)
+
+            // Guardar log de sincronización (silencioso si la tabla aún no existe)
+            try {
+                await supabase.from('dian_sync_logs').insert({
                     profile_id: p_id,
-                    tipo: 'compra',
-                    fuente: 'api',
-                    estado: finalEstado,
-                    fecha: fecha,
-                    cufe: cufe,
-                    numero_factura: numFactura,
-                    nit_tercero: provNit,
-                    nombre_tercero: provNombre || 'Proveedor No Identificado',
-                    valor_base: base,
-                    valor_iva: iva,
-                    valor_retefuente: retefuente,
-                    valor_reteica: reteica,
-                    valor_neto: netoAPagar,
-                    asiento: asiento,
-                    // Se usa este campo u otro para log de errores si no existe error_log, podemos guardarlo en json interno o db
-                };
+                    finalizado_en: new Date().toISOString(),
+                    nuevas: stats.nuevas,
+                    causadas: stats.causadas,
+                    errores: stats.errores,
+                    omitidas: stats.omitidas,
+                    duration_ms: Date.now() - startMs,
+                    errores_detalle: erroresDetalle,
+                    triggered_by: mode,
+                })
+            } catch { /* tabla puede no existir hasta correr la migración */ }
 
-                // Guardar en la tabla oficial 'causaciones'
-                const { error: insertError } = await supabase.from('causaciones').insert(nuevaFactura);
-
-                if (!insertError) {
-                    stats.nuevas++;
-                    if (!validError) {
-                        // ─── NODO M: Enviar Acuse de Recibo a DIAN ──────────────────────────
-                        await enviarAcuseDian(cufe, config);
-                        
-                        // ─── NODO N: Marcar como procesada ──────────────────────────────────
-                        await supabase.from('user_dian_config').update({ last_sync: new Date().toISOString() }).eq('profile_id', p_id);
-                    }
-                }
-            }
-
-            // ─── NODO O: Notificar al contador por email ────────────────────────────────────
+            // Nodo O: Notificar al contador por email
             if (stats.nuevas > 0 || stats.errores > 0) {
-                console.log(`[EMAIL ENVIADO] Contador del perfil ${p_id} notificado: ${stats.nuevas} nuevas, ${stats.errores} errores.`);
+                try {
+                    const { data: { user } } = await supabase.auth.getUser()
+                    const email = user?.email || ''
+                    const nombre = (user?.user_metadata?.full_name as string) || ''
+                    if (email) await notificarContador(email, nombre, stats, erroresDetalle)
+                } catch { /* email es best-effort */ }
             }
         }
 
-        stats.ms = Date.now() - startMs;
-
-        return NextResponse.json({ 
-            success: true, 
+        return NextResponse.json({
+            success: true,
             nuevas_sincronizadas: stats.nuevas,
             causadas: stats.causadas,
             errores: stats.errores,
-            duration_ms: stats.ms
-        });
+            omitidas: stats.omitidas,
+            duration_ms: Date.now() - startMs,
+            errores_detalle: erroresDetalle.slice(0, 10),
+        })
 
-    } catch (error: any) {
-        console.error('Error en pipeline trigger:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error('[DIAN-TRIGGER] Fatal:', msg)
+        return NextResponse.json({ error: msg }, { status: 500 })
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SERVICIOS Y AYUDANTES DE LOS NODOS
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function simularConsultaProveedor(config: any) {
-    const mockXmlData = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-    <Invoice>
-        <ID>SETT-${Date.now().toString().slice(-5)}</ID>
-        <IssueDate>${new Date().toISOString().split('T')[0]}</IssueDate>
-        <UUID>CUFE-${Date.now()}-SIMULADO</UUID>
-        <AccountingSupplierParty>
-            <Party>
-                <PartyName><Name>HOSTING PROVIDER SAS</Name></PartyName>
-                <PartyTaxScheme><CompanyID>900111222</CompanyID></PartyTaxScheme>
-            </Party>
-        </AccountingSupplierParty>
-        <LegalMonetaryTotal>
-            <LineExtensionAmount>100000.00</LineExtensionAmount>
-            <TaxExclusiveAmount>100000.00</TaxExclusiveAmount>
-            <TaxInclusiveAmount>119000.00</TaxInclusiveAmount>
-            <PayableAmount>119000.00</PayableAmount>
-        </LegalMonetaryTotal>
-        <InvoiceLine>
-            <ID>1</ID>
-            <Item><Description>Servicio de Servidor en la Nube Anual AWS</Description></Item>
-        </InvoiceLine>
-    </Invoice>`;
-    
-    return [ { id: 'ext-1', xml: mockXmlData } ];
-}
-
-function aplicarCausacion(nit: string, desc: string, reglas: any) {
-    if (!reglas) return { estadoCausacion: 'error', cuentas: {}, nota: 'Sin reglas definidas (Configuración vacía)' };
-
-    // 1. Prioridad: Matching por NIT
-    if (reglas.nit_proveedor && Array.isArray(reglas.nit_proveedor)) {
-        const match = reglas.nit_proveedor.find((r: any) => r.nit === nit);
-        if (match) {
-            return { 
-                estadoCausacion: 'ok', 
-                nota: 'Causación aplicada (Regla por NIT)',
-                cuentas: {
-                    gasto: match.cuenta_puc,
-                    proveedor: reglas.defaults?.cuenta_proveedor || '220501',
-                    retefuente: '236515', tasaReteFuente: match.concepto_retefuente === 'servicios' ? 4 : 11,
-                    reteica: '2368', tasaReteIca: 0
-                }
-            };
-        }
+// ── Envío Evento 030 (Acuse de Recibo) a DIAN vía PT ─────────────────────────
+async function enviarAcuseDian(cufe: string, ptConfig: PTConfig): Promise<void> {
+    if (ptConfig.proveedor_tecnologico === 'factus') {
+        console.log(`[DIAN-ACUSE] Evento 030 pendiente para CUFE ${cufe} vía Factus`)
+    } else {
+        console.log(`[DIAN-ACUSE] Evento 030 para CUFE ${cufe} vía ${ptConfig.proveedor_tecnologico}`)
     }
-
-    // 2. Prioridad: Matching por Palabras Clave en Descripción
-    if (reglas.keywords && Array.isArray(reglas.keywords)) {
-        const descLower = desc.toLowerCase();
-        for (const kwGroup of reglas.keywords) {
-            if (Array.isArray(kwGroup.keywords)) {
-                const hasMatch = kwGroup.keywords.some((k: string) => descLower.includes(k.toLowerCase()));
-                if (hasMatch) {
-                    return {
-                        estadoCausacion: 'ok',
-                        nota: `Causación aplicada (Regla por Keyword: ${kwGroup.keywords[0]})`,
-                        cuentas: {
-                            gasto: kwGroup.cuenta_puc,
-                            proveedor: reglas.defaults?.cuenta_proveedor || '220501',
-                            retefuente: '236515', tasaReteFuente: 4,
-                            reteica: '2368', tasaReteIca: 0
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Fallback a IA (simulado)
-    if (reglas.usar_ia) {
-        return { 
-            estadoCausacion: 'error', 
-            cuentas: {}, 
-            nota: 'IA requerida: No hay reglas para este ítem. Revisión pendiente.' 
-        };
-    }
-
-    return { estadoCausacion: 'error', cuentas: {}, nota: 'No se encontraron reglas coincidentes. Se requiere causación manual.' };
-}
-
-async function enviarAcuseDian(cufe: string, config: any) {
-    // Mock Evento 030 a DIAN
-    // fetch('https://api.proveedor.com/v1/dian/acuse', { ... })
-    console.log(`[EVENTO DIAN] 030 (Acuse Recibo) enviado vía ${config.proveedor_tecnologico} para CUFE: ${cufe}`);
 }

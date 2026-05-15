@@ -1,26 +1,30 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'
+import { testConnection, PTConfig } from '@/lib/causacion/pt-adapters'
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const { proveedor_tecnologico, nit_empresa, ambiente, api_key } = body;
+        const body = await req.json()
+        const { proveedor_tecnologico, nit_empresa, ambiente, api_key, api_secret, config_extra } = body
 
-        // Simulamos un test de conexión
         if (!api_key || !proveedor_tecnologico) {
-            return NextResponse.json({ ok: false, message: 'Faltan credenciales para probar la conexión' });
+            return NextResponse.json({ ok: false, message: 'Faltan credenciales para probar la conexión' })
         }
 
-        // Mock de validación (En prod, hacer fetch al PT y validar código de estado 200)
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simula latencia
+        const cfg: PTConfig = {
+            proveedor_tecnologico,
+            api_key,
+            api_secret: api_secret || '',
+            nit_empresa: nit_empresa || '',
+            ambiente: ambiente === 'produccion' ? 'produccion' : 'prueba',
+            config_extra: config_extra || {},
+        }
 
-        return NextResponse.json({ 
-            ok: true, 
-            message: `Conexión exitosa a ${proveedor_tecnologico} en ambiente de ${ambiente}`, 
-            empresa: `Empresa Asociada al NIT ${nit_empresa}` 
-        });
+        const result = await testConnection(cfg)
+        return NextResponse.json(result)
 
-    } catch (error: any) {
-        console.error('Error testing DIAN connection:', error);
-        return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error('Error testing DIAN connection:', msg)
+        return NextResponse.json({ ok: false, message: msg }, { status: 500 })
     }
 }

@@ -123,6 +123,13 @@ const MENU_CATEGORIES = [
                 icon: FileCheck,
                 moduleKey: 'causacion',
             },
+            {
+                name: 'DIAN Auto',
+                desc: 'Descarga automática y monitoreo cron',
+                href: '/dashboard/causacion/automatizacion',
+                icon: Zap,
+                moduleKey: 'causacion',
+            },
         ],
     },
     {

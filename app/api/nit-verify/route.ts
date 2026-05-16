@@ -27,7 +27,7 @@ function getEntityType(base: string): { tipo: string; subtipo: string; esJuridic
 }
 
 function fmtDate(raw: string): string {
-    if (!raw || raw === '99991231' || raw === '0') return '—'
+    if (!raw || raw === '99991231' || raw === '0' || raw === '00000000' || raw === '0000') return '—'
     const s = String(raw).replace(/\D/g, '')
     if (s.length === 8) return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`
     if (s.includes('-')) {
@@ -118,6 +118,14 @@ const CIIU: Record<string, string> = {
     '3900': 'Actividades de saneamiento',
 }
 
+function extractCiudadDept(camara: string): { ciudad: string | null; departamento: string | null } {
+    if (!camara) return { ciudad: null, departamento: null }
+    // Formato: "CIUDAD PARA DEPARTAMENTO" o solo "CIUDAD"
+    const m = camara.match(/^(.+?)\s+PARA\s+(.+)$/i)
+    if (m) return { ciudad: m[1].trim(), departamento: m[2].trim() }
+    return { ciudad: camara.trim(), departamento: null }
+}
+
 function describeCIIU(code: string): string {
     if (!code || code === '9999') return 'No clasificada'
     const clean = code.replace(/\D/g, '')
@@ -180,10 +188,20 @@ export async function GET(req: NextRequest) {
         ciuuPrincipal:       principal ? describeCIIU(principal.cod_ciiu_act_econ_pri) : null,
         ciuuSecundario:      principal ? describeCIIU(principal.cod_ciiu_act_econ_sec || '') : null,
         ciuu3:               principal ? describeCIIU(principal.ciiu3 || '')              : null,
+        ciuu4:               principal ? describeCIIU(principal.ciiu4 || '')              : null,
         representanteLegal:  principal?.representante_legal       || null,
         idRepresentante:     principal?.num_identificacion_representante_legal || null,
         claseIdRL:           principal?.clase_identificacion_rl   || null,
         digitoVerificacion:  principal?.digito_verificacion       || String(expected),
+
+        /* Ubicación (derivada de la Cámara de Comercio — el dataset RUES no tiene municipio directo) */
+        municipio:           principal ? extractCiudadDept(principal.camara_comercio || '').ciudad : null,
+        departamento:        principal ? extractCiudadDept(principal.camara_comercio || '').departamento : null,
+        direccion:           null,
+        telefono:            null,
+        email:               null,
+        tamanoEmpresa:       null,
+        codigoPostal:        null,
 
         /* Registros adicionales (otras cámaras) */
         otrasMatriculas: registros.slice(1).map(r => ({

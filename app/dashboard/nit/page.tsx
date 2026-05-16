@@ -116,14 +116,9 @@ function InfoRow({ label, value, mono = false, highlight = false }: { label: str
     )
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const ANON_KEY    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_ANON_KEY || ''
-
 async function callVerify(nit: string): Promise<NitResult> {
     const cleaned = nit.replace(/\D/g, '')
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/nit-verify?nit=${cleaned}`, {
-        headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}` },
-    })
+    const res = await fetch(`/api/nit-verify?nit=${cleaned}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
 }

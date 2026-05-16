@@ -902,10 +902,7 @@ function RuesMode() {
                         NIT {result.formatted} — Sin registro mercantil
                     </p>
                     <p style={{ fontSize: '11px', color: JA.GREY, margin: '0 0 18px', lineHeight: 1.6 }}>
-                        {result.esJuridica
-                            ? 'Esta empresa no aparece en el Registro Mercantil (RUES). Puede ser entidad pública, cooperativa, o no tener matrícula mercantil vigente.'
-                            : 'Las personas naturales no aparecen en el Registro Mercantil. Consulta el portal DIAN con la cédula para obtener datos del RUT.'
-                        }
+                        No aparece en el Registro Mercantil (RUES). Puede ser entidad sin matrícula mercantil, cooperativa, entidad pública, o persona natural sin actividad comercial registrada.
                     </p>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
                         {[

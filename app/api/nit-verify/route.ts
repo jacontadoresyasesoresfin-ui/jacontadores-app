@@ -140,30 +140,46 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'NIT demasiado corto' }, { status: 400 })
     }
 
-    /* ── Determinar base y dígito ── */
-    const base      = cleaned.slice(0, -1)
-    const givenDig  = parseInt(cleaned.slice(-1))
-    const expected  = calcCheckDigit(base)
-    const valid     = givenDig === expected
-
-    /* ── Consultar RUES / datos.gov.co ── */
+    /* ── Consultar RUES / datos.gov.co ──
+       Estrategia: probar primero con el número completo (para cédulas sin DV),
+       luego con base (número sin último dígito, para NITs con DV adjunto).       */
     let registros: Record<string, string>[] = []
+    let resolvedBase = cleaned.slice(0, -1)
     try {
-        const url = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${base}&$limit=5&$order=ultimo_ano_renovado%20DESC`
-        const res = await fetch(url, { next: { revalidate: 3600 } })
-        if (res.ok) registros = await res.json()
+        const tryFetch = async (id: string) => {
+            const url = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${id}&$limit=10&$order=ultimo_ano_renovado%20DESC`
+            const res = await fetch(url, { next: { revalidate: 3600 } })
+            return res.ok ? (await res.json() as Record<string, string>[]) : []
+        }
+        // 1) Número completo tal como lo escribió el usuario
+        registros = await tryFetch(cleaned)
+        if (registros.length > 0) {
+            resolvedBase = cleaned  // la cédula ES el número de identificación
+        } else {
+            // 2) Sin el último dígito (NIT jurídico con DV adjunto)
+            resolvedBase = cleaned.slice(0, -1)
+            registros = await tryFetch(resolvedBase)
+        }
     } catch {
-        // Red no disponible — continuar con datos locales
+        resolvedBase = cleaned.slice(0, -1)
     }
 
-    /* ── Preparar respuesta ── */
+    /* ── Determinar base y dígito desde el dataset o calcular ── */
     const principal = registros[0] || null
+    const dsBase    = principal?.numero_identificacion || resolvedBase
+    const dsDV      = principal?.digito_verificacion   || ''
+    const base      = dsBase
+    const givenDig  = parseInt(cleaned.slice(-1))
+    const expected  = calcCheckDigit(base)
+    // Si el dataset dio DV, usarlo; si no, calcular o tomar el que puso el usuario
+    const displayDV = dsDV || (registros.length === 0 ? String(givenDig) : String(expected))
+    const valid     = String(expected) === displayDV || givenDig === expected
 
     return NextResponse.json({
         /* Validación */
         valid, nit: cleaned, base,
         checkDigit: expected, providedDigit: givenDig,
-        formatted:  base + '-' + givenDig,
+        formatted:  base + '-' + displayDV,
 
         /* Clasificación por rango */
         tipoRango:  getEntityType(base).tipo,
@@ -179,7 +195,10 @@ export async function GET(req: NextRequest) {
         categoriaMatricula:  principal?.categoria_matricula       || null,
         camaraComercio:      principal?.camara_comercio           || null,
         matricula:           principal?.matricula                 || null,
-        inscripcionProponente: principal?.inscripcion_proponente  || null,
+        inscripcionProponente: (() => {
+            const v = principal?.inscripcion_proponente || ''
+            return /^0+$/.test(v) || !v ? null : v
+        })(),
         fechaMatricula:      principal ? fmtDate(principal.fecha_matricula)  : null,
         fechaRenovacion:     principal ? fmtDate(principal.fecha_renovacion) : null,
         ultimoAnoRenovado:   principal?.ultimo_ano_renovado       || null,

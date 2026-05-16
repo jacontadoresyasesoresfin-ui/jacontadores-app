@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { Search, CheckCircle, XCircle, Building2, User, RefreshCw, Copy,
-         ExternalLink, ChevronDown, ChevronUp, Clock, FileDown, Layers, Hash, AlertCircle } from 'lucide-react'
+         ExternalLink, ChevronDown, ChevronUp, Clock, FileDown, Layers, Hash, AlertCircle,
+         BookOpen, MapPin, Briefcase, Award } from 'lucide-react'
 
 const JA = {
     NAVY: '#13213C', GOLD: '#B8960C', GOLD_PALE: '#F5E9C0',
@@ -66,6 +67,7 @@ interface NitResult {
     tamanoEmpresa: string | null
     codigoPostal: string | null
     otrasMatriculas: { camara: string; matricula: string; estado: string; renovado: string }[]
+    inscripcionProponente?: string | null
 }
 
 type BatchStatus = 'pending' | 'loading' | 'done' | 'error'
@@ -822,9 +824,261 @@ function IndividualMode() {
     )
 }
 
+/* ──────────────────────────── RUES MODE ──────────────────────────── */
+function RuesMode() {
+    const [input,   setInput]   = useState('')
+    const [result,  setResult]  = useState<NitResult | null>(null)
+    const [loading, setLoading] = useState(false)
+    const [error,   setError]   = useState<string | null>(null)
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const search = useCallback(async (value: string) => {
+        const cleaned = value.replace(/\D/g, '')
+        if (cleaned.length < 5) { setResult(null); setError(null); return }
+        setLoading(true)
+        setError(null)
+        try {
+            const data = await callVerify(cleaned)
+            setResult(data)
+        } catch {
+            setError('No se pudo consultar el NIT. Intenta de nuevo.')
+            setResult(null)
+        } finally {
+            setLoading(false)
+        }
+    }, [])
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value.replace(/[^0-9\-]/g, '')
+        setInput(val)
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        debounceRef.current = setTimeout(() => search(val), 700)
+    }
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        search(input)
+    }
+
+    const found = result?.encontrado
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Search */}
+            <div style={{ ...CARD, padding: '20px' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>
+                    Buscar en Registro Mercantil RUES por NIT
+                </p>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', border: `2px solid ${found ? JA.GREEN : error ? JA.RED : JA.BORDER}`, borderRadius: '2px', background: '#FAFAFA', transition: 'border-color 0.2s' }}>
+                        {loading
+                            ? <div style={{ width: 18, height: 18, border: `2px solid ${JA.BORDER}`, borderTopColor: JA.NAVY, borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                            : <BookOpen style={{ width: 18, height: 18, color: JA.GREY_LT, flexShrink: 0 }} />
+                        }
+                        <input
+                            type="text"
+                            placeholder="Ingresa el NIT (con o sin dígito de verificación)"
+                            value={input}
+                            onChange={handleChange}
+                            autoFocus
+                            style={{ border: 'none', outline: 'none', fontSize: '18px', fontWeight: 700, color: JA.NAVY, background: 'none', flex: 1, fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                        />
+                    </div>
+                    <button type="submit" disabled={loading || input.replace(/\D/g, '').length < 5}
+                        style={{ padding: '12px 20px', background: JA.NAVY, color: '#FFF', border: 'none', borderRadius: '2px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: input.replace(/\D/g, '').length < 5 ? 0.5 : 1 }}>
+                        <Search style={{ width: 13, height: 13 }} /> Buscar
+                    </button>
+                </form>
+                {error && (
+                    <p style={{ fontSize: '10px', color: JA.RED, margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <AlertCircle style={{ width: 12, height: 12 }} /> {error}
+                    </p>
+                )}
+            </div>
+
+            {/* No found state */}
+            {result && !found && (
+                <div style={{ ...CARD, padding: '28px 24px', textAlign: 'center' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                        <BookOpen style={{ width: 24, height: 24, color: JA.GREY_LT }} />
+                    </div>
+                    <p style={{ fontSize: '14px', fontWeight: 800, color: JA.NAVY, margin: '0 0 6px' }}>
+                        NIT {result.formatted} — Sin registro mercantil
+                    </p>
+                    <p style={{ fontSize: '11px', color: JA.GREY, margin: '0 0 18px', lineHeight: 1.6 }}>
+                        {result.esJuridica
+                            ? 'Esta empresa no aparece en el Registro Mercantil (RUES). Puede ser entidad pública, cooperativa, o no tener matrícula mercantil vigente.'
+                            : 'Las personas naturales no aparecen en el Registro Mercantil. Consulta el portal DIAN con la cédula para obtener datos del RUT.'
+                        }
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {[
+                            { label: 'RUES Oficial',           url: 'https://www.rues.org.co' },
+                            { label: 'DIAN — Consulta RUT',    url: 'https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces' },
+                            { label: 'Confecámaras',           url: 'https://confecamaras.org.co' },
+                        ].map(({ label, url }) => (
+                            <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', textDecoration: 'none', fontSize: '11px', fontWeight: 600, color: JA.GREY, background: '#FFF' }}>
+                                {label} <ExternalLink style={{ width: 10, height: 10 }} />
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* RUES record card */}
+            {result && found && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Header strip */}
+                    <div style={{ ...CARD, borderLeft: `5px solid ${JA.GOLD}`, padding: '20px 24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: '4px', background: JA.GOLD_PALE, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    {result.esJuridica
+                                        ? <Building2 style={{ width: 22, height: 22, color: JA.GOLD }} />
+                                        : <User style={{ width: 22, height: 22, color: JA.GOLD }} />
+                                    }
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Razón Social / Nombre</p>
+                                    <h2 style={{ fontSize: '18px', fontWeight: 900, color: JA.NAVY, margin: '0 0 8px', lineHeight: 1.2 }}>{result.razonSocial}</h2>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <StatusBadge estado={result.estadoMatricula} />
+                                        {result.categoriaMatricula && (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', background: '#EEF2F8', color: JA.NAVY, borderRadius: '2px', fontSize: '10px', fontWeight: 700 }}>
+                                                <Award style={{ width: 10, height: 10 }} /> {result.categoriaMatricula}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', margin: '0 0 2px' }}>NIT</p>
+                                <p style={{ fontSize: '20px', fontWeight: 900, color: JA.NAVY, margin: 0, fontFamily: 'monospace', letterSpacing: '0.06em' }}>{result.formatted}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Detail grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                        {/* Left: registry data */}
+                        <div style={{ ...CARD, padding: '0' }}>
+                            <div style={{ padding: '12px 18px', background: JA.NAVY, borderRadius: '2px 2px 0 0' }}>
+                                <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GOLD, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                                    Datos de Matrícula Mercantil
+                                </p>
+                            </div>
+                            <div style={{ padding: '0 18px 12px' }}>
+                                <InfoRow label="Número de Matrícula"     value={result.matricula}              mono highlight />
+                                {result.inscripcionProponente && (
+                                    <InfoRow label="Número de Inscripción"   value={result.inscripcionProponente}  mono />
+                                )}
+                                <InfoRow label="Estado Matrícula"        value={result.estadoMatricula}                   />
+                                <InfoRow label="Cámara de Comercio"      value={result.camaraComercio}                    />
+                                <InfoRow label="Categoría"               value={result.categoriaMatricula}                />
+                                <InfoRow label="Persona Natural/Jurídica" value={result.organizacionJuridica}             />
+                                <InfoRow label="Tipo de Sociedad"        value={result.tipoSociedad}                      />
+                                <InfoRow label="Identificación (NIT)"    value={result.formatted}             mono        />
+                                <InfoRow label="Fecha Matrícula"         value={result.fechaMatricula}        mono        />
+                                <InfoRow label="Última Renovación"       value={result.fechaRenovacion}       mono        />
+                                {result.ultimoAnoRenovado && result.ultimoAnoRenovado !== '0' && (
+                                    <InfoRow label="Año Renovado" value={result.ultimoAnoRenovado} mono />
+                                )}
+                                {result.fechaCancelacion && result.fechaCancelacion !== '—' && (
+                                    <InfoRow label="Fecha Cancelación" value={result.fechaCancelacion} mono />
+                                )}
+                                <InfoRow label="Tamaño Empresa"          value={result.tamanoEmpresa}                     />
+                            </div>
+                        </div>
+
+                        {/* Right: location + activity */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div style={{ ...CARD, padding: '0' }}>
+                                <div style={{ padding: '12px 18px', background: JA.TEAL, borderRadius: '2px 2px 0 0' }}>
+                                    <p style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <MapPin style={{ width: 12, height: 12 }} /> Ubicación
+                                    </p>
+                                </div>
+                                <div style={{ padding: '0 18px 12px' }}>
+                                    <InfoRow label="Ciudad / Municipio" value={result.municipio}   highlight />
+                                    <InfoRow label="Departamento"        value={result.departamento}           />
+                                    <InfoRow label="Dirección"           value={result.direccion}              />
+                                    <InfoRow label="Teléfono"            value={result.telefono}    mono       />
+                                    <InfoRow label="Email"               value={result.email}                  />
+                                    <InfoRow label="Código Postal"       value={result.codigoPostal} mono      />
+                                </div>
+                            </div>
+
+                            <div style={{ ...CARD, padding: '0' }}>
+                                <div style={{ padding: '12px 18px', background: '#374151', borderRadius: '2px 2px 0 0' }}>
+                                    <p style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Briefcase style={{ width: 12, height: 12 }} /> Actividad Económica
+                                    </p>
+                                </div>
+                                <div style={{ padding: '0 18px 12px' }}>
+                                    <InfoRow label="CIUU Principal"    value={result.ciuuPrincipal}   highlight />
+                                    {result.ciuuSecundario && !result.ciuuSecundario.includes('No clasificada') && (
+                                        <InfoRow label="CIUU Secundario" value={result.ciuuSecundario} />
+                                    )}
+                                    {result.ciuu3 && !result.ciuu3.includes('No clasificada') && (
+                                        <InfoRow label="CIUU Terciaria" value={result.ciuu3} />
+                                    )}
+                                    {result.ciuu4 && !result.ciuu4.includes('No clasificada') && (
+                                        <InfoRow label="CIUU 4" value={result.ciuu4} />
+                                    )}
+                                    {result.representanteLegal && (
+                                        <>
+                                            <InfoRow label="Representante Legal" value={result.representanteLegal} highlight />
+                                            <InfoRow label="Identificación RL"   value={result.idRepresentante}    mono />
+                                            <InfoRow label="Clase ID RL"         value={result.claseIdRL}          />
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Other chambers */}
+                            {result.otrasMatriculas.length > 0 && (
+                                <div style={CARD}>
+                                    <div style={{ padding: '12px 16px', borderBottom: `1px solid ${JA.BORDER}` }}>
+                                        <p style={{ fontSize: '10px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                                            Otras Cámaras ({result.otrasMatriculas.length})
+                                        </p>
+                                    </div>
+                                    <div style={{ padding: '8px' }}>
+                                        {result.otrasMatriculas.map((m, i) => (
+                                            <div key={i} style={{ padding: '8px 10px', borderRadius: '2px', marginBottom: '4px', background: JA.BG, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div>
+                                                    <p style={{ fontSize: '11px', fontWeight: 700, color: JA.TEXT, margin: 0 }}>{m.camara}</p>
+                                                    <p style={{ fontSize: '9px', color: JA.GREY_LT, margin: '2px 0 0' }}>Mat. {m.matricula} · Ren. {m.renovado}</p>
+                                                </div>
+                                                <span style={{ fontSize: '9px', fontWeight: 700, color: m.estado === 'ACTIVA' ? JA.GREEN : JA.GREY_LT, background: m.estado === 'ACTIVA' ? '#F0FDF4' : JA.BG, border: `1px solid ${m.estado === 'ACTIVA' ? JA.GREEN + '40' : JA.BORDER}`, padding: '2px 8px', borderRadius: '1px' }}>
+                                                    {m.estado}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Source note */}
+                            <div style={{ padding: '10px 14px', background: JA.BG, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Clock style={{ width: 11, height: 11, color: JA.GREY_LT, flexShrink: 0 }} />
+                                <p style={{ fontSize: '9px', color: JA.GREY_LT, margin: 0, lineHeight: 1.5 }}>
+                                    Fuente: RUES — Registro Mercantil (datos.gov.co · Confecámaras) · Actualizado cada 24h
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 /* ──────────────────────────── PAGE ROOT ──────────────────────────── */
 export default function NitPage() {
-    const [mode, setMode] = useState<'individual' | 'lote'>('individual')
+    const [mode, setMode] = useState<'individual' | 'lote' | 'rues'>('individual')
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingBottom: '32px', fontFamily: 'Inter, sans-serif' }}>
@@ -851,9 +1105,14 @@ export default function NitPage() {
                     <Layers style={{ width: 13, height: 13 }} /> Verificación en Lote
                     <span style={{ fontSize: '9px', fontWeight: 700, background: JA.GOLD, color: '#FFF', padding: '1px 6px', borderRadius: '8px' }}>hasta 300</span>
                 </button>
+                <button onClick={() => setMode('rues')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 18px', border: 'none', borderRadius: '2px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: mode === 'rues' ? '#FFF' : 'transparent', color: mode === 'rues' ? JA.NAVY : JA.GREY, boxShadow: mode === 'rues' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', transition: 'all 0.15s' }}>
+                    <BookOpen style={{ width: 13, height: 13 }} /> Registro Mercantil
+                    <span style={{ fontSize: '9px', fontWeight: 700, background: JA.TEAL, color: '#FFF', padding: '1px 6px', borderRadius: '8px' }}>RUES</span>
+                </button>
             </div>
 
-            {mode === 'individual' ? <IndividualMode /> : <LoteMode />}
+            {mode === 'individual' ? <IndividualMode /> : mode === 'lote' ? <LoteMode /> : <RuesMode />}
         </div>
     )
 }

@@ -906,7 +906,7 @@ function RuesMode() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
                         {[
-                            { label: 'RUES Oficial',           url: 'https://www.rues.org.co' },
+                            { label: 'Buscar en RUES',         url: `https://www.rues.org.co/buscar/RM/${result.base}` },
                             { label: 'DIAN — Consulta RUT',    url: 'https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces' },
                             { label: 'Confecámaras',           url: 'https://confecamaras.org.co' },
                         ].map(({ label, url }) => (
@@ -945,9 +945,15 @@ function RuesMode() {
                                     </div>
                                 </div>
                             </div>
-                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', margin: '0 0 2px' }}>NIT</p>
-                                <p style={{ fontSize: '20px', fontWeight: 900, color: JA.NAVY, margin: 0, fontFamily: 'monospace', letterSpacing: '0.06em' }}>{result.formatted}</p>
+                            <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                                <div>
+                                    <p style={{ fontSize: '9px', fontWeight: 700, color: JA.GREY_LT, textTransform: 'uppercase', margin: '0 0 2px' }}>NIT</p>
+                                    <p style={{ fontSize: '20px', fontWeight: 900, color: JA.NAVY, margin: 0, fontFamily: 'monospace', letterSpacing: '0.06em' }}>{result.formatted}</p>
+                                </div>
+                                <a href={`https://www.rues.org.co/buscar/RM/${result.base}`} target="_blank" rel="noopener noreferrer"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 12px', border: `1px solid ${JA.BORDER}`, borderRadius: '2px', textDecoration: 'none', fontSize: '10px', fontWeight: 700, color: JA.TEAL, background: '#FFF' }}>
+                                    <ExternalLink style={{ width: 10, height: 10 }} /> Ver en RUES
+                                </a>
                             </div>
                         </div>
                     </div>

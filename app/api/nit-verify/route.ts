@@ -141,39 +141,44 @@ export async function GET(req: NextRequest) {
     }
 
     /* ── Consultar RUES / datos.gov.co ──
-       Estrategia: probar primero con el número completo (para cédulas sin DV),
-       luego con base (número sin último dígito, para NITs con DV adjunto).       */
+       Estrategia multi-paso para cubrir todos los formatos de NIT:
+       1) Número completo (cédulas y NITs sin DV)
+       2) Sin último dígito (NITs con DV adjunto al número)
+       3) Sin dos últimos dígitos (NITs con DV de 2 dígitos — infrecuente)      */
     let registros: Record<string, string>[] = []
-    let resolvedBase = cleaned.slice(0, -1)
+    let resolvedId = cleaned
     try {
-        const tryFetch = async (id: string) => {
-            const url = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${id}&$limit=10&$order=ultimo_ano_renovado%20DESC`
-            const res = await fetch(url, { next: { revalidate: 3600 } })
-            return res.ok ? (await res.json() as Record<string, string>[]) : []
+        const tryFetch = async (id: string): Promise<Record<string, string>[]> => {
+            if (!id || id.length < 5) return []
+            const url = `https://www.datos.gov.co/resource/c82u-588k.json?numero_identificacion=${encodeURIComponent(id)}&$limit=50&$order=ultimo_ano_renovado%20DESC`
+            const res = await fetch(url, { next: { revalidate: 1800 } })
+            if (!res.ok) return []
+            const data = await res.json() as Record<string, string>[]
+            return Array.isArray(data) ? data : []
         }
-        // 1) Número completo tal como lo escribió el usuario
-        registros = await tryFetch(cleaned)
-        if (registros.length > 0) {
-            resolvedBase = cleaned  // la cédula ES el número de identificación
-        } else {
-            // 2) Sin el último dígito (NIT jurídico con DV adjunto)
-            resolvedBase = cleaned.slice(0, -1)
-            registros = await tryFetch(resolvedBase)
-        }
-    } catch {
-        resolvedBase = cleaned.slice(0, -1)
-    }
 
-    /* ── Determinar base y dígito desde el dataset o calcular ── */
+        // Intentar en orden: número completo → sin último dígito → sin dos últimos
+        const candidates = [cleaned, cleaned.slice(0, -1), cleaned.slice(0, -2)]
+        for (const candidate of candidates) {
+            const data = await tryFetch(candidate)
+            if (data.length > 0) { registros = data; resolvedId = candidate; break }
+        }
+    } catch { /* sin conexión — continuar con datos locales */ }
+
+    /* ── Construir NIT formateado usando los datos del dataset ── */
     const principal = registros[0] || null
-    const dsBase    = principal?.numero_identificacion || resolvedBase
-    const dsDV      = principal?.digito_verificacion   || ''
-    const base      = dsBase
-    const givenDig  = parseInt(cleaned.slice(-1))
-    const expected  = calcCheckDigit(base)
-    // Si el dataset dio DV, usarlo; si no, calcular o tomar el que puso el usuario
-    const displayDV = dsDV || (registros.length === 0 ? String(givenDig) : String(expected))
-    const valid     = String(expected) === displayDV || givenDig === expected
+    const dsId  = principal?.numero_identificacion || resolvedId
+    const dsDV  = principal?.digito_verificacion   || ''
+    // Base para cálculo DIAN = número sin DV
+    const base     = dsId
+    const expected = calcCheckDigit(base)
+    // DV a mostrar: del dataset (fuente oficial) > calculado
+    const displayDV  = dsDV || String(expected)
+    const givenDig   = parseInt(cleaned.slice(-1))
+    // Válido si: el dataset confirma el DV, o la cédula fue encontrada en RUES
+    const valid = registros.length > 0
+        ? (dsDV ? givenDig === parseInt(dsDV) || cleaned === dsId : true)
+        : givenDig === expected
 
     return NextResponse.json({
         /* Validación */

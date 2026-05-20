@@ -7,7 +7,7 @@ import {
     Users, Receipt, Store, CreditCard, Percent, RotateCcw, DollarSign,
     Bell, Settings, FileSpreadsheet, FileCheck, Calculator, Search,
     ChevronDown, BarChart3, PieChart, BookOpen, ShieldCheck, Zap,
-    ArrowRight
+    ArrowRight, Scale
 } from 'lucide-react'
 import { useClient } from '@/app/dashboard/ClientContext'
 
@@ -129,6 +129,13 @@ const MENU_CATEGORIES = [
                 href: '/dashboard/causacion/automatizacion',
                 icon: Zap,
                 moduleKey: 'causacion',
+            },
+            {
+                name: 'Conciliaciones',
+                desc: 'Conciliación bancaria + IVA, Retefuente, ICA',
+                href: '/dashboard/conciliaciones',
+                icon: Scale,
+                moduleKey: 'conciliaciones',
             },
         ],
     },

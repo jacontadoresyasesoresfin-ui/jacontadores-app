@@ -137,6 +137,13 @@ const MENU_CATEGORIES = [
                 icon: Scale,
                 moduleKey: 'conciliaciones',
             },
+            {
+                name: 'Exógenas',
+                desc: 'Medios magnéticos DIAN — Res. 000227/2025',
+                href: '/dashboard/exogenas',
+                icon: FileSpreadsheet,
+                moduleKey: 'exogenas',
+            },
         ],
     },
     {

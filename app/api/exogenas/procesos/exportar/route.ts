@@ -9,7 +9,9 @@ import type { AsientoContable, ConfigExogena, ReglaMapeo, FilaFormato, Resultado
 /**
  * POST /api/exogenas/procesos/exportar
  * Genera el archivo Excel del Prevalidador DIAN con todos los formatos.
- * Body: { config, asientos, reglasOverride?, soloFormatos? }
+ *
+ * Flujo CSV:   { config, asientos }   → re-transforma desde Siigo asientos
+ * Flujo xlsx:  { config, filasFormato } → usa las filas ya estructuradas
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -18,31 +20,45 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     config: ConfigExogena
-    asientos: AsientoContable[]
+    asientos?: AsientoContable[]
+    filasFormato?: Array<{ formatoCodigo: string; filas: FilaFormato[] }>
     reglasOverride?: ReglaMapeo[]
     soloFormatos?: string[]
   }
 
-  const { config, asientos, reglasOverride, soloFormatos } = body
-  if (!config || !Array.isArray(asientos)) {
-    return NextResponse.json({ error: 'Se requiere config y asientos' }, { status: 400 })
+  const { config, asientos, filasFormato, reglasOverride, soloFormatos } = body
+  if (!config) {
+    return NextResponse.json({ error: 'Se requiere config' }, { status: 400 })
   }
-
-  const reglas: ReglaMapeo[] = [...REGLAS_DEFAULT_2025, ...(reglasOverride ?? [])]
-  const engine = new RulesEngine(reglas)
-  const formatosAExportar = soloFormatos ?? config.formatos
 
   const resultados: ResultadoTransformacion<FilaFormato>[] = []
 
-  for (const codigoFormato of formatosAExportar) {
-    const estrategia = FormatoRegistry.obtener(codigoFormato)
-    if (!estrategia) continue
+  if (filasFormato?.length) {
+    // ── Flujo xlsx: las filas ya vienen estructuradas, solo validar y totalizar ──
+    for (const { formatoCodigo, filas } of filasFormato) {
+      const estrategia = FormatoRegistry.obtener(formatoCodigo)
+      if (!estrategia) continue
+      const excepciones = estrategia.validar(filas)
+      const totales = estrategia.totalizar(filas)
+      resultados.push({ formatoCodigo, filas, excepciones, totales, cuentasSinRegla: [] })
+    }
+  } else {
+    // ── Flujo CSV: re-transformar desde Siigo asientos con RulesEngine ──────────
+    if (!Array.isArray(asientos)) {
+      return NextResponse.json({ error: 'Se requiere asientos (flujo CSV) o filasFormato (flujo xlsx)' }, { status: 400 })
+    }
+    const reglas: ReglaMapeo[] = [...REGLAS_DEFAULT_2025, ...(reglasOverride ?? [])]
+    const engine = new RulesEngine(reglas)
+    const formatosAExportar = soloFormatos ?? config.formatos
 
-    const filas = estrategia.transformar(asientos, engine)
-    const excepciones = estrategia.validar(filas)
-    const totales = estrategia.totalizar(filas)
-
-    resultados.push({ formatoCodigo: codigoFormato, filas, excepciones, totales, cuentasSinRegla: [] })
+    for (const codigoFormato of formatosAExportar) {
+      const estrategia = FormatoRegistry.obtener(codigoFormato)
+      if (!estrategia) continue
+      const filas = estrategia.transformar(asientos, engine)
+      const excepciones = estrategia.validar(filas)
+      const totales = estrategia.totalizar(filas)
+      resultados.push({ formatoCodigo: codigoFormato, filas, excepciones, totales, cuentasSinRegla: [] })
+    }
   }
 
   const generator = new ExcelGenerator()

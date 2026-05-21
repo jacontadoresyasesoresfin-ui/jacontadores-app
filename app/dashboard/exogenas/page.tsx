@@ -51,6 +51,7 @@ interface ResultadoFinal {
   tarjetasExcepciones: TarjetaExcepcion[]
   resumenExcepciones: { criticas: number; alertas: number; informativas: number; descripcionResumen: string }
   asientosParaExportar: unknown[]
+  filasFormatoParaExportar?: Array<{ formatoCodigo: string; filas: unknown[] }>
   configParaExportar: unknown
 }
 
@@ -402,9 +403,20 @@ export default function ExogenasPage() {
       const res = await fetch('/api/exogenas/procesos/exportar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: resultado.configParaExportar, asientos: resultado.asientosParaExportar }),
+        body: JSON.stringify({
+          config: resultado.configParaExportar,
+          asientos: resultado.asientosParaExportar,
+          filasFormato: resultado.filasFormatoParaExportar,
+        }),
       })
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
+      if (!res.ok) {
+        let msg = `Error al exportar (${res.status})`
+        try {
+          const texto = await res.text()
+          try { msg = (JSON.parse(texto) as { error?: string }).error ?? msg } catch { if (texto) msg += ': ' + texto.replace(/<[^>]*>/g, '').trim().slice(0, 200) }
+        } catch { /* ignorar */ }
+        throw new Error(msg)
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

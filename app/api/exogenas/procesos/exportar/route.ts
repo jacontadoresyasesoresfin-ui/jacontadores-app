@@ -116,7 +116,10 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err)
-    console.error('[exportar] Error al generar Excel:', mensaje)
-    return NextResponse.json({ error: `Error al generar el archivo: ${mensaje}` }, { status: 500 })
+    const linea = err instanceof Error
+      ? (err.stack ?? '').split('\n').slice(1, 4).map(l => l.trim()).join(' → ')
+      : ''
+    console.error('[exportar] Error:', mensaje, linea)
+    return NextResponse.json({ error: `${mensaje} | ${linea}` }, { status: 500 })
   }
 }

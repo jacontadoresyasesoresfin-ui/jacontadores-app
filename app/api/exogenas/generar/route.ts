@@ -228,7 +228,8 @@ export async function POST(req: NextRequest) {
               })),
               tarjetasExcepciones: tarjetasXlsx,
               resumenExcepciones: resumenXlsx,
-              asientosParaExportar: xlsxResult.formatos.flatMap(f => f.filas),
+              asientosParaExportar: [],
+              filasFormatoParaExportar: resultadosXlsx.map(r => ({ formatoCodigo: r.formatoCodigo, filas: r.filas })),
               configParaExportar: config,
             },
           })

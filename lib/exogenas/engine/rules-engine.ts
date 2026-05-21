@@ -59,6 +59,7 @@ export class RulesEngine {
   // ── Helpers privados ───────────────────────────────────────────────────
 
   private matchCuenta(cuenta: string, patron: string): boolean {
+    if (!cuenta || !patron) return false
     if (patron.endsWith('%')) {
       // Wildcard: '51%' matchea '5120', '5125', etc.
       return cuenta.startsWith(patron.slice(0, -1))

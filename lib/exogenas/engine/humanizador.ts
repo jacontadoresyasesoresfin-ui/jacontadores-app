@@ -59,7 +59,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     case 'tercero_sin_identificar':
       return {
         excepcionOriginal: e,
-        icono: '❓',
+        icono: 'question-circle',
         titulo: 'No sé a quién se le pagó este dinero',
         explicacion: [
           fmt(e.valorInvolucrado) && `Encontré un pago de ${fmt(e.valorInvolucrado)}`,
@@ -80,7 +80,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
       const dvCorrecto = e.sugerencia?.match(/DV calculado:\s*(\d)/)?.[1] ?? e.sugerencia?.match(/corrija el DV a (\d)/i)?.[1]
       return {
         excepcionOriginal: e,
-        icono: '🔢',
+        icono: 'hashtag',
         titulo: `El NIT ${contexto.terceroId} tiene el dígito de verificación incorrecto`,
         explicacion: `El dígito de verificación registrado no coincide con el que calcula la DIAN para ese NIT. ${dvCorrecto ? `El correcto es ${dvCorrecto}.` : ''} Esto puede causar que la DIAN rechace el archivo.`,
         impacto: 'Si el dígito de verificación está mal, la DIAN puede invalidar el reporte de este tercero.',
@@ -97,7 +97,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
       const dvCalculado = e.sugerencia?.match(/DV calculado:\s*(\d)/)?.[1]
       return {
         excepcionOriginal: e,
-        icono: '🔢',
+        icono: 'hashtag',
         titulo: `El NIT ${contexto.terceroId} no tiene dígito de verificación`,
         explicacion: `Este NIT está registrado sin el dígito de verificación. ${dvCalculado ? `Según el cálculo de la DIAN, el dígito correcto es ${dvCalculado}.` : 'Necesito el dígito para completar el reporte.'}`,
         impacto: 'La DIAN valida el dígito de verificación. Un NIT incompleto puede ser rechazado.',
@@ -113,7 +113,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     case 'concepto_invalido':
       return {
         excepcionOriginal: e,
-        icono: '🏷',
+        icono: 'tag',
         titulo: `No sé cómo clasificar la cuenta ${contexto.cuenta} para la DIAN`,
         explicacion: `La cuenta ${contexto.cuenta}${contexto.nombreCuenta ? ` — ${contexto.nombreCuenta}` : ''} tiene movimientos por ${fmt(e.valorInvolucrado)} que no están asociados a ninguna categoría del formulario de exógenas. El sistema no sabe en qué renglón del reporte incluirlos.`,
         impacto: 'Estos valores no se incluirán en ningún formato de la exógena hasta que se defina la categoría.',
@@ -127,7 +127,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     case 'retencion_inconsistente':
       return {
         excepcionOriginal: e,
-        icono: '⚠️',
+        icono: 'triangle-warning',
         titulo: 'La retención parece más alta de lo normal',
         explicacion: `Para ${fila?.razonSocial ?? fila?.numeroId ?? 'este tercero'}, la retención registrada es ${fmt(e.valorInvolucrado)}, que supera el valor del pago. Esto no es posible — la retención nunca puede ser mayor que el valor del servicio o compra.`,
         impacto: 'Un dato de retención incorrecto puede generar inconsistencias frente a la declaración de retención en la fuente.',
@@ -142,7 +142,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     case 'tercero_sin_nombre':
       return {
         excepcionOriginal: e,
-        icono: '👤',
+        icono: 'user-circle',
         titulo: `El NIT ${contexto.terceroId} no tiene nombre registrado`,
         explicacion: `Encontré movimientos por ${fmt(e.valorInvolucrado)} para el NIT ${contexto.terceroId} pero no hay un nombre o razón social registrado en la contabilidad. El archivo de la DIAN debe incluir el nombre del tercero.`,
         impacto: 'La DIAN puede rechazar registros sin nombre del tercero identificado.',
@@ -157,7 +157,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     case 'ingreso_negativo':
       return {
         excepcionOriginal: e,
-        icono: '🔄',
+        icono: 'arrows-rotate',
         titulo: 'Las devoluciones superan el valor registrado',
         explicacion: `Para ${fila?.razonSocial ?? fila?.numeroId ?? 'este tercero'}, el valor neto después de devoluciones y descuentos es negativo: ${fmt(e.valorInvolucrado)}. Esto generalmente indica que hay devoluciones registradas sin su compra o venta original.`,
         impacto: 'Un valor neto negativo no se puede reportar a la DIAN. Este registro será excluido automáticamente.',
@@ -171,7 +171,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     default:
       return {
         excepcionOriginal: e,
-        icono: '⚠️',
+        icono: 'triangle-warning',
         titulo: 'Situación que requiere revisión',
         explicacion: e.descripcion,
         impacto: e.sugerencia ?? 'Revise este registro antes de enviar a la DIAN.',

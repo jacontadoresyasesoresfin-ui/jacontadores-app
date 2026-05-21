@@ -58,11 +58,11 @@ interface ResultadoFinal {
 type Vista = 'inicio' | 'procesando' | 'resumen' | 'excepciones' | 'listo'
 
 const ETAPAS_INICIALES: EtapaUI[] = [
-  { num: 1, titulo: 'Leer archivo de Siigo',   icono: '📂', estado: 'pendiente', detalles: [], subformatos: [] },
-  { num: 2, titulo: 'Cargar reglas DIAN 2025', icono: '📋', estado: 'pendiente', detalles: [], subformatos: [] },
-  { num: 3, titulo: 'Analizar movimientos',     icono: '🔍', estado: 'pendiente', detalles: [], subformatos: [] },
-  { num: 4, titulo: 'Generar formatos DIAN',    icono: '📊', estado: 'pendiente', detalles: [], subformatos: [] },
-  { num: 5, titulo: 'Validar excepciones',      icono: '✅', estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 1, titulo: 'Leer archivo de Siigo',   icono: 'folder-open',       estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 2, titulo: 'Cargar reglas DIAN 2025', icono: 'document-list',     estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 3, titulo: 'Analizar movimientos',     icono: 'magnifying-glass',  estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 4, titulo: 'Generar formatos DIAN',    icono: 'chart-bar',         estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 5, titulo: 'Validar excepciones',      icono: 'shield-check',      estado: 'pendiente', detalles: [], subformatos: [] },
 ]
 
 const STORAGE_KEY = 'ja_exogenas_config_v2'
@@ -412,8 +412,9 @@ export default function ExogenasPage() {
       <div style={{ background: JA.NAVY, padding: '14px 28px', display: 'flex', alignItems: 'center', gap: '14px',
         position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ width: '36px', height: '36px', background: JA.GOLD, borderRadius: '2px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '18px', fontWeight: 800, color: JA.NAVY, flexShrink: 0 }}>E</div>
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name="file-spreadsheet" size={20} style={{ color: JA.NAVY }} />
+        </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: JA.WHITE }}>Exógenas DIAN 2025</div>
           <div style={{ fontSize: '11px', color: '#94A3B8' }}>Medios magnéticos · Res. 000227/2025 · AG {config.anioGravable}</div>
@@ -433,7 +434,8 @@ export default function ExogenasPage() {
           <div style={{ padding: '12px 16px', background: JA.RED_BG, border: '1px solid #FECACA',
             borderRadius: '2px', color: JA.RED, fontSize: '13px', marginBottom: '20px',
             display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <span>⚠</span><span>{error}</span>
+            <Icon name="triangle-warning" size={16} style={{ color: JA.RED, flexShrink: 0, marginTop: '1px' }} />
+            <span>{error}</span>
           </div>
         )}
 
@@ -552,7 +554,9 @@ export default function ExogenasPage() {
                 <input ref={fileRef} type="file" accept=".csv,.txt,.CSV" style={{ display: 'none' }} onChange={onFileChange} />
                 {!archivo ? (
                   <>
-                    <div style={{ fontSize: '36px', marginBottom: '8px' }}>📂</div>
+                    <div style={{ marginBottom: '10px', color: JA.GREY }}>
+                      <Icon name="folder-open" size={40} />
+                    </div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: JA.TEXT, marginBottom: '5px' }}>
                       Arrastre aquí el archivo .csv de Siigo
                     </div>
@@ -567,7 +571,9 @@ export default function ExogenasPage() {
                   </>
                 ) : (
                   <>
-                    <div style={{ fontSize: '32px', marginBottom: '6px' }}>✅</div>
+                    <div style={{ marginBottom: '6px', color: JA.GREEN }}>
+                      <Icon name="check-circle" size={32} />
+                    </div>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: JA.GREEN, marginBottom: '3px' }}>{archivo.name}</div>
                     <div style={{ fontSize: '12px', color: JA.GREY, marginBottom: '10px' }}>
                       {(archivo.size / 1024).toFixed(0)} KB · listo para procesar
@@ -590,7 +596,7 @@ export default function ExogenasPage() {
               {/* Descarga CSV de prueba */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
                 background: JA.BLUE_BG, border: '1px solid #BFDBFE', borderRadius: '2px' }}>
-                <span style={{ fontSize: '13px' }}>🧪</span>
+                <Icon name="beaker" size={16} style={{ color: JA.BLUE, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '11px', fontWeight: 600, color: JA.BLUE }}>¿Sin archivo de Siigo? Use el CSV de prueba</div>
                   <div style={{ fontSize: '10px', color: JA.GREY }}>Datos ficticios con cuentas PUC reales para verificar que el sistema funciona</div>
@@ -666,7 +672,7 @@ export default function ExogenasPage() {
                   cursor: puedeGenerar ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                   transition: 'background 0.2s' }}>
-                <span style={{ fontSize: '20px' }}>⚡</span>
+                <Icon name="bolt" size={18} />
                 {puedeGenerar
                   ? `Generar Exógenas AG ${config.anioGravable} — ${config.formatosSeleccionados.length} formato(s)`
                   : 'Complete los campos requeridos para continuar'}
@@ -740,12 +746,18 @@ export default function ExogenasPage() {
                         background: completada ? '#D1FAE5' : activa ? '#DBEAFE' : conError ? '#FEE2E2' : JA.SURFACE,
                         border: `2px solid ${colorBorde}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
-                        {completada ? '✓' : conError ? '✗' : activa ? <Spinner /> : etapa.num}
+                        {completada
+                          ? <Icon name="check" size={14} style={{ color: JA.GREEN }} />
+                          : conError
+                          ? <Icon name="x-mark" size={14} style={{ color: JA.RED }} />
+                          : activa ? <Spinner /> : <span style={{ fontSize: '12px', fontWeight: 700, color: JA.GREY }}>{etapa.num}</span>}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '13px', fontWeight: 600,
-                          color: completada ? JA.GREEN : activa ? JA.BLUE : conError ? JA.RED : JA.GREY }}>
-                          {etapa.icono} {etapa.titulo}
+                          color: completada ? JA.GREEN : activa ? JA.BLUE : conError ? JA.RED : JA.GREY,
+                          display: 'flex', alignItems: 'center', gap: '7px' }}>
+                          <Icon name={etapa.icono} size={14} style={{ flexShrink: 0 }} />
+                          {etapa.titulo}
                         </div>
                         {activa && <div style={{ fontSize: '11px', color: JA.GREY, marginTop: '2px' }}>En proceso…</div>}
                       </div>
@@ -771,7 +783,11 @@ export default function ExogenasPage() {
                               color: f.estado === 'pendiente' ? JA.GREY : JA.WHITE,
                               borderRadius: '2px', display: 'inline-flex', alignItems: 'center',
                               justifyContent: 'center', fontSize: '9px', fontWeight: 800, flexShrink: 0 }}>
-                              {f.estado === 'ok' ? '✓' : f.estado === 'activa' ? '…' : f.codigo}
+                              {f.estado === 'ok'
+                                ? <Icon name="check" size={10} />
+                                : f.estado === 'activa'
+                                ? <Spinner />
+                                : <span style={{ fontSize: '9px', fontWeight: 800 }}>{f.codigo}</span>}
                             </span>
                             <span style={{ color: JA.TEXT, fontWeight: 500 }}>
                               Formato {f.codigo}{f.nombre && <span style={{ color: JA.GREY, fontWeight: 400 }}> — {f.nombre}</span>}
@@ -797,9 +813,8 @@ export default function ExogenasPage() {
             <div style={{ background: JA.NAVY, borderRadius: '2px', padding: '14px 18px',
               display: 'flex', gap: '14px', alignItems: 'center' }}>
               <div style={{ width: '42px', height: '42px', background: JA.GOLD, borderRadius: '2px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '16px', fontWeight: 800, color: JA.NAVY, flexShrink: 0 }}>
-                {config.razonSocial.charAt(0)}
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon name="building-office" size={22} style={{ color: JA.NAVY }} />
               </div>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: 700, color: JA.WHITE }}>{config.razonSocial}</div>
@@ -813,8 +828,9 @@ export default function ExogenasPage() {
             <div style={{ background: resultado.resumenExcepciones.criticas > 0 ? JA.AMBER_BG : JA.GREEN_BG,
               border: `1px solid ${resultado.resumenExcepciones.criticas > 0 ? '#FDE68A' : '#BBF7D0'}`,
               borderRadius: '4px', padding: '20px 22px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '8px' }}>
-                {resultado.resumenExcepciones.criticas > 0 ? '⚠️' : '✅'}
+              <div style={{ marginBottom: '10px',
+                color: resultado.resumenExcepciones.criticas > 0 ? JA.AMBER : JA.GREEN }}>
+                <Icon name={resultado.resumenExcepciones.criticas > 0 ? 'triangle-warning' : 'check-circle'} size={28} />
               </div>
               <div style={{ fontSize: '17px', fontWeight: 700, color: JA.TEXT, marginBottom: '4px' }}>
                 {resultado.resumenExcepciones.criticas === 0
@@ -892,7 +908,9 @@ export default function ExogenasPage() {
               <div style={{ padding: '0 18px 14px' }}>
                 {etapas.filter(e => e.estado === 'ok').map(e => (
                   <div key={e.num} style={{ marginTop: '10px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: JA.TEXT }}>{e.icono} {e.titulo}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: JA.TEXT, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Icon name={e.icono} size={12} />{e.titulo}
+                    </div>
                     {e.detalles.map((d, i) => (
                       <div key={i} style={{ fontSize: '11px', color: JA.GREY, paddingLeft: '16px', marginTop: '3px' }}>└─ {d}</div>
                     ))}
@@ -913,7 +931,7 @@ export default function ExogenasPage() {
                   style={{ padding: '15px', background: JA.NAVY, color: JA.WHITE, border: 'none',
                     borderRadius: '4px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  🔍 Revisar {resultado.tarjetasExcepciones.length} situación(es) pendientes
+                  <Icon name="magnifying-glass" size={16} /> Revisar {resultado.tarjetasExcepciones.length} situación(es) pendientes
                 </button>
               )}
               <button onClick={exportarExcel} disabled={exportando}
@@ -925,7 +943,7 @@ export default function ExogenasPage() {
                   fontWeight: resultado.tarjetasExcepciones.length === 0 ? 700 : 400,
                   cursor: exportando ? 'wait' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                ⬇ {exportando ? 'Generando Excel…' : 'Descargar Excel para el Prevalidador DIAN'}
+                <Icon name="arrow-down-tray" size={16} /> {exportando ? 'Generando Excel…' : 'Descargar Excel para el Prevalidador DIAN'}
               </button>
             </div>
           </div>
@@ -977,7 +995,10 @@ export default function ExogenasPage() {
                     background: resuelta ? JA.GREEN_BG : tarjeta.excepcionOriginal.severidad === 'alta' ? JA.RED_BG : JA.AMBER_BG,
                     borderBottom: `1px solid ${resuelta ? '#BBF7D0' : tarjeta.excepcionOriginal.severidad === 'alta' ? '#FECACA' : '#FDE68A'}`,
                     display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '26px' }}>{resuelta ? '✅' : tarjeta.icono}</span>
+                    <div style={{ flexShrink: 0, marginTop: '2px',
+                      color: resuelta ? JA.GREEN : tarjeta.excepcionOriginal.severidad === 'alta' ? JA.RED : JA.AMBER }}>
+                      <Icon name={resuelta ? 'check-circle' : tarjeta.icono} size={24} />
+                    </div>
                     <div>
                       <div style={{ fontSize: '15px', fontWeight: 700, color: JA.TEXT }}>
                         {resuelta ? 'Situación resuelta' : tarjeta.titulo}
@@ -1097,7 +1118,9 @@ export default function ExogenasPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: JA.GREEN_BG, border: '1px solid #BBF7D0', borderRadius: '4px',
               padding: '28px', textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎉</div>
+              <div style={{ marginBottom: '12px', color: JA.GREEN }}>
+                <Icon name="check-circle" size={48} />
+              </div>
               <div style={{ fontSize: '20px', fontWeight: 800, color: JA.TEXT, marginBottom: '6px' }}>
                 Exógenas listas para la DIAN
               </div>
@@ -1114,7 +1137,7 @@ export default function ExogenasPage() {
                   borderRadius: '4px', fontSize: '15px', fontWeight: 800,
                   cursor: exportando ? 'wait' : 'pointer',
                   display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px' }}>⬇</span>
+                <Icon name="arrow-down-tray" size={18} />
                 {exportando ? 'Generando…' : 'Descargar Excel para el Prevalidador DIAN'}
               </button>
               <div style={{ fontSize: '11px', color: JA.GREY, marginTop: '12px' }}>
@@ -1177,11 +1200,11 @@ function Campo({ label, requerido, children }: { label: string; requerido?: bool
 function ValidacionItem({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <span style={{ width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
+      <div style={{ width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
         background: ok ? JA.GREEN : JA.BORDER, display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: JA.WHITE }}>
-        {ok ? '✓' : ''}
-      </span>
+        alignItems: 'center', justifyContent: 'center', color: JA.WHITE }}>
+        {ok && <Icon name="check" size={10} style={{ color: JA.WHITE }} />}
+      </div>
       <span style={{ fontSize: '12px', color: ok ? JA.GREEN : JA.GREY }}>{label}</span>
     </div>
   )
@@ -1211,6 +1234,52 @@ function etiquetaAccion(accion: AccionExcepcion): string {
   }
   return m[accion] ?? accion
 }
+
+// ── Iconos SVG — sin emojis ───────────────────────────────────────────────────
+type IconName =
+  | 'folder-open' | 'document-list' | 'magnifying-glass' | 'chart-bar' | 'shield-check'
+  | 'bolt' | 'beaker' | 'arrow-down-tray' | 'triangle-warning' | 'check-circle'
+  | 'check' | 'x-mark' | 'question-circle' | 'hashtag' | 'tag' | 'user-circle'
+  | 'arrows-rotate' | 'building-office' | 'file-spreadsheet'
+
+function Icon({ name, size = 16, style }: { name: string; size?: number; style?: React.CSSProperties }) {
+  const paths: Record<string, React.ReactNode> = {
+    'folder-open': <><path d="M2 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1H2V6z"/><path d="M1 10a1 1 0 011-1h18a1 1 0 01.97 1.243l-2 8A1 1 0 0118 19H3a1 1 0 01-.97-.757l-2-8A1 1 0 011 9v1z" opacity=".6"/></>,
+    'document-list': <><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></>,
+    'magnifying-glass': <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    'chart-bar': <><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></>,
+    'shield-check': <><path d="M12 2l7 4v5c0 5-3.5 9.74-7 11C8.5 20.74 5 16 5 11V6l7-4z"/><polyline points="9 12 11 14 15 10"/></>,
+    'bolt': <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
+    'beaker': <><path d="M9 3h6M9 3v7l-4.5 8.5A1 1 0 005.4 20h13.2a1 1 0 00.9-1.5L15 10V3M9 3H7m8 0h2"/><line x1="9" y1="14" x2="15" y2="14"/></>,
+    'arrow-down-tray': <><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></>,
+    'triangle-warning': <><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    'check-circle': <><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+    'check': <polyline points="20 6 9 17 4 12"/>,
+    'x-mark': <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    'question-circle': <><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    'hashtag': <><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>,
+    'tag': <><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
+    'user-circle': <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    'arrows-rotate': <><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/></>,
+    'building-office': <><path d="M3 21h18M6 21V7a2 2 0 012-2h8a2 2 0 012 2v14M3 7h18"/><path d="M9 21v-4a1 1 0 011-1h4a1 1 0 011 1v4"/><rect x="9" y="9" width="2" height="2"/><rect x="13" y="9" width="2" height="2"/><rect x="9" y="13" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/></>,
+    'file-spreadsheet': <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="12" y1="11" x2="12" y2="19"/></>,
+  }
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth={1.8}
+      strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      {paths[name] ?? null}
+    </svg>
+  )
+}
+
+// supress unused type warning
+const _iconNames: IconName[] = []
+void _iconNames
 
 const JA_CONST = JA
 

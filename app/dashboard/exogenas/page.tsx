@@ -65,6 +65,14 @@ const ETAPAS_INICIALES: EtapaUI[] = [
   { num: 5, titulo: 'Validar excepciones',      icono: 'shield-check',      estado: 'pendiente', detalles: [], subformatos: [] },
 ]
 
+const ETAPAS_XLSX_INICIALES: EtapaUI[] = [
+  { num: 1, titulo: 'Leer archivo xlsx',        icono: 'folder-open',       estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 2, titulo: 'Detectar formatos DIAN',   icono: 'document-list',     estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 3, titulo: 'Validar registros',         icono: 'magnifying-glass',  estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 4, titulo: 'Generar formatos DIAN',    icono: 'chart-bar',         estado: 'pendiente', detalles: [], subformatos: [] },
+  { num: 5, titulo: 'Validar excepciones',      icono: 'shield-check',      estado: 'pendiente', detalles: [], subformatos: [] },
+]
+
 const STORAGE_KEY = 'ja_exogenas_config_v2'
 const FORMATOS_DISPONIBLES = ['1001', '1005', '1006', '1007', '1010']
 
@@ -117,6 +125,7 @@ export default function ExogenasPage() {
 
   const [vista, setVista] = useState<Vista>('inicio')
   const [archivo, setArchivo] = useState<File | null>(null)
+  const [tipoArchivo, setTipoArchivo] = useState<'csv' | 'xlsx' | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
   const [exportando, setExportando] = useState(false)
@@ -173,17 +182,27 @@ export default function ExogenasPage() {
     actualizarConfig('formatosSeleccionados', next)
   }
 
+  // ── Detectar tipo de archivo ────────────────────────────────────────────────
+  const detectarTipo = (nombre: string): 'csv' | 'xlsx' | null => {
+    if (nombre.match(/\.(xlsx|xls)$/i)) return 'xlsx'
+    if (nombre.match(/\.(csv|txt)$/i)) return 'csv'
+    return null
+  }
+
   // ── Drag & drop ─────────────────────────────────────────────────────────────
   const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragOver(true) }
   const onDragLeave = () => setDragOver(false)
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
     const f = e.dataTransfer.files[0]
-    if (f && f.name.match(/\.(csv|txt|CSV)$/i)) { setArchivo(f); setError('') }
-    else setError('Cargue un archivo .csv exportado desde Siigo.')
+    if (!f) return
+    const tipo = detectarTipo(f.name)
+    if (tipo) { setArchivo(f); setTipoArchivo(tipo); setError('') }
+    else setError('Cargue un archivo .csv de Siigo o un .xlsx del prevalidador DIAN.')
   }
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (f) { setArchivo(f); setError('') }
+    const f = e.target.files?.[0]
+    if (f) { setArchivo(f); setTipoArchivo(detectarTipo(f.name)); setError('') }
   }
 
   // ── Validación ───────────────────────────────────────────────────────────────
@@ -227,13 +246,25 @@ export default function ExogenasPage() {
         setPorcentaje(20)
       }
       if (e === 2) {
-        agregarDetalle(2, `${d.totalReglas} reglas PUC → Formato DIAN cargadas`)
-        if (Number(d.reglasPersonalizadas) > 0) agregarDetalle(2, `${d.reglasPersonalizadas} reglas personalizadas de su empresa`)
+        if (Array.isArray(d.formatosXlsx)) {
+          // xlsx mode
+          const fmts = d.formatosXlsx as string[]
+          agregarDetalle(2, `${fmts.length} formato(s) DIAN detectado(s): ${fmts.join(', ')}`)
+        } else {
+          agregarDetalle(2, `${d.totalReglas} reglas PUC → Formato DIAN cargadas`)
+          if (Number(d.reglasPersonalizadas) > 0) agregarDetalle(2, `${d.reglasPersonalizadas} reglas personalizadas de su empresa`)
+        }
         setPorcentaje(35)
       }
       if (e === 3) {
-        agregarDetalle(3, `${d.cuentasUnicas} cuentas PUC distintas en el período`)
-        agregarDetalle(3, `${d.tercerosUnicos} terceros únicos identificados`)
+        if (d.registrosValidados != null) {
+          // xlsx mode
+          agregarDetalle(3, `${Number(d.registrosValidados).toLocaleString('es-CO')} registros validados`)
+          agregarDetalle(3, `${d.tercerosUnicos} terceros únicos identificados`)
+        } else {
+          agregarDetalle(3, `${d.cuentasUnicas} cuentas PUC distintas en el período`)
+          agregarDetalle(3, `${d.tercerosUnicos} terceros únicos identificados`)
+        }
         setPorcentaje(45)
       }
       if (e === 4) setPorcentaje(85)
@@ -278,7 +309,7 @@ export default function ExogenasPage() {
     if (!puedeGenerar || !archivo) return
     setVista('procesando')
     setError('')
-    setEtapas(ETAPAS_INICIALES)
+    setEtapas(tipoArchivo === 'xlsx' ? ETAPAS_XLSX_INICIALES : ETAPAS_INICIALES)
     setPorcentaje(0)
     setResultado(null)
     setIndiceExcepcion(0)
@@ -352,7 +383,10 @@ export default function ExogenasPage() {
 
       // Stream terminó sin evento 'fin' ni 'error' → informar al usuario
       if (!recibiFinEvent) {
-        throw new Error('El proceso terminó sin generar resultados. Verifique que el archivo CSV sea el Libro Auxiliar completo de Siigo con movimientos del período.')
+        const hint = tipoArchivo === 'xlsx'
+          ? 'El proceso terminó sin generar resultados. Verifique que el archivo xlsx sea el del prevalidador DIAN con hojas nombradas "1001", "1005", etc.'
+          : 'El proceso terminó sin generar resultados. Verifique que el archivo CSV sea el Libro Auxiliar completo de Siigo con movimientos del período.'
+        throw new Error(hint)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de conexión con el servidor.')
@@ -394,7 +428,7 @@ export default function ExogenasPage() {
   }
 
   const reiniciar = () => {
-    setVista('inicio'); setArchivo(null); setResultado(null); setError('')
+    setVista('inicio'); setArchivo(null); setTipoArchivo(null); setResultado(null); setError('')
     setEtapas(ETAPAS_INICIALES); setPorcentaje(0)
     setExcepcionesResueltas(new Map()); setIndiceExcepcion(0)
     if (fileRef.current) fileRef.current.value = ''
@@ -542,8 +576,8 @@ export default function ExogenasPage() {
               </Campo>
             </Seccion>
 
-            {/* ─── SECCIÓN 2: Archivo de Siigo ─── */}
-            <Seccion num="2" titulo="Libro auxiliar de Siigo" requerido>
+            {/* ─── SECCIÓN 2: Archivo de entrada ─── */}
+            <Seccion num="2" titulo="Archivo contable" requerido>
               <div
                 onClick={() => !archivo && fileRef.current?.click()}
                 onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
@@ -551,22 +585,29 @@ export default function ExogenasPage() {
                   borderRadius: '4px', padding: '28px 20px', textAlign: 'center',
                   background: dragOver ? JA.BLUE_BG : archivo ? JA.GREEN_BG : JA.WHITE,
                   cursor: archivo ? 'default' : 'pointer', transition: 'all 0.15s' }}>
-                <input ref={fileRef} type="file" accept=".csv,.txt,.CSV" style={{ display: 'none' }} onChange={onFileChange} />
+                <input ref={fileRef} type="file" accept=".csv,.txt,.CSV,.xlsx,.xls" style={{ display: 'none' }} onChange={onFileChange} />
                 {!archivo ? (
                   <>
                     <div style={{ marginBottom: '10px', color: JA.GREY }}>
                       <Icon name="folder-open" size={40} />
                     </div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: JA.TEXT, marginBottom: '5px' }}>
-                      Arrastre aquí el archivo .csv de Siigo
+                      Arrastre aquí el archivo de su software contable
                     </div>
                     <div style={{ fontSize: '12px', color: JA.GREY, marginBottom: '12px' }}>
                       o haga clic para buscar en su computador
                     </div>
-                    <div style={{ fontSize: '11px', color: JA.GREY, background: JA.SURFACE, borderRadius: '2px',
-                      padding: '8px 14px', display: 'inline-block', textAlign: 'left', lineHeight: '1.7' }}>
-                      <strong>¿Cómo exportar desde Siigo Nube?</strong><br />
-                      Contabilidad → Libros → Libro Auxiliar → seleccione <em>Todo el año {config.anioGravable}</em> → Exportar CSV
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: '11px', color: JA.GREY, background: JA.SURFACE, borderRadius: '2px',
+                        padding: '8px 14px', textAlign: 'left', lineHeight: '1.7', flex: '1 1 200px', maxWidth: '260px' }}>
+                        <strong>Siigo Nube (.csv)</strong><br />
+                        Contabilidad → Libros → Libro Auxiliar → seleccione <em>Todo el año {config.anioGravable}</em> → Exportar CSV
+                      </div>
+                      <div style={{ fontSize: '11px', color: JA.GREY, background: JA.SURFACE, borderRadius: '2px',
+                        padding: '8px 14px', textAlign: 'left', lineHeight: '1.7', flex: '1 1 200px', maxWidth: '260px' }}>
+                        <strong>World Office / Helisa / Aspel (.xlsx)</strong><br />
+                        Exporte el Formato 1001 directamente desde el módulo de Exógenas de su software
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -575,10 +616,13 @@ export default function ExogenasPage() {
                       <Icon name="check-circle" size={32} />
                     </div>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: JA.GREEN, marginBottom: '3px' }}>{archivo.name}</div>
-                    <div style={{ fontSize: '12px', color: JA.GREY, marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', color: JA.GREY, marginBottom: '4px' }}>
                       {(archivo.size / 1024).toFixed(0)} KB · listo para procesar
                     </div>
-                    <button onClick={e => { e.stopPropagation(); setArchivo(null); if (fileRef.current) fileRef.current.value = '' }}
+                    <div style={{ fontSize: '11px', color: tipoArchivo === 'xlsx' ? JA.BLUE : JA.GREY, marginBottom: '10px' }}>
+                      {tipoArchivo === 'xlsx' ? 'Formato prevalidador DIAN (.xlsx)' : 'Libro auxiliar Siigo (.csv)'}
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); setArchivo(null); setTipoArchivo(null); if (fileRef.current) fileRef.current.value = '' }}
                       style={{ padding: '5px 12px', background: 'transparent', border: `1px solid ${JA.BORDER}`,
                         borderRadius: '2px', fontSize: '12px', color: JA.GREY, cursor: 'pointer' }}>
                       Cambiar archivo
@@ -587,18 +631,28 @@ export default function ExogenasPage() {
                 )}
               </div>
 
-              <div style={{ fontSize: '11px', color: JA.GREY, padding: '8px 12px', background: JA.AMBER_BG,
-                border: '1px solid #FDE68A', borderRadius: '2px', lineHeight: '1.6', marginTop: '4px' }}>
-                <strong>Importante:</strong> El libro auxiliar debe incluir <em>todos los movimientos del año {config.anioGravable}</em>,
-                con las columnas de tercero (NIT/CC), cuenta PUC, débitos y créditos. Exporte en formato CSV con detalle de movimientos.
-              </div>
+              {tipoArchivo !== 'xlsx' && (
+                <div style={{ fontSize: '11px', color: JA.GREY, padding: '8px 12px', background: JA.AMBER_BG,
+                  border: '1px solid #FDE68A', borderRadius: '2px', lineHeight: '1.6', marginTop: '4px' }}>
+                  <strong>Importante:</strong> El libro auxiliar debe incluir <em>todos los movimientos del año {config.anioGravable}</em>,
+                  con las columnas de tercero (NIT/CC), cuenta PUC, débitos y créditos. Exporte en formato CSV con detalle de movimientos.
+                </div>
+              )}
+
+              {tipoArchivo === 'xlsx' && (
+                <div style={{ fontSize: '11px', color: JA.GREY, padding: '8px 12px', background: JA.BLUE_BG,
+                  border: '1px solid #BFDBFE', borderRadius: '2px', lineHeight: '1.6', marginTop: '4px' }}>
+                  <strong>Archivo xlsx detectado:</strong> El sistema leerá directamente las hojas del prevalidador DIAN (1001, 1005, etc.)
+                  sin necesidad de aplicar reglas de mapeo. Asegúrese de que el archivo contenga todos los formatos del año {config.anioGravable}.
+                </div>
+              )}
 
               {/* Descarga CSV de prueba */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
                 background: JA.BLUE_BG, border: '1px solid #BFDBFE', borderRadius: '2px' }}>
                 <Icon name="beaker" size={16} style={{ color: JA.BLUE, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: JA.BLUE }}>¿Sin archivo de Siigo? Use el CSV de prueba</div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: JA.BLUE }}>¿Sin archivo? Use el CSV de prueba de Siigo</div>
                   <div style={{ fontSize: '10px', color: JA.GREY }}>Datos ficticios con cuentas PUC reales para verificar que el sistema funciona</div>
                 </div>
                 <a href="/libro-auxiliar-prueba.csv" download

@@ -1,8 +1,9 @@
 /**
  * POST /api/exogenas/generar — Streaming NDJSON
  *
- * Emite eventos JSON line-by-line para que la UI muestre cada etapa
- * en tiempo real. El cliente lee el stream con fetch + ReadableStream.
+ * Acepta dos tipos de archivo:
+ *   - CSV Libro Auxiliar de Siigo  → parsea + aplica RulesEngine → genera formatos DIAN
+ *   - xlsx prevalidador DIAN       → ya viene estructurado por hoja; solo valida y totaliza
  *
  * Eventos emitidos:
  *   etapa_inicio  — etapa N arranca
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { parsearSiigoCsv } from '@/lib/exogenas/parsers/siigo-csv-parser'
+import { parsearXlsxFormato } from '@/lib/exogenas/parsers/xlsx-formato-parser'
 import { humanizarExcepciones, resumirExcepciones } from '@/lib/exogenas/engine/humanizador'
 import { RulesEngine } from '@/lib/exogenas/engine/rules-engine'
 import { FormatoRegistry } from '@/lib/exogenas/registry/formato-registry'
@@ -35,6 +37,9 @@ export async function POST(req: NextRequest) {
 
   const contentType = req.headers.get('content-type') ?? ''
   let csvTexto = ''
+  let archivoBuffer: Buffer = Buffer.alloc(0)
+  let nombreArchivo = ''
+  let esXlsx = false
   let config: ConfigExogena = {
     anioGravable: 2025, nitDeclarante: '', razonSocial: '',
     tipoDeclarante: 'contribuyente', municipioCodigo: '11001',
@@ -45,11 +50,15 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const archivo = formData.get('archivo') as File | null
     if (!archivo) {
-      return new Response(JSON.stringify({ tipo: 'error', mensaje: 'Se requiere el archivo CSV de Siigo.' }) + '\n', { status: 400 })
+      return new Response(JSON.stringify({ tipo: 'error', mensaje: 'Se requiere el archivo (CSV de Siigo o xlsx del prevalidador DIAN).' }) + '\n', { status: 400 })
     }
-    const buffer = Buffer.from(await archivo.arrayBuffer())
-    csvTexto = buffer.toString('utf-8')
-    if (csvTexto.includes('�')) csvTexto = buffer.toString('latin1')
+    archivoBuffer = Buffer.from(await archivo.arrayBuffer())
+    nombreArchivo = archivo.name.toLowerCase()
+    esXlsx = nombreArchivo.endsWith('.xlsx') || nombreArchivo.endsWith('.xls')
+    if (!esXlsx) {
+      csvTexto = archivoBuffer.toString('utf-8')
+      if (csvTexto.includes('�')) csvTexto = archivoBuffer.toString('latin1')
+    }
     const configStr = formData.get('config') as string | null
     if (configStr) config = { ...config, ...JSON.parse(configStr) }
   } else {
@@ -57,10 +66,10 @@ export async function POST(req: NextRequest) {
     if (body.config) config = body.config
   }
 
-  // ── Cargar reglas del tenant ───────────────────────────────────────────
+  // ── Cargar reglas del tenant (solo se usan en flujo CSV) ──────────────
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
   const reglasExtra: typeof REGLAS_DEFAULT_2025 = []
-  if (profile?.tenant_id) {
+  if (!esXlsx && profile?.tenant_id) {
     const { data } = await supabase.from('exogenas_reglas_mapeo').select('*').eq('tenant_id', profile.tenant_id).eq('activo', true)
     if (data) reglasExtra.push(...(data as typeof REGLAS_DEFAULT_2025))
   }
@@ -73,73 +82,14 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(encoder.encode(JSON.stringify(event) + '\n')) } catch { /* closed */ }
       }
 
-      try {
-        // ══ ETAPA 1: Leer CSV ════════════════════════════════════════════
-        emit({ tipo: 'etapa_inicio', etapa: 1 })
-
-        const parseado = parsearSiigoCsv(csvTexto)
-        const { asientos, advertencias, empresaDetectada, periodoDetectado, totalFilas, filasFallidas } = parseado
-
-        if (!asientos.length) {
-          emit({ tipo: 'error', mensaje: 'No se encontraron movimientos. Verifique que exportó el Libro Auxiliar con detalle de movimientos.' })
-          controller.close(); return
-        }
-
-        emit({
-          tipo: 'etapa_ok', etapa: 1,
-          datos: { asientosCont: asientos.length, empresa: empresaDetectada, periodo: periodoDetectado, totalFilas, filasFallidas, advertencias },
-        })
-
-        // ══ ETAPA 2: Cargar reglas ═══════════════════════════════════════
-        emit({ tipo: 'etapa_inicio', etapa: 2 })
-        const engine = new RulesEngine([...REGLAS_DEFAULT_2025, ...reglasExtra])
-        const totalReglas = REGLAS_DEFAULT_2025.length + reglasExtra.length
-        emit({ tipo: 'etapa_ok', etapa: 2, datos: { totalReglas, reglasPersonalizadas: reglasExtra.length } })
-
-        // ══ ETAPA 3: Analizar movimientos ════════════════════════════════
-        emit({ tipo: 'etapa_inicio', etapa: 3 })
-        const cuentasUnicas = new Set(asientos.map(a => a.cuentaPuc)).size
-        const tercerosUnicos = new Set(asientos.map(a => a.tercero.numeroId).filter(Boolean)).size
-        // Pequeña pausa artificial para que la contadora vea esta etapa
-        await new Promise(r => setTimeout(r, 120))
-        emit({ tipo: 'etapa_ok', etapa: 3, datos: { cuentasUnicas, tercerosUnicos } })
-
-        // ══ ETAPA 4: Generar formatos ════════════════════════════════════
-        emit({ tipo: 'etapa_inicio', etapa: 4 })
-        const formatos = config.formatos?.length ? config.formatos : DEFAULT_FORMATOS
-        const resultados: ResultadoTransformacion<FilaFormato>[] = []
-
-        for (const codigo of formatos) {
-          emit({ tipo: 'formato_inicio', codigo })
-          await new Promise(r => setTimeout(r, 80)) // visible progress
-
-          const estrategia = FormatoRegistry.obtener(codigo)
-          if (!estrategia) continue
-
-          const filas = estrategia.transformar(asientos, engine)
-          const excepciones = estrategia.validar(filas)
-          const totales = estrategia.totalizar(filas)
-          resultados.push({ formatoCodigo: codigo, filas, excepciones, totales, cuentasSinRegla: [] })
-
-          // Primer campo monetario del formato como total principal
-          const campoMonto = Object.keys(totales).find(k => k !== 'totalFilas' && k.startsWith('total'))
-          const montoPrincipal = campoMonto ? totales[campoMonto] : 0
-
-          emit({
-            tipo: 'formato_ok', codigo,
-            datos: {
-              totalFilas: totales.totalFilas,
-              montoPrincipal,
-              montoFormateado: COP.format(montoPrincipal),
-              excepcionesCnt: excepciones.length,
-              nombre: FormatoRegistry.listar().find(f => f.codigo === codigo)?.nombre ?? '',
-            },
-          })
-        }
-
+      // Helper compartido: cerrar etapa 4 + emitir etapa 5 con excepciones
+      const emitirEtapas45 = async (
+        resultados: ResultadoTransformacion<FilaFormato>[],
+        cuentasSinReglaCount: number,
+      ) => {
         emit({ tipo: 'etapa_ok', etapa: 4, datos: { formatosGenerados: resultados.length } })
 
-        // ══ ETAPA 5: Validar excepciones ════════════════════════════════
+        // ══ ETAPA 5: Validar excepciones ═════════════════════════════════
         emit({ tipo: 'etapa_inicio', etapa: 5 })
         await new Promise(r => setTimeout(r, 100))
 
@@ -148,49 +98,245 @@ export async function POST(req: NextRequest) {
         )
         const tarjetas = humanizarExcepciones(todasExcepciones)
         const resumenExcepciones = resumirExcepciones(tarjetas)
-        const cuentasSinRegla = engine.cuentasSinRegla(asientos)
 
         emit({
           tipo: 'etapa_ok', etapa: 5,
-          datos: { totalExcepciones: tarjetas.length, criticas: resumenExcepciones.criticas, alertas: resumenExcepciones.alertas, cuentasSinRegla: cuentasSinRegla.length },
-        })
-
-        // ══ Persistir proceso en DB ══════════════════════════════════════
-        if (profile?.tenant_id && config.nitDeclarante) {
-          await supabase.from('exogenas_procesos').insert({
-            tenant_id: profile.tenant_id, creado_por: user.id,
-            anio_gravable: config.anioGravable,
-            periodo_inicio: new Date(`${config.anioGravable}-01-01`).toISOString(),
-            periodo_fin: new Date(`${config.anioGravable}-12-31`).toISOString(),
-            nit_declarante: config.nitDeclarante, tipo_declarante: config.tipoDeclarante,
-            formatos_incluidos: config.formatos, estado: 'revision',
-            total_registros: resultados.reduce((s, r) => s + r.totales.totalFilas, 0),
-            total_excepciones: tarjetas.length, log_proceso: advertencias,
-          })
-        }
-
-        // ══ FIN — resultado completo ═════════════════════════════════════
-        emit({
-          tipo: 'fin',
           datos: {
-            asientosProcesados: asientos.length,
-            advertenciasCsv: advertencias,
-            metaCsv: { empresa: empresaDetectada, periodo: periodoDetectado },
-            cuentasSinRegla,
-            resumenFormatos: resultados.map(r => ({
-              codigo: r.formatoCodigo,
-              nombre: FormatoRegistry.listar().find(f => f.codigo === r.formatoCodigo)?.nombre ?? '',
-              totalFilas: r.totales.totalFilas,
-              totales: r.totales,
-              excepcionesCriticas: r.excepciones.filter(e => e.severidad === 'alta').length,
-              excepcionesMedia: r.excepciones.filter(e => e.severidad === 'media').length,
-            })),
-            tarjetasExcepciones: tarjetas,
-            resumenExcepciones,
-            asientosParaExportar: asientos,
-            configParaExportar: config,
+            totalExcepciones: tarjetas.length,
+            criticas: resumenExcepciones.criticas,
+            alertas: resumenExcepciones.alertas,
+            cuentasSinRegla: cuentasSinReglaCount,
           },
         })
+
+        return { tarjetas, resumenExcepciones }
+      }
+
+      try {
+        if (esXlsx) {
+          // ══════════════════════════════════════════════════════════════
+          // FLUJO xlsx — Prevalidador DIAN (ya estructurado por hoja)
+          // ══════════════════════════════════════════════════════════════
+
+          // ══ ETAPA 1: Leer xlsx ════════════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 1 })
+          const xlsxResult = parsearXlsxFormato(archivoBuffer)
+
+          if (!xlsxResult.formatosDetectados.length) {
+            emit({ tipo: 'error', mensaje: xlsxResult.advertencias[0] ?? 'No se encontraron hojas con formato DIAN en el archivo xlsx. Las hojas deben llamarse "1001", "1005", etc.' })
+            controller.close(); return
+          }
+
+          const totalRegistrosXlsx = xlsxResult.formatos.reduce((s, f) => s + f.totalRegistros, 0)
+          emit({
+            tipo: 'etapa_ok', etapa: 1,
+            datos: {
+              asientosCont: totalRegistrosXlsx,
+              empresa: xlsxResult.softwareDetectado ?? 'Archivo xlsx DIAN',
+              periodo: String(config.anioGravable),
+              totalFilas: xlsxResult.formatos.reduce((s, f) => s + f.totalFilas, 0),
+              filasFallidas: 0,
+              advertencias: xlsxResult.advertencias,
+            },
+          })
+
+          // ══ ETAPA 2: Detectar formatos ════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 2 })
+          await new Promise(r => setTimeout(r, 100))
+          emit({
+            tipo: 'etapa_ok', etapa: 2,
+            datos: {
+              formatosXlsx: xlsxResult.formatosDetectados,
+              totalReglas: xlsxResult.formatosDetectados.length,
+              reglasPersonalizadas: 0,
+            },
+          })
+
+          // ══ ETAPA 3: Validar registros ════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 3 })
+          const tercerosXlsx = new Set(
+            xlsxResult.formatos.flatMap(f => f.filas.map(r => r.numeroId).filter(Boolean))
+          ).size
+          await new Promise(r => setTimeout(r, 120))
+          emit({
+            tipo: 'etapa_ok', etapa: 3,
+            datos: { registrosValidados: totalRegistrosXlsx, tercerosUnicos: tercerosXlsx },
+          })
+
+          // ══ ETAPA 4: Generar formatos ══════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 4 })
+          const resultadosXlsx: ResultadoTransformacion<FilaFormato>[] = []
+
+          for (const formatoXlsx of xlsxResult.formatos) {
+            const codigo = formatoXlsx.codigo
+            emit({ tipo: 'formato_inicio', codigo })
+            await new Promise(r => setTimeout(r, 80))
+
+            const estrategia = FormatoRegistry.obtener(codigo)
+            if (!estrategia) continue
+
+            const filas = formatoXlsx.filas as unknown as FilaFormato[]
+            const excepciones = estrategia.validar(filas)
+            const totales = estrategia.totalizar(filas)
+            resultadosXlsx.push({ formatoCodigo: codigo, filas, excepciones, totales, cuentasSinRegla: [] })
+
+            const campoMonto = Object.keys(totales).find(k => k !== 'totalFilas' && k.startsWith('total'))
+            const montoPrincipal = campoMonto ? totales[campoMonto] : 0
+
+            emit({
+              tipo: 'formato_ok', codigo,
+              datos: {
+                totalFilas: totales.totalFilas,
+                montoPrincipal,
+                montoFormateado: COP.format(montoPrincipal),
+                excepcionesCnt: excepciones.length,
+                nombre: FormatoRegistry.listar().find(f => f.codigo === codigo)?.nombre ?? '',
+              },
+            })
+          }
+
+          const { tarjetas: tarjetasXlsx, resumenExcepciones: resumenXlsx } =
+            await emitirEtapas45(resultadosXlsx, 0)
+
+          if (profile?.tenant_id && config.nitDeclarante) {
+            await supabase.from('exogenas_procesos').insert({
+              tenant_id: profile.tenant_id, creado_por: user.id,
+              anio_gravable: config.anioGravable,
+              periodo_inicio: new Date(`${config.anioGravable}-01-01`).toISOString(),
+              periodo_fin: new Date(`${config.anioGravable}-12-31`).toISOString(),
+              nit_declarante: config.nitDeclarante, tipo_declarante: config.tipoDeclarante,
+              formatos_incluidos: xlsxResult.formatosDetectados, estado: 'revision',
+              total_registros: totalRegistrosXlsx,
+              total_excepciones: tarjetasXlsx.length, log_proceso: xlsxResult.advertencias,
+            })
+          }
+
+          emit({
+            tipo: 'fin',
+            datos: {
+              asientosProcesados: totalRegistrosXlsx,
+              advertenciasCsv: xlsxResult.advertencias,
+              metaCsv: { empresa: xlsxResult.softwareDetectado ?? 'Prevalidador DIAN', periodo: String(config.anioGravable) },
+              cuentasSinRegla: [],
+              resumenFormatos: resultadosXlsx.map(r => ({
+                codigo: r.formatoCodigo,
+                nombre: FormatoRegistry.listar().find(f => f.codigo === r.formatoCodigo)?.nombre ?? '',
+                totalFilas: r.totales.totalFilas,
+                totales: r.totales,
+                excepcionesCriticas: r.excepciones.filter(e => e.severidad === 'alta').length,
+                excepcionesMedia: r.excepciones.filter(e => e.severidad === 'media').length,
+              })),
+              tarjetasExcepciones: tarjetasXlsx,
+              resumenExcepciones: resumenXlsx,
+              asientosParaExportar: xlsxResult.formatos.flatMap(f => f.filas),
+              configParaExportar: config,
+            },
+          })
+
+        } else {
+          // ══════════════════════════════════════════════════════════════
+          // FLUJO CSV — Libro Auxiliar Siigo
+          // ══════════════════════════════════════════════════════════════
+
+          // ══ ETAPA 1: Leer CSV ═════════════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 1 })
+
+          const parseado = parsearSiigoCsv(csvTexto)
+          const { asientos, advertencias, empresaDetectada, periodoDetectado, totalFilas, filasFallidas } = parseado
+
+          if (!asientos.length) {
+            emit({ tipo: 'error', mensaje: 'No se encontraron movimientos. Verifique que exportó el Libro Auxiliar con detalle de movimientos.' })
+            controller.close(); return
+          }
+
+          emit({
+            tipo: 'etapa_ok', etapa: 1,
+            datos: { asientosCont: asientos.length, empresa: empresaDetectada, periodo: periodoDetectado, totalFilas, filasFallidas, advertencias },
+          })
+
+          // ══ ETAPA 2: Cargar reglas ════════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 2 })
+          const engine = new RulesEngine([...REGLAS_DEFAULT_2025, ...reglasExtra])
+          const totalReglas = REGLAS_DEFAULT_2025.length + reglasExtra.length
+          emit({ tipo: 'etapa_ok', etapa: 2, datos: { totalReglas, reglasPersonalizadas: reglasExtra.length } })
+
+          // ══ ETAPA 3: Analizar movimientos ═════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 3 })
+          const cuentasUnicas = new Set(asientos.map(a => a.cuentaPuc)).size
+          const tercerosUnicos = new Set(asientos.map(a => a.tercero.numeroId).filter(Boolean)).size
+          await new Promise(r => setTimeout(r, 120))
+          emit({ tipo: 'etapa_ok', etapa: 3, datos: { cuentasUnicas, tercerosUnicos } })
+
+          // ══ ETAPA 4: Generar formatos ═════════════════════════════════
+          emit({ tipo: 'etapa_inicio', etapa: 4 })
+          const formatos = config.formatos?.length ? config.formatos : DEFAULT_FORMATOS
+          const resultados: ResultadoTransformacion<FilaFormato>[] = []
+
+          for (const codigo of formatos) {
+            emit({ tipo: 'formato_inicio', codigo })
+            await new Promise(r => setTimeout(r, 80))
+
+            const estrategia = FormatoRegistry.obtener(codigo)
+            if (!estrategia) continue
+
+            const filas = estrategia.transformar(asientos, engine)
+            const excepciones = estrategia.validar(filas)
+            const totales = estrategia.totalizar(filas)
+            resultados.push({ formatoCodigo: codigo, filas, excepciones, totales, cuentasSinRegla: [] })
+
+            const campoMonto = Object.keys(totales).find(k => k !== 'totalFilas' && k.startsWith('total'))
+            const montoPrincipal = campoMonto ? totales[campoMonto] : 0
+
+            emit({
+              tipo: 'formato_ok', codigo,
+              datos: {
+                totalFilas: totales.totalFilas,
+                montoPrincipal,
+                montoFormateado: COP.format(montoPrincipal),
+                excepcionesCnt: excepciones.length,
+                nombre: FormatoRegistry.listar().find(f => f.codigo === codigo)?.nombre ?? '',
+              },
+            })
+          }
+
+          const cuentasSinRegla = engine.cuentasSinRegla(asientos)
+          const { tarjetas, resumenExcepciones } = await emitirEtapas45(resultados, cuentasSinRegla.length)
+
+          if (profile?.tenant_id && config.nitDeclarante) {
+            await supabase.from('exogenas_procesos').insert({
+              tenant_id: profile.tenant_id, creado_por: user.id,
+              anio_gravable: config.anioGravable,
+              periodo_inicio: new Date(`${config.anioGravable}-01-01`).toISOString(),
+              periodo_fin: new Date(`${config.anioGravable}-12-31`).toISOString(),
+              nit_declarante: config.nitDeclarante, tipo_declarante: config.tipoDeclarante,
+              formatos_incluidos: config.formatos, estado: 'revision',
+              total_registros: resultados.reduce((s, r) => s + r.totales.totalFilas, 0),
+              total_excepciones: tarjetas.length, log_proceso: advertencias,
+            })
+          }
+
+          emit({
+            tipo: 'fin',
+            datos: {
+              asientosProcesados: asientos.length,
+              advertenciasCsv: advertencias,
+              metaCsv: { empresa: empresaDetectada, periodo: periodoDetectado },
+              cuentasSinRegla,
+              resumenFormatos: resultados.map(r => ({
+                codigo: r.formatoCodigo,
+                nombre: FormatoRegistry.listar().find(f => f.codigo === r.formatoCodigo)?.nombre ?? '',
+                totalFilas: r.totales.totalFilas,
+                totales: r.totales,
+                excepcionesCriticas: r.excepciones.filter(e => e.severidad === 'alta').length,
+                excepcionesMedia: r.excepciones.filter(e => e.severidad === 'media').length,
+              })),
+              tarjetasExcepciones: tarjetas,
+              resumenExcepciones,
+              asientosParaExportar: asientos,
+              configParaExportar: config,
+            },
+          })
+        }
 
       } catch (err) {
         emit({ tipo: 'error', mensaje: err instanceof Error ? err.message : 'Error inesperado al generar las exógenas.' })

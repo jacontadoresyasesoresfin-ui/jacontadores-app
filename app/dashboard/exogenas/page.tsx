@@ -296,12 +296,36 @@ export default function ExogenasPage() {
       formatos: config.formatosSeleccionados,
     }))
 
+    let recibiFinEvent = false
     try {
       const res = await fetch('/api/exogenas/generar', { method: 'POST', body: fd })
-      if (!res.body) throw new Error('Sin respuesta del servidor.')
+
+      // Si el servidor responde con error HTTP, mostrar el mensaje real
+      if (!res.ok) {
+        let detalle = `Error del servidor (${res.status})`
+        try {
+          const texto = await res.text()
+          // Intentar parsear como NDJSON (el servidor podría enviar {tipo:'error',...})
+          const lineas = texto.split('\n').filter(l => l.trim())
+          for (const linea of lineas) {
+            try {
+              const ev = JSON.parse(linea) as Evento
+              if (ev.tipo === 'error' && ev.mensaje) { detalle = ev.mensaje; break }
+            } catch { /* no es JSON */ }
+          }
+          // Si no había JSON, mostrar los primeros caracteres del texto
+          if (detalle.startsWith('Error del servidor') && texto) {
+            detalle += ': ' + texto.replace(/<[^>]*>/g, '').trim().slice(0, 200)
+          }
+        } catch { /* ignorar */ }
+        throw new Error(detalle)
+      }
+
+      if (!res.body) throw new Error('El servidor no devolvió datos (sin stream).')
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -310,12 +334,28 @@ export default function ExogenasPage() {
         buffer = lineas.pop() ?? ''
         for (const linea of lineas) {
           if (!linea.trim()) continue
-          try { procesarEvento(JSON.parse(linea) as Evento) } catch { /* ignorar */ }
+          try {
+            const ev = JSON.parse(linea) as Evento
+            if (ev.tipo === 'fin') recibiFinEvent = true
+            procesarEvento(ev)
+          } catch { /* ignorar línea malformada */ }
         }
       }
-      if (buffer.trim()) try { procesarEvento(JSON.parse(buffer) as Evento) } catch { /* ignorar */ }
+      // Procesar residuo final
+      if (buffer.trim()) {
+        try {
+          const ev = JSON.parse(buffer) as Evento
+          if (ev.tipo === 'fin') recibiFinEvent = true
+          procesarEvento(ev)
+        } catch { /* ignorar */ }
+      }
+
+      // Stream terminó sin evento 'fin' ni 'error' → informar al usuario
+      if (!recibiFinEvent) {
+        throw new Error('El proceso terminó sin generar resultados. Verifique que el archivo CSV sea el Libro Auxiliar completo de Siigo con movimientos del período.')
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error de conexión.')
+      setError(e instanceof Error ? e.message : 'Error de conexión con el servidor.')
       setVista('inicio')
     }
   }, [puedeGenerar, archivo, config, procesarEvento])
@@ -545,6 +585,21 @@ export default function ExogenasPage() {
                 border: '1px solid #FDE68A', borderRadius: '2px', lineHeight: '1.6', marginTop: '4px' }}>
                 <strong>Importante:</strong> El libro auxiliar debe incluir <em>todos los movimientos del año {config.anioGravable}</em>,
                 con las columnas de tercero (NIT/CC), cuenta PUC, débitos y créditos. Exporte en formato CSV con detalle de movimientos.
+              </div>
+
+              {/* Descarga CSV de prueba */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
+                background: JA.BLUE_BG, border: '1px solid #BFDBFE', borderRadius: '2px' }}>
+                <span style={{ fontSize: '13px' }}>🧪</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: JA.BLUE }}>¿Sin archivo de Siigo? Use el CSV de prueba</div>
+                  <div style={{ fontSize: '10px', color: JA.GREY }}>Datos ficticios con cuentas PUC reales para verificar que el sistema funciona</div>
+                </div>
+                <a href="/libro-auxiliar-prueba.csv" download
+                  style={{ padding: '5px 12px', background: JA.BLUE, color: JA.WHITE, borderRadius: '2px',
+                    fontSize: '11px', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                  Descargar CSV prueba
+                </a>
               </div>
             </Seccion>
 

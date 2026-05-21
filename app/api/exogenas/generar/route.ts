@@ -12,6 +12,7 @@
  *   fin           — proceso completo, lleva el resultado completo
  *   error         — falla irrecuperable
  */
+export const dynamic = 'force-dynamic'
 import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { parsearSiigoCsv } from '@/lib/exogenas/parsers/siigo-csv-parser'

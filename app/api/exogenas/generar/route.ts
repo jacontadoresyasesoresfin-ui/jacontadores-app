@@ -17,6 +17,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { parsearSiigoCsv } from '@/lib/exogenas/parsers/siigo-csv-parser'
+import { parsearSiigoXlsx, esDianPrevalidador } from '@/lib/exogenas/parsers/siigo-xlsx-parser'
 import { parsearXlsxFormato } from '@/lib/exogenas/parsers/xlsx-formato-parser'
 import { humanizarExcepciones, resumirExcepciones } from '@/lib/exogenas/engine/humanizador'
 import { RulesEngine } from '@/lib/exogenas/engine/rules-engine'
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest) {
   let csvTexto = ''
   let archivoBuffer: Buffer = Buffer.alloc(0)
   let nombreArchivo = ''
-  let esXlsx = false
+  let esXlsx = false        // true solo para el Prevalidador DIAN (hojas 1001, 1005…)
+  let esSiigoXlsx = false   // true para Libro Auxiliar de Siigo en formato xlsx
   let config: ConfigExogena = {
     anioGravable: 2025, nitDeclarante: '', razonSocial: '',
     tipoDeclarante: 'contribuyente', municipioCodigo: '11001',
@@ -54,8 +56,16 @@ export async function POST(req: NextRequest) {
     }
     archivoBuffer = Buffer.from(await archivo.arrayBuffer())
     nombreArchivo = archivo.name.toLowerCase()
-    esXlsx = nombreArchivo.endsWith('.xlsx') || nombreArchivo.endsWith('.xls')
-    if (!esXlsx) {
+    const esArchivoXlsx = nombreArchivo.endsWith('.xlsx') || nombreArchivo.endsWith('.xls')
+
+    if (esArchivoXlsx) {
+      // Distinguir: ¿es el Prevalidador DIAN (hojas 1001, 1005…) o el Libro Auxiliar de Siigo?
+      if (esDianPrevalidador(archivoBuffer)) {
+        esXlsx = true           // Flujo DIAN prevalidador (sin RulesEngine)
+      } else {
+        esSiigoXlsx = true      // Flujo Siigo xlsx → parsear a AsientoContable[] → RulesEngine
+      }
+    } else {
       csvTexto = archivoBuffer.toString('utf-8')
       if (csvTexto.includes('�')) csvTexto = archivoBuffer.toString('latin1')
     }
@@ -66,7 +76,7 @@ export async function POST(req: NextRequest) {
     if (body.config) config = body.config
   }
 
-  // ── Cargar reglas del tenant (solo se usan en flujo CSV) ──────────────
+  // ── Cargar reglas del tenant (flujo CSV y Siigo xlsx — no en Prevalidador DIAN) ──
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
   const reglasExtra: typeof REGLAS_DEFAULT_2025 = []
   if (!esXlsx && profile?.tenant_id) {
@@ -239,14 +249,19 @@ export async function POST(req: NextRequest) {
           // FLUJO CSV — Libro Auxiliar Siigo
           // ══════════════════════════════════════════════════════════════
 
-          // ══ ETAPA 1: Leer CSV ═════════════════════════════════════════
+          // ══ ETAPA 1: Leer archivo (CSV o xlsx de Siigo) ═══════════════
           emit({ tipo: 'etapa_inicio', etapa: 1 })
 
-          const parseado = parsearSiigoCsv(csvTexto)
+          const parseado = esSiigoXlsx
+            ? parsearSiigoXlsx(archivoBuffer)
+            : parsearSiigoCsv(csvTexto)
           const { asientos, advertencias, empresaDetectada, periodoDetectado, totalFilas, filasFallidas } = parseado
 
           if (!asientos.length) {
-            emit({ tipo: 'error', mensaje: 'No se encontraron movimientos. Verifique que exportó el Libro Auxiliar con detalle de movimientos.' })
+            emit({
+              tipo: 'error',
+              mensaje: advertencias[0] ?? 'No se encontraron movimientos. Verifique que exportó el Libro Auxiliar con detalle de movimientos.',
+            })
             controller.close(); return
           }
 

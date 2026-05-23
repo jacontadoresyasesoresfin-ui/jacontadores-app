@@ -199,7 +199,7 @@ export default function ExogenasPage() {
     if (!f) return
     const tipo = detectarTipo(f.name)
     if (tipo) { setArchivo(f); setTipoArchivo(tipo); setError('') }
-    else setError('Cargue un archivo .csv de Siigo o un .xlsx del prevalidador DIAN.')
+    else setError('Cargue un archivo .csv o .xlsx del Libro Auxiliar de Siigo, o el .xlsx del prevalidador DIAN.')
   }
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -385,7 +385,7 @@ export default function ExogenasPage() {
       // Stream terminó sin evento 'fin' ni 'error' → informar al usuario
       if (!recibiFinEvent) {
         const hint = tipoArchivo === 'xlsx'
-          ? 'El proceso terminó sin generar resultados. Verifique que el archivo xlsx sea el del prevalidador DIAN con hojas nombradas "1001", "1005", etc.'
+          ? 'El proceso terminó sin generar resultados. Si es un Libro Auxiliar de Siigo (.xlsx), verifique que tenga la columna COMPROBANTE con movimientos. Si es el prevalidador DIAN, las hojas deben llamarse "1001", "1005", etc.'
           : 'El proceso terminó sin generar resultados. Verifique que el archivo CSV sea el Libro Auxiliar completo de Siigo con movimientos del período.'
         throw new Error(hint)
       }
@@ -617,8 +617,8 @@ export default function ExogenasPage() {
                       </div>
                       <div style={{ fontSize: '11px', color: JA.GREY, background: JA.SURFACE, borderRadius: '2px',
                         padding: '8px 14px', textAlign: 'left', lineHeight: '1.7', flex: '1 1 200px', maxWidth: '260px' }}>
-                        <strong>World Office / Helisa / Aspel (.xlsx)</strong><br />
-                        Exporte el Formato 1001 directamente desde el módulo de Exógenas de su software
+                        <strong>Siigo / World Office / Helisa (.xlsx)</strong><br />
+                        Libro Auxiliar de Siigo → Exportar xlsx, o prevalidador DIAN desde otro software
                       </div>
                     </div>
                   </>
@@ -632,7 +632,7 @@ export default function ExogenasPage() {
                       {(archivo.size / 1024).toFixed(0)} KB · listo para procesar
                     </div>
                     <div style={{ fontSize: '11px', color: tipoArchivo === 'xlsx' ? JA.BLUE : JA.GREY, marginBottom: '10px' }}>
-                      {tipoArchivo === 'xlsx' ? 'Formato prevalidador DIAN (.xlsx)' : 'Libro auxiliar Siigo (.csv)'}
+                      {tipoArchivo === 'xlsx' ? 'Archivo xlsx detectado' : 'Libro auxiliar Siigo (.csv)'}
                     </div>
                     <button onClick={e => { e.stopPropagation(); setArchivo(null); setTipoArchivo(null); if (fileRef.current) fileRef.current.value = '' }}
                       style={{ padding: '5px 12px', background: 'transparent', border: `1px solid ${JA.BORDER}`,
@@ -654,8 +654,8 @@ export default function ExogenasPage() {
               {tipoArchivo === 'xlsx' && (
                 <div style={{ fontSize: '11px', color: JA.GREY, padding: '8px 12px', background: JA.BLUE_BG,
                   border: '1px solid #BFDBFE', borderRadius: '2px', lineHeight: '1.6', marginTop: '4px' }}>
-                  <strong>Archivo xlsx detectado:</strong> El sistema leerá directamente las hojas del prevalidador DIAN (1001, 1005, etc.)
-                  sin necesidad de aplicar reglas de mapeo. Asegúrese de que el archivo contenga todos los formatos del año {config.anioGravable}.
+                  <strong>Archivo xlsx detectado.</strong> Si es el Libro Auxiliar de Siigo (.xlsx), el sistema aplicará las reglas de clasificación
+                  PUC → DIAN automáticamente. Si es el prevalidador DIAN (hojas "1001", "1005"…), se leerá directamente sin transformación.
                 </div>
               )}
 

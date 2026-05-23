@@ -1,11 +1,13 @@
 /**
  * Parser de extractos bancarios — soporta Bancolombia, Davivienda, BBVA,
  * Banco de Bogotá y formato personalizado.
+ * Acepta Excel (.xlsx/.xls), CSV y PDF (extracto digital nativo).
  */
 import * as XLSX from 'xlsx'
 import { createHash } from 'crypto'
 import type { MovimientoBancario, TipoMovimiento } from '../models'
 import { FORMATOS_BANCO } from '../config'
+import { parsearExtractoBancarioPdf } from './banco-pdf'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -70,13 +72,21 @@ export interface ResultadoParser {
   errores: string[]
 }
 
-export function parsearExtractoBancario(
+export async function parsearExtractoBancario(
   buffer: Buffer | ArrayBuffer,
   nombreArchivo: string,
   formatoBanco: keyof typeof FORMATOS_BANCO = 'bancolombia',
   mapeoPersonalizado?: Partial<typeof FORMATOS_BANCO['bancolombia']>,
   cuenta?: string,
-): ResultadoParser {
+): Promise<ResultadoParser> {
+  // PDF: delegar al parser especializado
+  if (nombreArchivo.toLowerCase().endsWith('.pdf')) {
+    const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
+    const nombreBanco = (FORMATOS_BANCO[formatoBanco] ?? FORMATOS_BANCO.bancolombia).nombre
+    const res = await parsearExtractoBancarioPdf(buf, nombreBanco, cuenta)
+    return { movimientos: res.movimientos, errores: res.errores }
+  }
+
   const movimientos: MovimientoBancario[] = []
   const errores: string[] = []
 

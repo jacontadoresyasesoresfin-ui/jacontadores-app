@@ -9,6 +9,7 @@ import {
 import type {
   ResultadoConciliacion, MovimientoBancario,
   Discrepancia, ResultadoMatch,
+  ResumenConciliacionBancaria, PartidaConciliatoria,
 } from '@/lib/conciliaciones/models'
 import { FORMATOS_BANCO } from '@/lib/conciliaciones/config'
 
@@ -66,16 +67,38 @@ function FileDropZone({
   files: File[]; onChange: (files: File[]) => void; hint?: string
 }) {
   const [dragging, setDragging] = useState(false)
+  const [errorDrop, setErrorDrop] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const extensionesAceptadas = accept.split(',').map(e => e.trim().toLowerCase())
+
+  const filtrarPorExtension = (lista: File[]): { ok: File[]; rechazados: string[] } => {
+    const ok: File[] = []
+    const rechazados: string[] = []
+    for (const f of lista) {
+      const ext = '.' + (f.name.split('.').pop() ?? '').toLowerCase()
+      if (extensionesAceptadas.includes(ext)) ok.push(f)
+      else rechazados.push(f.name)
+    }
+    return { ok, rechazados }
+  }
 
   const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault(); setDragging(false)
     const dropped = Array.from(e.dataTransfer.files)
-    onChange(multiple ? [...files, ...dropped] : dropped.slice(0, 1))
-  }, [files, multiple, onChange])
+    const { ok, rechazados } = filtrarPorExtension(dropped)
+    if (rechazados.length > 0)
+      setErrorDrop(`Tipo de archivo no permitido: ${rechazados.join(', ')}. Permitidos: ${accept}`)
+    else
+      setErrorDrop('')
+    if (ok.length === 0) return
+    onChange(multiple ? [...files, ...ok] : ok.slice(0, 1))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, multiple, onChange, accept])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
+    setErrorDrop('')
     onChange(multiple ? [...files, ...selected] : selected.slice(0, 1))
     e.target.value = ''
   }
@@ -110,6 +133,12 @@ function FileDropZone({
         <input ref={inputRef} type="file" accept={accept} multiple={multiple} onChange={handleChange} style={{ display: 'none' }} />
       </div>
       {hint && <div style={{ fontSize: 11, color: JA.GREY_LT, marginTop: 4, fontFamily: 'Inter, sans-serif' }}>{hint}</div>}
+      {errorDrop && (
+        <div style={{ fontSize: 11, color: JA.RED, marginTop: 4, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+          <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+          {errorDrop}
+        </div>
+      )}
       {files.length > 0 && (
         <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
           {files.map((f, i) => (
@@ -527,6 +556,190 @@ function PanelIca({ resumen }: { resumen: ResultadoConciliacion['resumenIca'] })
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Componente: PanelConciliacionBancaria
+   Formato oficial colombiano de conciliación bancaria.
+   ══════════════════════════════════════════════════════════════════════════ */
+function FilaPartida({ p }: { p: PartidaConciliatoria }) {
+  const TIPO_LABEL: Record<string, string> = {
+    deposito_transito:  'Depósito en tránsito',
+    cheque_circulacion: 'Cheque/Pago pendiente',
+    nota_debito_banco:  'Nota débito banco',
+    nota_credito_banco: 'Nota crédito banco',
+    error_registro:     'Error de registro',
+  }
+  const TIPO_COLOR: Record<string, string> = {
+    deposito_transito:  JA.BLUE,
+    cheque_circulacion: JA.YELLOW,
+    nota_debito_banco:  JA.RED,
+    nota_credito_banco: JA.GREEN,
+    error_registro:     JA.GOLD,
+  }
+  return (
+    <tr style={{ borderBottom: `1px solid ${JA.BORDER}` }}>
+      <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: JA.GREY_LT, fontSize: 11 }}>{p.fecha}</td>
+      <td style={{ padding: '6px 10px' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: JA.WHITE, background: TIPO_COLOR[p.tipo] ?? JA.GREY, padding: '2px 6px', borderRadius: 2 }}>
+          {TIPO_LABEL[p.tipo] ?? p.tipo}
+        </span>
+      </td>
+      <td style={{ padding: '6px 10px', color: JA.TEXT, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{p.descripcion}</td>
+      <td style={{ padding: '6px 10px', color: JA.GREY_LT, fontSize: 11 }}>{p.cuentaContable ?? '—'}</td>
+      <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: JA.TEXT, fontSize: 12 }}>{COP(p.monto)}</td>
+    </tr>
+  )
+}
+
+function FilaConciliacion({ label, monto, esTotal, signo, indent }: {
+  label: string; monto: number; esTotal?: boolean; signo?: '+' | '-'; indent?: boolean
+}) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: esTotal ? '10px 16px' : '6px 16px',
+      background: esTotal ? JA.BG : JA.WHITE,
+      borderTop: esTotal ? `2px solid ${JA.BORDER}` : undefined,
+      fontFamily: 'Inter, sans-serif',
+    }}>
+      <span style={{
+        fontSize: esTotal ? 13 : 12, fontWeight: esTotal ? 800 : 400,
+        color: esTotal ? JA.NAVY : JA.TEXT,
+        paddingLeft: indent ? 20 : 0,
+      }}>
+        {signo && <span style={{ color: signo === '+' ? JA.GREEN : JA.RED, marginRight: 6 }}>{signo}</span>}
+        {label}
+      </span>
+      <span style={{ fontSize: esTotal ? 14 : 12, fontWeight: esTotal ? 800 : 600, color: esTotal ? JA.NAVY : JA.TEXT }}>
+        {COP(monto)}
+      </span>
+    </div>
+  )
+}
+
+function PanelConciliacionBancaria({ r }: { r: ResumenConciliacionBancaria }) {
+  const concilia = r.diferencia <= 100   // tolerancia $100 para errores de redondeo
+  const todasPartidas = [
+    ...r.depositosTransito, ...r.chequesPendientes,
+    ...r.notasDebitoBanco,  ...r.notasCreditoBanco, ...r.erroresRegistro,
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* KPIs superiores */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        <KpiCard title="Saldo Según Banco" value={COP(r.saldoSegunBanco)}
+          sub={`${r.totalMovimientosBanco} movimientos extracto`} color={JA.NAVY} icon={<Banknote size={16} />} />
+        <KpiCard title="Saldo Según Libros" value={COP(r.saldoSegunLibros)}
+          sub={`${r.totalMovimientosSiigoBanco} mov. cuentas banco Siigo`} color={JA.BLUE} icon={<FileCheck size={16} />} />
+        <KpiCard
+          title={concilia ? 'Concilia' : 'Diferencia'}
+          value={concilia ? '✓ $0' : COP(r.diferencia)}
+          sub={concilia ? 'Saldos ajustados iguales' : 'Revisar partidas abajo'}
+          color={concilia ? JA.GREEN : JA.RED}
+          icon={concilia ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+        />
+        <KpiCard title="Partidas Conciliatorias" value={String(todasPartidas.length)}
+          sub={`${r.depositosTransito.length} dep. + ${r.chequesPendientes.length} chq. + ${r.notasDebitoBanco.length + r.notasCreditoBanco.length} notas`}
+          color={JA.GOLD} icon={<Scale size={16} />} />
+      </div>
+
+      {/* Formato T: lado banco + lado libros */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+        {/* Columna BANCO */}
+        <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', background: JA.NAVY, color: JA.WHITE, fontSize: 12, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}>
+            Extracto Bancario{r.cuentaBancaria ? ` — Cta. ${r.cuentaBancaria}` : ''}
+          </div>
+          <FilaConciliacion label="Saldo según extracto" monto={r.saldoSegunBanco} esTotal />
+          {r.depositosTransito.length > 0 && (
+            <FilaConciliacion
+              label={`Menos: Depósitos en tránsito (${r.depositosTransito.length})`}
+              monto={r.totalDepositosTransito} signo="-" indent
+            />
+          )}
+          {r.chequesPendientes.length > 0 && (
+            <FilaConciliacion
+              label={`Más: Cheques/pagos pendientes (${r.chequesPendientes.length})`}
+              monto={r.totalChequesPendientes} signo="+" indent
+            />
+          )}
+          <FilaConciliacion label="Saldo ajustado banco" monto={r.saldoAjustadoBanco} esTotal />
+        </div>
+
+        {/* Columna LIBROS */}
+        <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', background: JA.BLUE, color: JA.WHITE, fontSize: 12, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}>
+            Libros Contables (Siigo)
+          </div>
+          <FilaConciliacion label="Saldo según libros" monto={r.saldoSegunLibros} esTotal />
+          {r.notasDebitoBanco.length > 0 && (
+            <FilaConciliacion
+              label={`Menos: Notas débito banco (${r.notasDebitoBanco.length})`}
+              monto={r.totalNotasDebito} signo="-" indent
+            />
+          )}
+          {r.notasCreditoBanco.length > 0 && (
+            <FilaConciliacion
+              label={`Más: Notas crédito banco (${r.notasCreditoBanco.length})`}
+              monto={r.totalNotasCredito} signo="+" indent
+            />
+          )}
+          <FilaConciliacion label="Saldo ajustado libros" monto={r.saldoAjustadoLibros} esTotal />
+        </div>
+      </div>
+
+      {/* Banner diferencia */}
+      {!concilia && (
+        <div style={{ padding: '12px 16px', background: JA.RED_LT, border: `1px solid ${JA.RED}44`, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <AlertTriangle size={16} color={JA.RED} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: JA.RED, fontFamily: 'Inter, sans-serif' }}>
+            <strong>Diferencia sin explicar: {COP(r.diferencia)}.</strong> Revise si hay partidas no clasificadas, errores de digitación o movimientos fuera del período.
+          </span>
+        </div>
+      )}
+      {concilia && (
+        <div style={{ padding: '12px 16px', background: JA.GREEN_LT, border: `1px solid ${JA.GREEN}44`, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <CheckCircle2 size={16} color={JA.GREEN} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: JA.GREEN, fontFamily: 'Inter, sans-serif' }}>
+            <strong>¡Concilia perfectamente!</strong> Los saldos ajustados de banco y libros son iguales.
+          </span>
+        </div>
+      )}
+
+      {/* Tabla detalle partidas */}
+      {todasPartidas.length > 0 && (
+        <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${JA.BORDER}`, fontSize: 12, fontWeight: 700, color: JA.TEXT, fontFamily: 'Inter, sans-serif' }}>
+            Detalle de Partidas Conciliatorias ({todasPartidas.length})
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+              <thead>
+                <tr style={{ background: JA.BG }}>
+                  {['Fecha', 'Tipo', 'Descripción', 'Cuenta', 'Monto'].map(h => (
+                    <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Monto' ? 'right' : 'left', fontWeight: 700, color: JA.GREY, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: `2px solid ${JA.BORDER}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {todasPartidas.map((p, i) => <FilaPartida key={i} p={p} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {r.totalMovimientosSiigoBanco === 0 && (
+        <div style={{ padding: '10px 14px', background: JA.YELLOW_LT, border: `1px solid ${JA.YELLOW}33`, borderRadius: 2, fontSize: 12, color: JA.GREY, fontFamily: 'Inter, sans-serif' }}>
+          <strong>Sin movimientos de cuentas bancarias en Siigo.</strong> Cargue el Libro Auxiliar de Siigo (Mov. aux cuenta contable) para obtener la conciliación completa banco vs. libros.
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Página principal
    ══════════════════════════════════════════════════════════════════════════ */
 export default function ConciliacionesPage() {
@@ -795,11 +1008,11 @@ export default function ConciliacionesPage() {
                   Extracto Bancario
                 </h3>
                 <FileDropZone
-                  label="Archivo banco (Excel / CSV)"
-                  accept=".xlsx,.xls,.csv"
+                  label="Archivo banco (PDF / Excel / CSV)"
+                  accept=".pdf,.xlsx,.xls,.csv"
                   files={archivoBanco}
                   onChange={setArchivoBanco}
-                  hint="Formatos: Bancolombia, Davivienda, BBVA, Bogotá, personalizado"
+                  hint="PDF nativo del banco, Excel o CSV — Bancolombia, Davivienda, BBVA, Bogotá, personalizado. Los PDFs escaneados (imágenes) no son compatibles."
                 />
               </div>
 
@@ -861,6 +1074,24 @@ export default function ConciliacionesPage() {
         {/* ═══════════════════ PASO 2: Conciliación ════════════════════════════ */}
         {paso === 2 && resultado && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Conciliación Bancaria Formal */}
+            {resultado.resumenConciliacionBancaria && (
+              <div style={{ background: JA.WHITE, border: `2px solid ${JA.GOLD}`, borderRadius: 2 }}>
+                <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 3, height: 20, background: JA.GOLD, borderRadius: 2 }} />
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: JA.NAVY, fontFamily: 'Inter, sans-serif' }}>
+                    Conciliación Bancaria
+                  </h3>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: JA.GOLD, background: JA.GOLD_LT, padding: '2px 8px', borderRadius: 2, border: `1px solid ${JA.GOLD}44` }}>
+                    FORMATO OFICIAL
+                  </span>
+                </div>
+                <div style={{ padding: 20 }}>
+                  <PanelConciliacionBancaria r={resultado.resumenConciliacionBancaria} />
+                </div>
+              </div>
+            )}
 
             {/* KPIs */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>

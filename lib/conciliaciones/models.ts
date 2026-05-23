@@ -242,6 +242,46 @@ export interface ConfiguracionConciliacion {
   calcularIca: boolean
 }
 
+// ─── CONCILIACIÓN BANCARIA FORMAL ────────────────────────────────────────────
+
+export type TipoPartida =
+  | 'deposito_transito'      // crédito banco sin registro en libros
+  | 'cheque_circulacion'     // débito libros sin salida en banco
+  | 'nota_debito_banco'      // cargo banco no contabilizado
+  | 'nota_credito_banco'     // abono banco no contabilizado
+  | 'error_registro'         // diferencia en monto (mismo mov., distinto valor)
+
+export interface PartidaConciliatoria {
+  id: string
+  tipo: TipoPartida
+  descripcion: string
+  fecha: string
+  monto: number
+  idOrigen: string          // id del MovimientoBancario o MovimientoSiigo
+  cuentaContable?: string
+  numeroDocumento?: string
+}
+
+export interface ResumenConciliacionBancaria {
+  cuentaBancaria?: string
+  saldoSegunBanco: number           // Saldo final extracto (último saldo conocido)
+  saldoSegunLibros: number          // Saldo final cuentas banco en Siigo
+  depositosTransito: PartidaConciliatoria[]    // En banco, no en libros (créditos)
+  chequesPendientes: PartidaConciliatoria[]    // En libros, no en banco (pagos)
+  notasDebitoBanco: PartidaConciliatoria[]     // Cargos banco no contabilizados
+  notasCreditoBanco: PartidaConciliatoria[]    // Abonos banco no contabilizados
+  erroresRegistro: PartidaConciliatoria[]      // Diferencias de monto
+  totalDepositosTransito: number
+  totalChequesPendientes: number
+  totalNotasDebito: number
+  totalNotasCredito: number
+  saldoAjustadoBanco: number        // Banco - depósitos + cheques
+  saldoAjustadoLibros: number       // Libros + notas crédito - notas débito
+  diferencia: number                // Debe ser 0 si concilia
+  totalMovimientosBanco: number
+  totalMovimientosSiigoBanco: number
+}
+
 // ─── RESULTADO COMPLETO ───────────────────────────────────────────────────────
 
 export interface KpisConciliacion {
@@ -268,6 +308,7 @@ export interface ResultadoConciliacion {
   resumenIva?: ResumenIVA
   resumenRetefuente?: ResumenRetefuente
   resumenIca?: ResumenICA
+  resumenConciliacionBancaria?: ResumenConciliacionBancaria
   kpis: KpisConciliacion
   logProceso: string[]
 }

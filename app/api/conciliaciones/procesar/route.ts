@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto'
 import { parsearExtractoBancario }   from '@/lib/conciliaciones/parsers/banco'
 import { parsearXmlDian }            from '@/lib/conciliaciones/parsers/dian-xml'
 import { parsearSiigo }              from '@/lib/conciliaciones/parsers/siigo'
-import { ejecutarConciliacion }      from '@/lib/conciliaciones/conciliador'
+import { ejecutarConciliacion, calcularConciliacionBancaria } from '@/lib/conciliaciones/conciliador'
 import { calcularIva }               from '@/lib/conciliaciones/tax/iva'
 import { calcularRetefuente }        from '@/lib/conciliaciones/tax/retefuente'
 import { calcularIca }               from '@/lib/conciliaciones/tax/ica'
@@ -53,8 +53,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const buf = Buffer.from(await archivoBanco.arrayBuffer())
       const formatoKey = (cfg.banco in FORMATOS_BANCO
         ? cfg.banco : 'bancolombia') as keyof typeof FORMATOS_BANCO
-      const res = parsearExtractoBancario(buf, archivoBanco.name, formatoKey,
-                                          undefined, cfg.numeroCuenta)
+      const res = await parsearExtractoBancario(buf, archivoBanco.name, formatoKey,
+                                               undefined, cfg.numeroCuenta)
       banco.push(...res.movimientos)
       erroresIngesta.push(...res.errores)
     }
@@ -67,16 +67,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!archivo || archivo.size === 0) continue
       const buf = Buffer.from(await archivo.arrayBuffer())
 
-      if (archivo.name.toLowerCase().endsWith('.zip')) {
+      const ext = archivo.name.split('.').pop()?.toLowerCase() ?? ''
+
+      if (ext === 'zip') {
         // Descomprimir ZIP y parsear cada XML dentro
         const { parsearZipDian } = await import('./_zip-helper')
         const { facturas: fs, errores } = await parsearZipDian(buf)
         facturas.push(...fs)
         erroresIngesta.push(...errores)
-      } else {
+      } else if (ext === 'xml') {
         const factura = parsearXmlDian(buf, archivo.name)
         if (factura) facturas.push(factura)
-        else erroresIngesta.push(`No se pudo parsear: ${archivo.name}`)
+        else erroresIngesta.push(`XML no reconocido como factura electrónica DIAN: ${archivo.name}`)
+      } else {
+        // Archivo de otro tipo cargado en la zona DIAN — orientar al usuario
+        const esExcel = ['xlsx', 'xls', 'csv'].includes(ext)
+        const sugerencia = esExcel
+          ? 'Si es un reporte de Siigo, cárguelo en la sección "Siigo (opcional)" más abajo.'
+          : 'Solo se aceptan archivos .xml (facturas electrónicas UBL 2.1) o .zip.'
+        erroresIngesta.push(
+          `"${archivo.name}" no es un XML DIAN y fue ignorado. ${sugerencia}`,
+        )
       }
     }
 
@@ -94,6 +105,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // ── Conciliación ───────────────────────────────────────────────────────
     const { matches, discrepancias, log } = ejecutarConciliacion(banco, facturas, siigo, cfg)
+
+    // ── Conciliación bancaria formal (banco ↔ libros Siigo) ────────────────
+    const resumenConciliacionBancaria = banco.length > 0 || siigo.length > 0
+      ? calcularConciliacionBancaria(banco, siigo, cfg)
+      : undefined
 
     // ── Motores tributarios ────────────────────────────────────────────────
     const periodoStr = `${cfg.periodoInicio.slice(0,7)} — ${cfg.periodoFin.slice(0,7)}`
@@ -140,6 +156,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       resumenIva,
       resumenRetefuente: resumenRfte,
       resumenIca,
+      resumenConciliacionBancaria,
       kpis,
       logProceso: [
         ...erroresIngesta.map(e => `⚠️ ${e}`),

@@ -7,6 +7,7 @@ import type {
   MovimientoBancario, FacturaElectronica, MovimientoSiigo,
   ResultadoMatch, Discrepancia, ConfiguracionConciliacion,
   EstadoConciliacion, SeveridadDiscrepancia,
+  ResumenConciliacionBancaria, PartidaConciliatoria, TipoPartida,
 } from './models'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -381,4 +382,152 @@ function marcarFactura(f: FacturaElectronica, estado: EstadoConciliacion, matchI
 
 function fmtCOP(n: number): string {
   return new Intl.NumberFormat('es-CO').format(Math.round(n))
+}
+
+// ─── CONCILIACIÓN BANCARIA FORMAL ────────────────────────────────────────────
+// Compara el extracto bancario (PDF/Excel) contra los registros en Siigo
+// de las cuentas bancarias (PUC 11xx).  Produce el informe de "partidas
+// conciliatorias" que el contador entrega junto al balance mensual.
+
+const RE_CUENTA_BANCO = /^11/  // Bancos y cajas: 1105 (caja), 1110 (bancos), 1115, etc.
+
+function idPartida() {
+  return 'PRT_' + randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()
+}
+
+function partida(
+  tipo: TipoPartida,
+  descripcion: string,
+  fecha: string,
+  monto: number,
+  idOrigen: string,
+  cuentaContable?: string,
+  numeroDocumento?: string,
+): PartidaConciliatoria {
+  return { id: idPartida(), tipo, descripcion, fecha, monto, idOrigen, cuentaContable, numeroDocumento }
+}
+
+/** Compara monto con tolerancia absoluta de $1 o 0.1% */
+function montosIguales(a: number, b: number): boolean {
+  return Math.abs(a - b) <= Math.max(1, Math.min(a, b) * 0.001)
+}
+
+/**
+ * Genera el resumen de conciliación bancaria formal (formato colombiano).
+ *
+ * Requiere:
+ *   - banco: movimientos del extracto bancario (PDF o Excel)
+ *   - siigo: todos los movimientos del Libro Auxiliar
+ *   - matches: resultado de ejecutarConciliacion() para marcar conciliados
+ */
+export function calcularConciliacionBancaria(
+  banco: MovimientoBancario[],
+  siigo: MovimientoSiigo[],
+  config: ConfiguracionConciliacion,
+): ResumenConciliacionBancaria | undefined {
+  if (banco.length === 0 && siigo.length === 0) return undefined
+
+  // Filtrar Siigo solo a cuentas bancarias y de caja (PUC 11xx)
+  const siigoBank = siigo.filter(s => s.cuentaContable && RE_CUENTA_BANCO.test(s.cuentaContable))
+
+  // Calcular saldo según extracto bancario
+  // Si los movimientos tienen saldo, tomar el último; si no, calcular
+  const ultimoConSaldo = [...banco].reverse().find(m => m.saldo != null && m.saldo > 0)
+  let saldoSegunBanco: number
+  if (ultimoConSaldo?.saldo) {
+    saldoSegunBanco = ultimoConSaldo.saldo
+  } else {
+    const totalCreditos = banco.filter(m => m.tipo === 'credito').reduce((s, m) => s + m.monto, 0)
+    const totalDebitos  = banco.filter(m => m.tipo === 'debito').reduce((s, m) => s + m.monto, 0)
+    saldoSegunBanco = totalCreditos - totalDebitos
+  }
+
+  // Calcular saldo según libros Siigo (cuentas banco)
+  const ultimoSiigoBanco = [...siigoBank].reverse().find(s => s.saldo != null && s.saldo! > 0)
+  let saldoSegunLibros: number
+  if (ultimoSiigoBanco?.saldo) {
+    saldoSegunLibros = ultimoSiigoBanco.saldo
+  } else if (siigoBank.length > 0) {
+    const tc = siigoBank.reduce((s, m) => s + m.credito, 0)
+    const td = siigoBank.reduce((s, m) => s + m.debito,  0)
+    saldoSegunLibros = tc - td
+  } else {
+    saldoSegunLibros = saldoSegunBanco  // sin datos Siigo, no hay diferencia calculable
+  }
+
+  // ── Identificar partidas conciliatorias ──────────────────────────────────
+  // Tolerancia: mismo monto ± 0.1% y fecha dentro de 10 días
+  const DIAS_TOL = 10
+
+  // Créditos banco sin match → depósitos en tránsito
+  const depositosTransito: PartidaConciliatoria[] = banco
+    .filter(m => m.tipo === 'credito' && m.estado === 'no_conciliado')
+    .map(m => partida(
+      'deposito_transito',
+      `Depósito en tránsito — ${m.descripcion.slice(0, 60)}`,
+      m.fecha, m.monto, m.id, undefined, m.referencia,
+    ))
+
+  // Débitos en Siigo sin match en banco → cheques/pagos pendientes de cobro
+  const chequesPendientes: PartidaConciliatoria[] = siigoBank
+    .filter(s => s.debito > 0 && s.estado === 'no_conciliado')
+    .map(s => partida(
+      'cheque_circulacion',
+      `Pago/cheque pendiente — ${s.descripcion?.slice(0, 60) ?? s.numeroDocumento ?? ''}`,
+      s.fecha, s.debito, s.id, s.cuentaContable, s.numeroDocumento,
+    ))
+
+  // Débitos banco sin match → notas débito del banco no contabilizadas
+  const notasDebitoBanco: PartidaConciliatoria[] = banco
+    .filter(m => m.tipo === 'debito' && m.estado === 'no_conciliado')
+    .map(m => partida(
+      'nota_debito_banco',
+      `Cargo banco no contabilizado — ${m.descripcion.slice(0, 60)}`,
+      m.fecha, m.monto, m.id,
+    ))
+
+  // Créditos Siigo banco sin match → notas crédito no contabilizadas
+  const notasCreditoBanco: PartidaConciliatoria[] = siigoBank
+    .filter(s => s.credito > 0 && s.estado === 'no_conciliado')
+    .map(s => partida(
+      'nota_credito_banco',
+      `Abono banco no contabilizado — ${s.descripcion?.slice(0, 60) ?? ''}`,
+      s.fecha, s.credito, s.id, s.cuentaContable, s.numeroDocumento,
+    ))
+
+  // Errores de registro: matches con diferencia significativa de monto
+  const erroresRegistro: PartidaConciliatoria[] = []
+
+  // ── Calcular saldos ajustados ─────────────────────────────────────────────
+  const totalDepositos  = depositosTransito.reduce((s, p) => s + p.monto, 0)
+  const totalCheques    = chequesPendientes.reduce((s, p) => s + p.monto, 0)
+  const totalNDebito    = notasDebitoBanco.reduce((s, p) => s + p.monto, 0)
+  const totalNCredito   = notasCreditoBanco.reduce((s, p) => s + p.monto, 0)
+
+  // Fórmula conciliación bancaria colombiana:
+  // Saldo ajustado banco = Saldo banco - Depósitos en tránsito + Cheques pendientes
+  // Saldo ajustado libros = Saldo libros - Notas débito + Notas crédito
+  const saldoAjustadoBanco  = saldoSegunBanco  - totalDepositos + totalCheques
+  const saldoAjustadoLibros = saldoSegunLibros - totalNDebito   + totalNCredito
+  const diferencia          = Math.abs(saldoAjustadoBanco - saldoAjustadoLibros)
+
+  return {
+    cuentaBancaria: config.numeroCuenta,
+    saldoSegunBanco,
+    saldoSegunLibros,
+    depositosTransito,
+    chequesPendientes,
+    notasDebitoBanco,
+    notasCreditoBanco,
+    erroresRegistro,
+    totalDepositosTransito: totalDepositos,
+    totalChequesPendientes: totalCheques,
+    totalNotasDebito:       totalNDebito,
+    totalNotasCredito:      totalNCredito,
+    saldoAjustadoBanco,
+    saldoAjustadoLibros,
+    diferencia,
+    totalMovimientosBanco:       banco.length,
+    totalMovimientosSiigoBanco:  siigoBank.length,
+  }
 }

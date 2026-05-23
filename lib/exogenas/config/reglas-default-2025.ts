@@ -101,9 +101,16 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
   { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5019', prioridad: 40,
     tipoTercero: 'exterior', notas: 'Pagos al exterior — servicios' },
 
-  // ── Salarios (solo si son pagos informados al empleado) ───────────────
-  { formatoCodigo: '1001', cuentaPucPatron: '5110%', conceptoCodigo: '5001', prioridad: 50,
-    tipoTercero: 'persona_natural', notas: 'Gastos de personal PN' },
+  // ── Pagos por contrato independiente (NO salarios directos) ──────────
+  // La cuenta 5110 agrupa TODA la nómina. Solo informar en F1001 los pagos
+  // a trabajadores independientes (honorarios por nómina), nunca los salarios
+  // de empleados vinculados por contrato laboral (esos van en declaración de
+  // retención mensual, formulario 350, no en exógenas).
+  // Usar subcuenta específica 5110-05 para independientes; la regla genérica
+  // 5110% se desactiva para evitar duplicar toda la nómina en F1001.
+  { formatoCodigo: '1001', cuentaPucPatron: '5110-05', conceptoCodigo: '5001', prioridad: 50,
+    tipoTercero: 'persona_natural',
+    notas: 'Honorarios a independientes registrados en nómina — solo sub-cuenta 5110-05' },
 
   // ── Fallback general (gastos clase 5 no clasificados) ─────────────────
   { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5098', prioridad: 99,

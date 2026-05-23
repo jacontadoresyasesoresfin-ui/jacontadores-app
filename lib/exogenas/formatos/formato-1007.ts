@@ -80,7 +80,7 @@ export class Formato1007Strategy implements IFormatoExogena<Fila1007> {
 
     return Array.from(acum.values())
       .map(f => ({ ...f, valorNetoIngreso: f.valorIngreso - f.valorDevolucion - f.valorDescuento }))
-      .filter(f => f.valorNetoIngreso >= UMBRAL_1007)
+      .filter(f => f.valorNetoIngreso > UMBRAL_1007)   // Art. 631 E.T.: "superiores a 500 UVT"
   }
 
   validar(filas: Fila1007[]): ExcepcionGenerada[] {

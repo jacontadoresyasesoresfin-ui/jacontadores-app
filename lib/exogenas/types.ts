@@ -75,7 +75,9 @@ export interface AsientoContable {
   tercero: TerceroExogena
   valorIva?: number
   retefuente?: number
+  retefuenteAsumida?: number  // retención que el pagador asume por el beneficiario
   reteIva?: number
+  reteIvaNoResidentes?: number // retención IVA a proveedores del exterior
   reteIca?: number
   documentoId?: string        // CUFE, ID Siigo, referencia interna
   descripcion?: string

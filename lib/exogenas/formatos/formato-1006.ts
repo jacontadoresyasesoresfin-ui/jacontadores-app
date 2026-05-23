@@ -80,7 +80,7 @@ export class Formato1006Strategy implements IFormatoExogena<Fila1006> {
     // Calcular neto y aplicar umbral
     return Array.from(acum.values())
       .map(f => ({ ...f, valorNetoCompra: f.valorCompra - f.valorDevolucion - f.valorDescuento }))
-      .filter(f => f.valorNetoCompra >= UMBRAL_1006)
+      .filter(f => f.valorNetoCompra > UMBRAL_1006)   // Art. 631 E.T.: "superiores a 500 UVT"
   }
 
   validar(filas: Fila1006[]): ExcepcionGenerada[] {

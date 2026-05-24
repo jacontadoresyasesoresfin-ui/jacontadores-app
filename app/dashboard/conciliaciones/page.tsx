@@ -1459,6 +1459,31 @@ export default function ConciliacionesPage() {
         {paso === 2 && resultado && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+            {/* Banner de errores de parseo — visible inmediatamente si no hay datos */}
+            {resultado.movimientosBanco.length === 0 && resultado.facturasDian.length === 0 && resultado.movimientosSiigo.length === 0 && (
+              <div style={{ padding: '16px 20px', background: '#FEF2F2', border: '2px solid #DC2626', borderRadius: 2 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <AlertTriangle size={18} color={JA.RED} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: JA.RED, fontFamily: 'Inter, sans-serif' }}>
+                    No se pudieron leer los archivos cargados
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: '#7F1D1D', fontFamily: 'Inter, sans-serif', marginBottom: 10 }}>
+                  Los parsers procesaron los archivos pero no extrajeron ningún movimiento. Vea los errores abajo y regrese al Paso 1 para intentar de nuevo.
+                </div>
+                {resultado.logProceso.filter(l => l.startsWith('⚠️')).map((l, i) => (
+                  <div key={i} style={{ fontSize: 11, color: '#991B1B', fontFamily: 'Inter, sans-serif', padding: '4px 8px', background: '#FEE2E2', borderRadius: 2, marginBottom: 4 }}>
+                    {l}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setPaso(1)}
+                  style={{ marginTop: 8, padding: '6px 16px', background: JA.NAVY, color: JA.WHITE, border: 'none', borderRadius: 2, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                  ← Volver a Cargar Archivos
+                </button>
+              </div>
+            )}
+
             {/* Tablero de control — semáforo + cifras */}
             <ResumenEjecutivo r={resultado} />
 

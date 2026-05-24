@@ -52,6 +52,25 @@ function parsearMontoCOP(raw: string): number {
   return Math.abs(parseFloat(raw.replace(/\./g, '').replace(',', '.').replace(/\$/g, '').trim()) || 0)
 }
 
+/**
+ * Parsea un monto en cualquier formato colombiano o internacional.
+ * Detecta automáticamente el separador de miles/decimal.
+ */
+function parsearMontoAmbiguo(raw: string): number {
+  const s = raw.replace(/\$/g, '').replace(/\s/g, '').trim()
+  if (!s) return 0
+  // Colombiano con decimal: 1.234.567,89
+  if (/^[\d.]+,\d{1,2}$/.test(s)) return parsearMontoCOP(s)
+  // Internacional con decimal: 1,234,567.89
+  if (/^[\d,]+\.\d{1,2}$/.test(s)) return parsearMontoInt(s)
+  // Solo puntos (miles colombiano): 1.234.567
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return parseFloat(s.replace(/\./g, '')) || 0
+  // Solo comas (miles internacional): 1,234,567
+  if (/^\d{1,3}(,\d{3})+$/.test(s)) return parseFloat(s.replace(/,/g, '')) || 0
+  // Número plano
+  return Math.abs(parseFloat(s) || 0)
+}
+
 function nuevoMovimiento(
   banco: string, fecha: string, descripcion: string,
   tipo: TipoMovimiento, monto: number, saldo: number | undefined,
@@ -103,7 +122,8 @@ function detectarBanco(texto: string): { banco: BancoDetectado; nombre: string }
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Detecta inicio de fila de transacción Davivienda: "DD MM $ AMOUNT+/-"
-const RE_DAVI_TX = /^(\d{1,2})\s+(\d{2})\s+\$\s*([\d,]+(?:\.\d{1,2})?)\s*([+-])\s+(\d{2,6})\s*(.*)/
+// Soporta formato internacional (1,234.00) y colombiano (1.234,00)
+const RE_DAVI_TX = /^(\d{1,2})\s+(\d{1,2})\s+\$\s*([\d.,]+)\s*([+-])\s*(\d{2,})?[^\w]*(.*)/
 
 // Líneas que nunca son continuación de descripción
 const RE_DAVI_SKIP = /^(fecha\s+valor|cuenta\s+de\s+(ahorros|corriente)|banco\s+davivienda|nit\.|apreciado\s+cliente|saldo\s+(anterior|promedio|nuevo)|m[aá]s\s+cr[eé]ditos|menos\s+d[eé]bitos|informe\s+del\s+mes|este\s+producto|cualquier\s+diferencia|recuerde|h\.0|vigilado|superintendencia|\d{1,4}\s*$|la\s+importancia)/i
@@ -152,12 +172,12 @@ function parsearDavivienda(
     const m = linea.match(RE_DAVI_TX)
     if (m) {
       emitirTx()
-      const monto = parsearMontoInt(m[3])
+      const monto = parsearMontoAmbiguo(m[3])
       if (monto > 0) {
         tx = {
           dd: m[1], mm: m[2],
           monto, signo: m[4] as '+' | '-',
-          doc: m[5],
+          doc: m[5] ?? '',
           partesDesc: m[6] ? [m[6].trim()] : [],
         }
       }
@@ -172,8 +192,8 @@ function parsearDavivienda(
 
   if (movimientos.length === 0) {
     errores.push(
-      'Davivienda: no se encontraron transacciones. ' +
-      'Verifique que el PDF sea el extracto digital descargado desde la app o web del banco.',
+      'Davivienda: no se encontraron transacciones con el formato esperado "DD MM $ monto+/-". ' +
+      'Se intentará el parser genérico como alternativa.',
     )
   }
 
@@ -410,17 +430,47 @@ export async function parsearExtractoBancarioPdf(
 
   // ── Detectar banco y aplicar estrategia específica ────────────────────────
   const { banco, nombre } = detectarBanco(textoRaw)
+  const nombreFinal = nombre || nombreBancoHint
+
+  let resultado: ResultadoParserPdf
 
   switch (banco) {
     case 'davivienda':
-      return parsearDavivienda(textoRaw, cuenta)
-
+      resultado = parsearDavivienda(textoRaw, cuenta)
+      break
     case 'bancolombia':
-      return parsearBancolombia(textoRaw, cuenta)
-
+      resultado = parsearBancolombia(textoRaw, cuenta)
+      break
     case 'bbva':
     case 'bogota':
     default:
-      return parsearGenerico(textoRaw, nombre || nombreBancoHint, cuenta)
+      resultado = parsearGenerico(textoRaw, nombreFinal, cuenta)
+      break
   }
+
+  // Si el parser específico no encontró movimientos, intentar el genérico como fallback
+  if (resultado.movimientos.length === 0 && banco !== 'generico') {
+    const fallback = parsearGenerico(textoRaw, nombreFinal, cuenta)
+    if (fallback.movimientos.length > 0) {
+      return {
+        ...fallback,
+        errores: [...resultado.errores, ...fallback.errores],
+      }
+    }
+    // Fallback también falló — devolver errores combinados con diagnóstico
+    return {
+      movimientos: [],
+      errores: [
+        ...resultado.errores,
+        ...fallback.errores,
+        `Diagnóstico: se extrajo texto del PDF (${textoRaw.trim().length} caracteres). ` +
+        'Si las cifras del extracto usan formato diferente al esperado, ' +
+        'descargue el extracto en formato Excel (.xlsx) desde el portal del banco.',
+      ],
+      lineasDetectadas: resultado.lineasDetectadas,
+      banco: resultado.banco,
+    }
+  }
+
+  return resultado
 }

@@ -5,9 +5,10 @@ import {
   Upload, FileText, CheckCircle2, AlertTriangle, Download,
   RefreshCw, ChevronRight, X, Info, TrendingUp, TrendingDown,
   FileCheck, Banknote, Scale, Receipt, Search, ChevronDown, ChevronUp,
+  Activity, BookOpen,
 } from 'lucide-react'
 import type {
-  ResultadoConciliacion, MovimientoBancario,
+  ResultadoConciliacion, MovimientoBancario, FacturaElectronica,
   Discrepancia, ResultadoMatch,
   ResumenConciliacionBancaria, PartidaConciliatoria,
 } from '@/lib/conciliaciones/models'
@@ -32,6 +33,7 @@ const fmt = (n: number) => new Intl.NumberFormat('es-CO').format(n)
 
 /* ─── Tipos de estado ───────────────────────────────────────────────────── */
 type Paso = 1 | 2 | 3 | 4
+type Tab2 = 'resumen' | 'banco' | 'facturas' | 'discrepancias'
 
 interface Config {
   periodoInicio: string
@@ -171,6 +173,337 @@ function KpiCard({ title, value, sub, color, icon }: {
       </div>
       <div style={{ fontSize: 22, fontWeight: 800, color: JA.TEXT, fontFamily: 'Inter, sans-serif', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: JA.GREY_LT, fontFamily: 'Inter, sans-serif' }}>{sub}</div>}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Componente: BarraEstado
+   ══════════════════════════════════════════════════════════════════════════ */
+function BarraEstado({ pct, label, color, dark }: {
+  pct: number; label: string; color: string; dark?: boolean
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ flex: 1, height: 6, background: dark ? '#FFFFFF22' : JA.BORDER, borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.6s ease' }} />
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 48, fontFamily: 'Inter, sans-serif' }}>{PCT(pct)}</span>
+      <span style={{ fontSize: 11, color: dark ? '#94A3B8' : JA.GREY, minWidth: 200, fontFamily: 'Inter, sans-serif' }}>{label}</span>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Componente: ResumenEjecutivo — semáforo + cifras clave arriba de resultados
+   ══════════════════════════════════════════════════════════════════════════ */
+function ResumenEjecutivo({ r }: { r: ResultadoConciliacion }) {
+  const pctB   = r.kpis.porcentajeConciliadoBanco
+  const pctF   = r.kpis.porcentajeConciliadoFacturas
+  const hasBan = r.movimientosBanco.length > 0
+  const hasFac = r.facturasDian.length > 0
+  const pctGen = hasBan && hasFac ? (pctB + pctF) / 2 : hasBan ? pctB : pctF
+  const colorG = pctGen >= 80 ? JA.GREEN : pctGen >= 50 ? JA.YELLOW : JA.RED
+  const textoG = pctGen >= 80 ? 'CONCILIA BIEN' : pctGen >= 50 ? 'REVISIÓN PARCIAL' : 'REQUIERE REVISIÓN'
+  const iconG  = pctGen >= 80
+    ? <CheckCircle2 size={28} color={JA.WHITE} />
+    : <AlertTriangle size={28} color={JA.WHITE} />
+  const discAlta = r.discrepancias.filter(d => d.severidad === 'alta').length
+  const discMed  = r.discrepancias.filter(d => d.severidad === 'media').length
+  const discBaj  = r.discrepancias.filter(d => d.severidad === 'baja').length
+  const montoDisc = r.discrepancias.reduce((s, d) => s + (d.montoInvolucrado ?? 0), 0)
+
+  return (
+    <div style={{ background: JA.NAVY, borderRadius: 2, padding: '20px 24px', fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+
+        {/* Semáforo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 240 }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: colorG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 0 0 5px ${colorG}44` }}>
+            {iconG}
+          </div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: JA.WHITE, letterSpacing: '-0.02em' }}>{textoG}</div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+              {r.config.nombreEmpresa || 'Empresa'} · {r.config.periodoInicio?.slice(0, 7)} — {r.config.periodoFin?.slice(0, 7)}
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Procesado: {new Date(r.fechaProceso).toLocaleString('es-CO')}</div>
+          </div>
+        </div>
+
+        <div style={{ width: 1, alignSelf: 'stretch', background: '#FFFFFF22', flexShrink: 0 }} />
+
+        {/* Banco */}
+        {hasBan && (
+          <div style={{ flex: 1, minWidth: 150 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Extracto Banco</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: JA.WHITE }}>{fmt(r.movimientosBanco.length)}<span style={{ fontSize: 12, fontWeight: 400, marginLeft: 4, color: '#94A3B8' }}>mov.</span></div>
+            <div style={{ marginTop: 4, display: 'flex', gap: 10 }}>
+              <span style={{ fontSize: 11, color: '#4ADE80' }}>▲ {COP(r.kpis.totalBancoCreditos)}</span>
+              <span style={{ fontSize: 11, color: '#F87171' }}>▼ {COP(r.kpis.totalBancoDebitos)}</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{r.kpis.numBancoConciliados} concil. · {r.kpis.numBancoNoConciliados} pendientes</div>
+          </div>
+        )}
+
+        {/* Facturas */}
+        {hasFac && (
+          <div style={{ flex: 1, minWidth: 150 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Facturas DIAN</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: JA.WHITE }}>{fmt(r.facturasDian.length)}<span style={{ fontSize: 12, fontWeight: 400, marginLeft: 4, color: '#94A3B8' }}>doc.</span></div>
+            <div style={{ marginTop: 4, fontSize: 11, color: '#4ADE80' }}>{COP(r.kpis.totalFacturasVentas)}</div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{r.kpis.numFacturasConciliadas} concil. · {r.kpis.numFacturasNoConciliadas} pendientes</div>
+          </div>
+        )}
+
+        {/* Siigo */}
+        {r.movimientosSiigo.length > 0 && (
+          <div style={{ flex: 1, minWidth: 130 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Siigo</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: JA.WHITE }}>{fmt(r.movimientosSiigo.length)}<span style={{ fontSize: 12, fontWeight: 400, marginLeft: 4, color: '#94A3B8' }}>mov.</span></div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+              Deb: {COP(r.movimientosSiigo.reduce((s, m) => s + m.debito, 0))}
+            </div>
+            <div style={{ fontSize: 11, color: '#94A3B8' }}>
+              Cré: {COP(r.movimientosSiigo.reduce((s, m) => s + m.credito, 0))}
+            </div>
+          </div>
+        )}
+
+        {/* Discrepancias */}
+        <div style={{ flex: 1, minWidth: 150 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Discrepancias</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {discAlta > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: JA.WHITE, background: JA.RED, padding: '3px 8px', borderRadius: 2 }}>{discAlta} Alta{discAlta > 1 ? 's' : ''}</span>}
+            {discMed  > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: JA.WHITE, background: JA.YELLOW, padding: '3px 8px', borderRadius: 2 }}>{discMed} Media{discMed > 1 ? 's' : ''}</span>}
+            {discBaj  > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: JA.WHITE, background: JA.BLUE, padding: '3px 8px', borderRadius: 2 }}>{discBaj} Baja{discBaj > 1 ? 's' : ''}</span>}
+            {r.discrepancias.length === 0 && <span style={{ fontSize: 12, color: '#4ADE80', fontWeight: 700 }}>✓ Sin discrepancias</span>}
+          </div>
+          {montoDisc > 0 && <div style={{ fontSize: 11, color: '#F87171', marginTop: 6 }}>Monto: {COP(montoDisc)}</div>}
+          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{r.matches.length} matches · {r.logProceso.filter(l => l.startsWith('⚠️')).length} advertencias</div>
+        </div>
+      </div>
+
+      {/* Barras de progreso */}
+      {(hasBan || hasFac) && (
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #FFFFFF22', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {hasBan && <BarraEstado pct={pctB} label={`Banco: ${r.kpis.numBancoConciliados} de ${r.movimientosBanco.length} conciliados`} color={colorG} dark />}
+          {hasFac && <BarraEstado pct={pctF} label={`Facturas: ${r.kpis.numFacturasConciliadas} de ${r.facturasDian.length} conciliadas`} color={pctF >= 80 ? JA.GREEN : pctF >= 50 ? JA.YELLOW : JA.RED} dark />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Componente: TablaBancoCompleta — todos los movimientos con filtros
+   ══════════════════════════════════════════════════════════════════════════ */
+function TablaBancoCompleta({ movimientos }: { movimientos: MovimientoBancario[] }) {
+  const [filtro, setFiltro] = useState<'todos' | 'conciliado' | 'no_conciliado'>('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [pag, setPag] = useState(0)
+  const POR_PAGINA = 25
+
+  const filtrados = useMemo(() => movimientos.filter(m => {
+    if (filtro === 'conciliado'    && m.estado !== 'conciliado') return false
+    if (filtro === 'no_conciliado' && m.estado === 'conciliado') return false
+    const q = busqueda.toLowerCase()
+    if (q && !m.descripcion.toLowerCase().includes(q) && !(m.referencia ?? '').toLowerCase().includes(q)) return false
+    return true
+  }), [movimientos, filtro, busqueda])
+
+  const slice   = filtrados.slice(pag * POR_PAGINA, (pag + 1) * POR_PAGINA)
+  const nConc   = movimientos.filter(m => m.estado === 'conciliado').length
+  const nNoCon  = movimientos.filter(m => m.estado !== 'conciliado').length
+  const totalCr = movimientos.filter(m => m.tipo === 'credito').reduce((s, m) => s + m.monto, 0)
+  const totalDb = movimientos.filter(m => m.tipo === 'debito').reduce((s, m) => s + m.monto, 0)
+
+  if (movimientos.length === 0) return (
+    <div style={{ padding: '40px 0', textAlign: 'center', color: JA.GREY_LT, fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+      <Banknote size={32} style={{ marginBottom: 12, opacity: 0.3 }} />
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>No hay movimientos bancarios</div>
+      <div>Cargue el extracto PDF o Excel del banco en el Paso 1.</div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <KpiCard title="Total Movimientos" value={fmt(movimientos.length)} color={JA.NAVY} icon={<Activity size={14} />} />
+        <KpiCard title="Total Créditos" value={COP(totalCr)} sub={`${movimientos.filter(m => m.tipo === 'credito').length} transacciones`} color={JA.GREEN} icon={<TrendingUp size={14} />} />
+        <KpiCard title="Total Débitos" value={COP(totalDb)} sub={`${movimientos.filter(m => m.tipo === 'debito').length} transacciones`} color={JA.RED} icon={<TrendingDown size={14} />} />
+        <KpiCard title="Sin Conciliar" value={fmt(nNoCon)} sub={`${nConc} conciliados · ${PCT(movimientos.length > 0 ? nConc / movimientos.length * 100 : 0)}`} color={nNoCon > 0 ? JA.YELLOW : JA.GREEN} icon={<AlertTriangle size={14} />} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {([
+          { k: 'todos' as const,        label: `Todos (${movimientos.length})` },
+          { k: 'conciliado' as const,    label: `Conciliados (${nConc})` },
+          { k: 'no_conciliado' as const, label: `Sin conciliar (${nNoCon})` },
+        ]).map(({ k, label }) => (
+          <button key={k} onClick={() => { setFiltro(k); setPag(0) }}
+            style={{ padding: '6px 12px', border: `1px solid ${filtro === k ? JA.NAVY : JA.BORDER}`, borderRadius: 2, background: filtro === k ? JA.NAVY : JA.WHITE, color: filtro === k ? JA.WHITE : JA.GREY, fontSize: 11, fontWeight: filtro === k ? 700 : 500, fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+            {label}
+          </button>
+        ))}
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: JA.GREY_LT }} />
+          <input value={busqueda} onChange={e => { setBusqueda(e.target.value); setPag(0) }}
+            placeholder="Buscar descripción o referencia..."
+            style={{ width: '100%', paddingLeft: 30, paddingRight: 12, paddingTop: 7, paddingBottom: 7, fontSize: 12, border: `1px solid ${JA.BORDER}`, borderRadius: 2, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+          <thead>
+            <tr style={{ background: JA.BG, borderBottom: `2px solid ${JA.BORDER}` }}>
+              {['Estado', 'Fecha', 'Descripción', 'Referencia', 'Tipo', 'Monto', 'Saldo'].map(h => (
+                <th key={h} style={{ padding: '8px 12px', textAlign: ['Monto', 'Saldo'].includes(h) ? 'right' : 'left', fontWeight: 700, color: JA.GREY, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {slice.map((m, i) => {
+              const ok = m.estado === 'conciliado'
+              return (
+                <tr key={i} style={{ borderBottom: `1px solid ${JA.BORDER}`, background: ok ? '#F0FDF4' : undefined }}>
+                  <td style={{ padding: '7px 12px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: JA.WHITE, background: ok ? JA.GREEN : JA.RED, padding: '2px 6px', borderRadius: 2 }}>
+                      {ok ? '✓ Concil.' : '● Pendiente'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '7px 12px', color: JA.TEXT, whiteSpace: 'nowrap' }}>{m.fecha}</td>
+                  <td style={{ padding: '7px 12px', color: JA.TEXT, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.descripcion}</td>
+                  <td style={{ padding: '7px 12px', color: JA.GREY_LT, fontSize: 11 }}>{m.referencia ?? '—'}</td>
+                  <td style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: m.tipo === 'credito' ? JA.GREEN : JA.RED }}>
+                    {m.tipo === 'credito' ? '▲ Crédito' : '▼ Débito'}
+                  </td>
+                  <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: m.tipo === 'credito' ? JA.GREEN : JA.RED }}>{COP(m.monto)}</td>
+                  <td style={{ padding: '7px 12px', textAlign: 'right', color: JA.GREY_LT, fontSize: 11 }}>{m.saldo != null ? COP(m.saldo) : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {filtrados.length > POR_PAGINA && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+          <button disabled={pag === 0} onClick={() => setPag(p => p - 1)} style={{ padding: '5px 12px', border: `1px solid ${JA.BORDER}`, borderRadius: 2, background: JA.WHITE, cursor: pag === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', color: JA.TEXT }}>← Prev</button>
+          <span style={{ fontSize: 12, color: JA.GREY_LT, fontFamily: 'Inter, sans-serif' }}>{pag + 1} / {Math.ceil(filtrados.length / POR_PAGINA)} · {fmt(filtrados.length)} registros</span>
+          <button disabled={(pag + 1) * POR_PAGINA >= filtrados.length} onClick={() => setPag(p => p + 1)} style={{ padding: '5px 12px', border: `1px solid ${JA.BORDER}`, borderRadius: 2, background: JA.WHITE, cursor: (pag + 1) * POR_PAGINA >= filtrados.length ? 'not-allowed' : 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', color: JA.TEXT }}>Sig →</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Componente: TablaFacturasCompleta — todas las facturas con filtros
+   ══════════════════════════════════════════════════════════════════════════ */
+function TablaFacturasCompleta({ facturas }: { facturas: FacturaElectronica[] }) {
+  const [filtro, setFiltro] = useState<'todos' | 'conciliado' | 'no_conciliado' | 'notas'>('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [pag, setPag] = useState(0)
+  const POR_PAGINA = 20
+
+  const filtrados = useMemo(() => facturas.filter(f => {
+    if (filtro === 'conciliado'    && f.estado !== 'conciliado') return false
+    if (filtro === 'no_conciliado' && f.estado === 'conciliado') return false
+    if (filtro === 'notas'         && !f.esNota) return false
+    const q = busqueda.toLowerCase()
+    if (q && !f.numero.toLowerCase().includes(q) && !f.nombreEmisor.toLowerCase().includes(q)) return false
+    return true
+  }), [facturas, filtro, busqueda])
+
+  const slice    = filtrados.slice(pag * POR_PAGINA, (pag + 1) * POR_PAGINA)
+  const nConc    = facturas.filter(f => f.estado === 'conciliado').length
+  const nNoCon   = facturas.filter(f => f.estado !== 'conciliado').length
+  const notas    = facturas.filter(f => f.esNota)
+  const ventas   = facturas.filter(f => !f.esNota)
+  const totalIva = facturas.reduce((s, f) => s + f.impuestos.filter(i => i.nombre === 'IVA').reduce((si, i) => si + i.valor, 0), 0)
+  const TIPO_DOC: Record<string, string> = { '01': 'Fact.Venta', '02': 'Fact.Export', '91': 'N.Débito', '92': 'N.Crédito', '96': 'Doc.Equiv' }
+
+  if (facturas.length === 0) return (
+    <div style={{ padding: '40px 0', textAlign: 'center', color: JA.GREY_LT, fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+      <FileText size={32} style={{ marginBottom: 12, opacity: 0.3 }} />
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>No hay facturas DIAN</div>
+      <div>Cargue los XMLs UBL 2.1 o ZIP del portal DIAN en el Paso 1.</div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <KpiCard title="Total Documentos" value={fmt(facturas.length)} sub={`${ventas.length} fact. + ${notas.length} notas`} color={JA.NAVY} icon={<FileText size={14} />} />
+        <KpiCard title="Valor Facturas"   value={COP(ventas.reduce((s, f) => s + f.total, 0))} sub={`${ventas.length} documentos`} color={JA.GREEN} icon={<TrendingUp size={14} />} />
+        <KpiCard title="Total IVA"        value={COP(totalIva)} sub="Impuestos en facturas" color={JA.GOLD} icon={<Receipt size={14} />} />
+        <KpiCard title="Notas Cré/Déb"   value={COP(notas.reduce((s, f) => s + f.total, 0))} sub={`${notas.length} notas`} color={JA.BLUE} icon={<TrendingDown size={14} />} />
+        <KpiCard title="Sin Conciliar"    value={fmt(nNoCon)} sub={`${nConc} conciliadas`} color={nNoCon > 0 ? JA.YELLOW : JA.GREEN} icon={<AlertTriangle size={14} />} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {([
+          { k: 'todos' as const,        label: `Todos (${facturas.length})` },
+          { k: 'conciliado' as const,    label: `Conciliadas (${nConc})` },
+          { k: 'no_conciliado' as const, label: `Sin concil. (${nNoCon})` },
+          { k: 'notas' as const,         label: `Notas (${notas.length})` },
+        ]).map(({ k, label }) => (
+          <button key={k} onClick={() => { setFiltro(k); setPag(0) }}
+            style={{ padding: '6px 12px', border: `1px solid ${filtro === k ? JA.NAVY : JA.BORDER}`, borderRadius: 2, background: filtro === k ? JA.NAVY : JA.WHITE, color: filtro === k ? JA.WHITE : JA.GREY, fontSize: 11, fontWeight: filtro === k ? 700 : 500, fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+            {label}
+          </button>
+        ))}
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: JA.GREY_LT }} />
+          <input value={busqueda} onChange={e => { setBusqueda(e.target.value); setPag(0) }}
+            placeholder="Buscar número de factura o emisor..."
+            style={{ width: '100%', paddingLeft: 30, paddingRight: 12, paddingTop: 7, paddingBottom: 7, fontSize: 12, border: `1px solid ${JA.BORDER}`, borderRadius: 2, fontFamily: 'Inter, sans-serif', outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+          <thead>
+            <tr style={{ background: JA.BG, borderBottom: `2px solid ${JA.BORDER}` }}>
+              {['Estado', 'Tipo', 'Número', 'Fecha', 'Emisor', 'Subtotal', 'IVA', 'Total'].map(h => (
+                <th key={h} style={{ padding: '8px 10px', textAlign: ['Subtotal', 'IVA', 'Total'].includes(h) ? 'right' : 'left', fontWeight: 700, color: JA.GREY, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {slice.map((f, i) => {
+              const ok  = f.estado === 'conciliado'
+              const ivaF = f.impuestos.filter(imp => imp.nombre === 'IVA').reduce((s, imp) => s + imp.valor, 0)
+              return (
+                <tr key={i} style={{ borderBottom: `1px solid ${JA.BORDER}`, background: f.esNota ? JA.BLUE_LT : ok ? '#F0FDF4' : undefined }}>
+                  <td style={{ padding: '7px 10px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: JA.WHITE, background: ok ? JA.GREEN : JA.YELLOW, padding: '2px 5px', borderRadius: 2 }}>{ok ? '✓' : '○'}</span>
+                  </td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: JA.WHITE, background: f.esNota ? JA.BLUE : JA.NAVY, padding: '2px 5px', borderRadius: 2 }}>{TIPO_DOC[f.tipoDocumento] ?? f.tipoDocumento}</span>
+                  </td>
+                  <td style={{ padding: '7px 10px', color: JA.NAVY, fontWeight: 600, whiteSpace: 'nowrap' }}>{f.numero}</td>
+                  <td style={{ padding: '7px 10px', color: JA.TEXT, whiteSpace: 'nowrap' }}>{f.fechaEmision}</td>
+                  <td style={{ padding: '7px 10px', color: JA.TEXT, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nombreEmisor}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: JA.TEXT }}>{COP(f.subtotal)}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: JA.GOLD, fontWeight: 600 }}>{ivaF > 0 ? COP(ivaF) : '—'}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: f.esNota ? JA.BLUE : JA.GREEN }}>{COP(f.total)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {filtrados.length > POR_PAGINA && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+          <button disabled={pag === 0} onClick={() => setPag(p => p - 1)} style={{ padding: '5px 12px', border: `1px solid ${JA.BORDER}`, borderRadius: 2, background: JA.WHITE, cursor: pag === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', color: JA.TEXT }}>← Prev</button>
+          <span style={{ fontSize: 12, color: JA.GREY_LT, fontFamily: 'Inter, sans-serif' }}>{pag + 1} / {Math.ceil(filtrados.length / POR_PAGINA)} · {fmt(filtrados.length)} registros</span>
+          <button disabled={(pag + 1) * POR_PAGINA >= filtrados.length} onClick={() => setPag(p => p + 1)} style={{ padding: '5px 12px', border: `1px solid ${JA.BORDER}`, borderRadius: 2, background: JA.WHITE, cursor: (pag + 1) * POR_PAGINA >= filtrados.length ? 'not-allowed' : 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', color: JA.TEXT }}>Sig →</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -752,6 +1085,7 @@ export default function ConciliacionesPage() {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tabTrib, setTabTrib] = useState<'iva' | 'rfte' | 'ica'>('iva')
+  const [tab2, setTab2] = useState<Tab2>('resumen')
 
   const setCfgField = (k: keyof Config, v: string | boolean) =>
     setCfg(prev => ({ ...prev, [k]: v }))
@@ -999,58 +1333,104 @@ export default function ConciliacionesPage() {
               </div>
             </div>
 
-            {/* Archivos */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* ── Archivos: 3 zonas numeradas ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-              <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, padding: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: JA.NAVY, margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Banknote size={14} color={JA.GOLD} />
-                  Extracto Bancario
-                </h3>
-                <FileDropZone
-                  label="Archivo banco (PDF / Excel / CSV)"
-                  accept=".pdf,.xlsx,.xls,.csv"
-                  files={archivoBanco}
-                  onChange={setArchivoBanco}
-                  hint="PDF nativo del banco, Excel o CSV — Bancolombia, Davivienda, BBVA, Bogotá, personalizado. Los PDFs escaneados (imágenes) no son compatibles."
-                />
+              {/* ZONA 1 — Extracto Bancario (REQUERIDO) */}
+              <div style={{ border: `2px solid ${JA.NAVY}`, borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ background: JA.NAVY, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: JA.GOLD, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 900, color: JA.WHITE, flexShrink: 0 }}>1</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: JA.WHITE, letterSpacing: '-0.01em' }}>EXTRACTO BANCARIO</div>
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>Archivo principal del módulo · PDF digital, Excel o CSV</div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: JA.GOLD, background: '#B8960C22', padding: '3px 10px', borderRadius: 2, border: `1px solid ${JA.GOLD}55`, flexShrink: 0 }}>REQUERIDO</span>
+                </div>
+                <div style={{ padding: '14px 16px', background: JA.WHITE, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <FileDropZone
+                    label=""
+                    accept=".pdf,.xlsx,.xls,.csv"
+                    files={archivoBanco}
+                    onChange={setArchivoBanco}
+                    hint=""
+                  />
+                  {/* Instrucciones cómo descargar el PDF */}
+                  <div style={{ padding: '10px 12px', background: '#EFF6FF', border: `1px solid ${JA.BLUE}33`, borderRadius: 2 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: JA.BLUE, marginBottom: 6 }}>📱 ¿CÓMO DESCARGAR EL PDF DEL BANCO?</div>
+                    <div style={{ fontSize: 11, color: JA.BLUE, lineHeight: 1.9 }}>
+                      <div>• <strong>App móvil:</strong> Consultas → Extractos / Movimientos → Descargar PDF</div>
+                      <div>• <strong>Portal web:</strong> Inicio → Mis Cuentas → Extracto → Descargar PDF</div>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: JA.RED, fontWeight: 600 }}>
+                      ⚠ El extracto FÍSICO escaneado (foto/imagen) no funciona — use el PDF digital del banco
+                    </div>
+                  </div>
+                  {/* Bancos soportados */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10, color: JA.GREY_LT, fontWeight: 600 }}>Bancos:</span>
+                    {['Davivienda', 'Bancolombia', 'BBVA', 'Bogotá'].map(b => (
+                      <span key={b} style={{ fontSize: 10, color: JA.GREY, background: JA.BG, border: `1px solid ${JA.BORDER}`, padding: '2px 8px', borderRadius: 2 }}>{b}</span>
+                    ))}
+                    <span style={{ fontSize: 10, color: JA.GOLD, background: JA.GOLD_LT, border: `1px solid ${JA.GOLD}44`, padding: '2px 8px', borderRadius: 2 }}>+ Excel/CSV propio</span>
+                  </div>
+                </div>
               </div>
 
-              <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, padding: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: JA.NAVY, margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <FileText size={14} color={JA.GOLD} />
-                  Facturas DIAN (XML UBL 2.1)
-                </h3>
-                <FileDropZone
-                  label="XMLs de facturación electrónica"
-                  accept=".xml,.zip"
-                  multiple
-                  files={archivosXml}
-                  onChange={setArchivosXml}
-                  hint="Facturas, notas crédito/débito. Puede cargar ZIPs del portal DIAN"
-                />
+              {/* ZONA 2 — Facturas DIAN */}
+              <div style={{ border: `1px solid ${JA.BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ background: JA.BG, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${JA.BORDER}` }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: JA.BLUE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: JA.WHITE, flexShrink: 0 }}>2</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: JA.TEXT }}>FACTURAS DIAN (XML UBL 2.1)</div>
+                    <div style={{ fontSize: 11, color: JA.GREY_LT }}>Para calcular IVA, Retefuente e ICA · Facturas y notas crédito/débito</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: JA.GREY_LT, fontWeight: 600, flexShrink: 0 }}>OPCIONAL</span>
+                </div>
+                <div style={{ padding: '12px 14px', background: JA.WHITE, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <FileDropZone
+                    label=""
+                    accept=".xml,.zip"
+                    multiple
+                    files={archivosXml}
+                    onChange={setArchivosXml}
+                    hint=""
+                  />
+                  <div style={{ fontSize: 11, color: JA.GREY_LT, lineHeight: 1.7 }}>
+                    Portal DIAN → Mis Documentos → Descargar XML · También acepta ZIPs masivos del portal
+                  </div>
+                </div>
               </div>
 
-              <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, padding: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: JA.NAVY, margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <FileCheck size={14} color={JA.GOLD} />
-                  Siigo (opcional)
-                </h3>
-                <FileDropZone
-                  label="Exportaciones Siigo"
-                  accept=".xlsx,.xls,.csv"
-                  multiple
-                  files={archivosSiigo}
-                  onChange={setArchivosSiigo}
-                  hint="Cartera, CxP, movimientos — mejora el matching"
-                />
+              {/* ZONA 3 — Siigo Libro Auxiliar */}
+              <div style={{ border: `1px solid ${JA.BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ background: JA.BG, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${JA.BORDER}` }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: JA.GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: JA.WHITE, flexShrink: 0 }}>3</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: JA.TEXT }}>LIBRO AUXILIAR SIIGO</div>
+                    <div style={{ fontSize: 11, color: JA.GREY_LT }}>Habilita conciliación formal banco vs. libros contables (Formato T)</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: JA.GREY_LT, fontWeight: 600, flexShrink: 0 }}>OPCIONAL</span>
+                </div>
+                <div style={{ padding: '12px 14px', background: JA.WHITE, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <FileDropZone
+                    label=""
+                    accept=".xlsx,.xls,.csv"
+                    multiple
+                    files={archivosSiigo}
+                    onChange={setArchivosSiigo}
+                    hint=""
+                  />
+                  <div style={{ padding: '8px 10px', background: JA.YELLOW_LT, border: `1px solid ${JA.YELLOW}44`, borderRadius: 2, fontSize: 11, color: JA.GREY, lineHeight: 1.7 }}>
+                    <strong>Siigo →</strong> Informes → Movimiento auxiliar por cuenta contable → Filtrar cuentas 11xx → Exportar Excel
+                  </div>
+                </div>
               </div>
 
               {/* Nota normativa */}
-              <div style={{ padding: '10px 14px', background: JA.BLUE_LT, border: `1px solid ${JA.BLUE}22`, borderRadius: 2, display: 'flex', gap: 8 }}>
-                <Info size={14} color={JA.BLUE} style={{ flexShrink: 0, marginTop: 1 }} />
-                <div style={{ fontSize: 11, color: JA.BLUE, fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
-                  <strong>Normatividad 2026:</strong> Retefuente según Decreto 1625/2016 restaurado por Comunicado DIAN No. 070 (vigente desde 8 mayo 2026). Todas las facturas electrónicas en COP (Res. 000165/2023 + 000202/2025).
+              <div style={{ padding: '8px 12px', background: JA.BLUE_LT, border: `1px solid ${JA.BLUE}22`, borderRadius: 2, display: 'flex', gap: 8 }}>
+                <Info size={13} color={JA.BLUE} style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: 11, color: JA.BLUE, lineHeight: 1.6 }}>
+                  <strong>Normatividad 2026:</strong> Retefuente Decreto 1625/2016 (Comunicado DIAN 070/2026 · vigente 8-may-2026) · UVT $52.374 (Res. 000238/2025) · Facturas en COP.
                 </div>
               </div>
 
@@ -1058,14 +1438,18 @@ export default function ConciliacionesPage() {
                 onClick={procesar}
                 disabled={cargando}
                 style={{
-                  width: '100%', padding: '12px 0', border: 'none', borderRadius: 2,
+                  width: '100%', padding: '14px 0', border: 'none', borderRadius: 2,
                   background: cargando ? JA.GREY_LT : JA.NAVY, color: JA.WHITE,
-                  fontSize: 13, fontWeight: 700, fontFamily: 'Inter, sans-serif',
-                  cursor: cargando ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  transition: 'background 0.15s',
+                  fontSize: 14, fontWeight: 800, fontFamily: 'Inter, sans-serif',
+                  cursor: cargando ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  letterSpacing: '0.02em', transition: 'background 0.15s',
+                  boxShadow: cargando ? 'none' : '0 2px 8px rgba(19,33,60,0.25)',
                 }}
               >
-                {cargando ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Procesando…</> : <><FileCheck size={14} /> Procesar Conciliación</>}
+                {cargando
+                  ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Procesando conciliación…</>
+                  : <><FileCheck size={16} /> PROCESAR CONCILIACIÓN</>}
               </button>
             </div>
           </div>
@@ -1073,90 +1457,125 @@ export default function ConciliacionesPage() {
 
         {/* ═══════════════════ PASO 2: Conciliación ════════════════════════════ */}
         {paso === 2 && resultado && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* Conciliación Bancaria Formal */}
-            {resultado.resumenConciliacionBancaria && (
-              <div style={{ background: JA.WHITE, border: `2px solid ${JA.GOLD}`, borderRadius: 2 }}>
-                <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 3, height: 20, background: JA.GOLD, borderRadius: 2 }} />
-                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: JA.NAVY, fontFamily: 'Inter, sans-serif' }}>
-                    Conciliación Bancaria
-                  </h3>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: JA.GOLD, background: JA.GOLD_LT, padding: '2px 8px', borderRadius: 2, border: `1px solid ${JA.GOLD}44` }}>
-                    FORMATO OFICIAL
+            {/* Tablero de control — semáforo + cifras */}
+            <ResumenEjecutivo r={resultado} />
+
+            {/* Sub-tabs */}
+            <div style={{ display: 'flex', gap: 2, background: JA.WHITE, padding: 4, borderRadius: 2, border: `1px solid ${JA.BORDER}` }}>
+              {([
+                { k: 'resumen' as Tab2,       label: 'Resumen & Bancaria',  count: resultado.matches.length,                  color: JA.NAVY  },
+                { k: 'banco' as Tab2,          label: 'Movimientos Banco',   count: resultado.movimientosBanco.length,          color: JA.GREEN },
+                { k: 'facturas' as Tab2,       label: 'Facturas DIAN',       count: resultado.facturasDian.length,              color: JA.BLUE  },
+                { k: 'discrepancias' as Tab2,  label: 'Discrepancias',       count: resultado.discrepancias.length,             color: resultado.discrepancias.length > 0 ? JA.RED : JA.GREEN },
+              ]).map(({ k, label, count, color }) => (
+                <button key={k} onClick={() => setTab2(k)}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '9px 12px', borderRadius: 2, border: 'none',
+                    cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                    background: tab2 === k ? JA.NAVY : 'transparent',
+                    color: tab2 === k ? JA.WHITE : JA.GREY,
+                    fontSize: 12, fontWeight: tab2 === k ? 700 : 500,
+                    transition: 'all 0.15s',
+                  }}>
+                  <span>{label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 2, background: tab2 === k ? '#FFFFFF22' : JA.BG, color: tab2 === k ? JA.WHITE : color }}>
+                    {count}
                   </span>
-                </div>
-                <div style={{ padding: 20 }}>
-                  <PanelConciliacionBancaria r={resultado.resumenConciliacionBancaria} />
-                </div>
-              </div>
-            )}
-
-            {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-              <KpiCard title="Créditos Banco" value={COP(resultado.kpis.totalBancoCreditos)} color={JA.GREEN} icon={<TrendingUp size={16} />} />
-              <KpiCard title="Débitos Banco" value={COP(resultado.kpis.totalBancoDebitos)} color={JA.RED} icon={<TrendingDown size={16} />} />
-              <KpiCard title="Ventas Facturadas" value={COP(resultado.kpis.totalFacturasVentas)} color={JA.GOLD} icon={<Receipt size={16} />} />
-              <KpiCard title="% Conciliado Banco" value={PCT(resultado.kpis.porcentajeConciliadoBanco)} sub={`${resultado.kpis.numBancoConciliados} de ${resultado.kpis.numBancoConciliados + resultado.kpis.numBancoNoConciliados}`} color={resultado.kpis.porcentajeConciliadoBanco >= 80 ? JA.GREEN : JA.YELLOW} icon={<FileCheck size={16} />} />
-              <KpiCard title="% Conciliado Facturas" value={PCT(resultado.kpis.porcentajeConciliadoFacturas)} sub={`${resultado.kpis.numFacturasConciliadas} de ${resultado.kpis.numFacturasConciliadas + resultado.kpis.numFacturasNoConciliadas}`} color={resultado.kpis.porcentajeConciliadoFacturas >= 80 ? JA.GREEN : JA.YELLOW} icon={<Scale size={16} />} />
+                </button>
+              ))}
             </div>
 
-            {/* Matches conciliados */}
-            <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2 }}>
-              <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: JA.TEXT, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckCircle2 size={14} color={JA.GREEN} />
-                  Transacciones Conciliadas ({fmt(resultado.matches.length)})
-                </h3>
-              </div>
-              <div style={{ padding: 20 }}>
-                <TablaMatches matches={resultado.matches} resultado={resultado} />
-              </div>
-            </div>
+            {/* ── Tab: Resumen & Conciliación Bancaria ── */}
+            {tab2 === 'resumen' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* Sin conciliar */}
-            <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2 }}>
-              <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}` }}>
-                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: JA.TEXT, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AlertTriangle size={14} color={JA.YELLOW} />
-                  Sin Conciliar
-                </h3>
-              </div>
-              <div style={{ padding: 20 }}>
-                <TablaMovimientos
-                  movimientos={resultado.movimientosBanco.filter(m => m.estado !== 'conciliado')}
-                  titulo="Movimientos banco sin conciliar"
-                />
-                {resultado.movimientosBanco.filter(m => m.estado !== 'conciliado').length === 0 && (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: JA.GREEN, fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-                    <CheckCircle2 size={20} style={{ marginBottom: 6 }} />
-                    <div>Todos los movimientos bancarios fueron conciliados</div>
+                {/* KPIs */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                  <KpiCard title="Créditos Banco"        value={COP(resultado.kpis.totalBancoCreditos)} color={JA.GREEN} icon={<TrendingUp size={16} />} />
+                  <KpiCard title="Débitos Banco"         value={COP(resultado.kpis.totalBancoDebitos)} color={JA.RED} icon={<TrendingDown size={16} />} />
+                  <KpiCard title="Ventas Facturadas"     value={COP(resultado.kpis.totalFacturasVentas)} color={JA.GOLD} icon={<Receipt size={16} />} />
+                  <KpiCard title="% Conciliado Banco"    value={PCT(resultado.kpis.porcentajeConciliadoBanco)} sub={`${resultado.kpis.numBancoConciliados} de ${resultado.kpis.numBancoConciliados + resultado.kpis.numBancoNoConciliados}`} color={resultado.kpis.porcentajeConciliadoBanco >= 80 ? JA.GREEN : JA.YELLOW} icon={<FileCheck size={16} />} />
+                  <KpiCard title="% Conciliado Facturas" value={PCT(resultado.kpis.porcentajeConciliadoFacturas)} sub={`${resultado.kpis.numFacturasConciliadas} de ${resultado.kpis.numFacturasConciliadas + resultado.kpis.numFacturasNoConciliadas}`} color={resultado.kpis.porcentajeConciliadoFacturas >= 80 ? JA.GREEN : JA.YELLOW} icon={<Scale size={16} />} />
+                </div>
+
+                {/* Conciliación Bancaria Formal (Formato T) */}
+                {resultado.resumenConciliacionBancaria && (
+                  <div style={{ background: JA.WHITE, border: `2px solid ${JA.GOLD}`, borderRadius: 2 }}>
+                    <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 3, height: 20, background: JA.GOLD, borderRadius: 2 }} />
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: JA.NAVY, fontFamily: 'Inter, sans-serif' }}>Conciliación Bancaria Formal</h3>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: JA.GOLD, background: JA.GOLD_LT, padding: '2px 8px', borderRadius: 2, border: `1px solid ${JA.GOLD}44` }}>FORMATO T OFICIAL</span>
+                    </div>
+                    <div style={{ padding: 20 }}>
+                      <PanelConciliacionBancaria r={resultado.resumenConciliacionBancaria} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Matches */}
+                <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2 }}>
+                  <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CheckCircle2 size={14} color={JA.GREEN} />
+                    <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: JA.TEXT, fontFamily: 'Inter, sans-serif' }}>
+                      Transacciones Conciliadas ({fmt(resultado.matches.length)})
+                    </h3>
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    <TablaMatches matches={resultado.matches} resultado={resultado} />
+                  </div>
+                </div>
+
+                {/* Warnings */}
+                {resultado.logProceso.filter(l => l.startsWith('⚠️')).length > 0 && (
+                  <div style={{ padding: '12px 16px', background: JA.YELLOW_LT, border: `1px solid ${JA.YELLOW}33`, borderRadius: 2 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: JA.YELLOW, marginBottom: 6 }}>Advertencias de ingesta ({resultado.logProceso.filter(l => l.startsWith('⚠️')).length})</div>
+                    {resultado.logProceso.filter(l => l.startsWith('⚠️')).map((l, i) => (
+                      <div key={i} style={{ fontSize: 11, color: JA.GREY, fontFamily: 'Inter, sans-serif', marginBottom: 2 }}>{l}</div>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
+            )}
 
-            {/* Discrepancias */}
-            <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2 }}>
-              <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}` }}>
-                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: JA.TEXT, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AlertTriangle size={14} color={JA.RED} />
-                  Discrepancias Detectadas ({resultado.discrepancias.length})
-                </h3>
+            {/* ── Tab: Movimientos Banco ── */}
+            {tab2 === 'banco' && (
+              <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, padding: 20 }}>
+                <TablaBancoCompleta movimientos={resultado.movimientosBanco} />
               </div>
-              <div style={{ padding: 20 }}>
-                <TablaDiscrepancias discrepancias={resultado.discrepancias} />
-              </div>
-            </div>
+            )}
 
-            {/* Warnings del log */}
-            {resultado.logProceso.filter(l => l.startsWith('⚠️')).length > 0 && (
-              <div style={{ padding: '12px 16px', background: JA.YELLOW_LT, border: `1px solid ${JA.YELLOW}33`, borderRadius: 2 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: JA.YELLOW, marginBottom: 6 }}>Advertencias de ingesta</div>
-                {resultado.logProceso.filter(l => l.startsWith('⚠️')).map((l, i) => (
-                  <div key={i} style={{ fontSize: 11, color: JA.GREY, fontFamily: 'Inter, sans-serif', marginBottom: 2 }}>{l}</div>
-                ))}
+            {/* ── Tab: Facturas DIAN ── */}
+            {tab2 === 'facturas' && (
+              <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2, padding: 20 }}>
+                <TablaFacturasCompleta facturas={resultado.facturasDian} />
+              </div>
+            )}
+
+            {/* ── Tab: Discrepancias ── */}
+            {tab2 === 'discrepancias' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {resultado.discrepancias.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    <KpiCard title="Total Discrepancias" value={fmt(resultado.discrepancias.length)} sub={`Monto: ${COP(resultado.discrepancias.reduce((s, d) => s + (d.montoInvolucrado ?? 0), 0))}`} color={JA.RED} icon={<AlertTriangle size={14} />} />
+                    <KpiCard title="Severidad Alta" value={fmt(resultado.discrepancias.filter(d => d.severidad === 'alta').length)} sub={COP(resultado.discrepancias.filter(d => d.severidad === 'alta').reduce((s, d) => s + (d.montoInvolucrado ?? 0), 0))} color={JA.RED} icon={<AlertTriangle size={14} />} />
+                    <KpiCard title="Severidad Media" value={fmt(resultado.discrepancias.filter(d => d.severidad === 'media').length)} sub={COP(resultado.discrepancias.filter(d => d.severidad === 'media').reduce((s, d) => s + (d.montoInvolucrado ?? 0), 0))} color={JA.YELLOW} icon={<Info size={14} />} />
+                    <KpiCard title="Severidad Baja" value={fmt(resultado.discrepancias.filter(d => d.severidad === 'baja').length)} sub={COP(resultado.discrepancias.filter(d => d.severidad === 'baja').reduce((s, d) => s + (d.montoInvolucrado ?? 0), 0))} color={JA.BLUE} icon={<Info size={14} />} />
+                  </div>
+                )}
+                <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 2 }}>
+                  <div style={{ padding: '12px 20px', borderBottom: `1px solid ${JA.BORDER}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertTriangle size={14} color={JA.RED} />
+                    <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: JA.TEXT, fontFamily: 'Inter, sans-serif' }}>
+                      Detalle de Discrepancias ({resultado.discrepancias.length})
+                    </h3>
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    <TablaDiscrepancias discrepancias={resultado.discrepancias} />
+                  </div>
+                </div>
               </div>
             )}
           </div>

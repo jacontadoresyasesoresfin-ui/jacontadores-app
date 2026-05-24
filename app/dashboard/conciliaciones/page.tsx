@@ -987,14 +987,14 @@ function PanelConciliacionBancaria({ r }: { r: ResumenConciliacionBancaria }) {
           <FilaConciliacion label="Saldo según extracto" monto={r.saldoSegunBanco} esTotal />
           {r.depositosTransito.length > 0 && (
             <FilaConciliacion
-              label={`Menos: Depósitos en tránsito (${r.depositosTransito.length})`}
-              monto={r.totalDepositosTransito} signo="-" indent
+              label={`(+) Depósitos en tránsito (${r.depositosTransito.length})`}
+              monto={r.totalDepositosTransito} signo="+" indent
             />
           )}
           {r.chequesPendientes.length > 0 && (
             <FilaConciliacion
-              label={`Más: Cheques/pagos pendientes (${r.chequesPendientes.length})`}
-              monto={r.totalChequesPendientes} signo="+" indent
+              label={`(-) Cheques en circulación (${r.chequesPendientes.length})`}
+              monto={r.totalChequesPendientes} signo="-" indent
             />
           )}
           <FilaConciliacion label="Saldo ajustado banco" monto={r.saldoAjustadoBanco} esTotal />
@@ -1006,16 +1006,16 @@ function PanelConciliacionBancaria({ r }: { r: ResumenConciliacionBancaria }) {
             Libros Contables (Siigo)
           </div>
           <FilaConciliacion label="Saldo según libros" monto={r.saldoSegunLibros} esTotal />
-          {r.notasDebitoBanco.length > 0 && (
-            <FilaConciliacion
-              label={`Menos: Notas débito banco (${r.notasDebitoBanco.length})`}
-              monto={r.totalNotasDebito} signo="-" indent
-            />
-          )}
           {r.notasCreditoBanco.length > 0 && (
             <FilaConciliacion
-              label={`Más: Notas crédito banco (${r.notasCreditoBanco.length})`}
+              label={`(+) Notas crédito banco (${r.notasCreditoBanco.length})`}
               monto={r.totalNotasCredito} signo="+" indent
+            />
+          )}
+          {r.notasDebitoBanco.length > 0 && (
+            <FilaConciliacion
+              label={`(-) Notas débito banco (${r.notasDebitoBanco.length})`}
+              monto={r.totalNotasDebito} signo="-" indent
             />
           )}
           <FilaConciliacion label="Saldo ajustado libros" monto={r.saldoAjustadoLibros} esTotal />

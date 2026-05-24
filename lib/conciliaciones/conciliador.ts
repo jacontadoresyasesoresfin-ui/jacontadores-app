@@ -203,8 +203,58 @@ export function ejecutarConciliacion(
   }
   registrar(`Etapa 3 (agrupados): ${n3} matches`)
 
-  // ── ETAPA 4: Siigo ↔ banco ────────────────────────────────────────────────
+  // ── ETAPA 4: Banco ↔ Siigo cuentas bancarias (PUC 11xx) ──────────────────
+  // Dirección: crédito banco = débito Siigo 11xx (abono); débito banco = crédito Siigo 11xx (cargo)
   let n4 = 0
+  const RE_11 = /^11/
+  const siigoDb11 = siigo.filter(s => s.cuentaContable && RE_11.test(s.cuentaContable) && s.debito  > 0)
+  const siigoCr11 = siigo.filter(s => s.cuentaContable && RE_11.test(s.cuentaContable) && s.credito > 0)
+
+  // Crédito banco ↔ Débito Siigo 11xx (mismo flujo: plata entra al banco)
+  for (const mov of banco.filter(m => m.estado === 'no_conciliado' && m.tipo === 'credito')) {
+    let mejor: { s: MovimientoSiigo; score: number } | null = null
+    for (const s of siigoDb11.filter(s => s.estado === 'no_conciliado')) {
+      const dm = pctDiff(mov.monto, s.debito)
+      if (dm > 0.01) continue
+      const dd = diffDias(mov.fecha, s.fecha)
+      if (dd > toleranciaD * 3) continue
+      const score = (1 - dm) * 0.7 + Math.max(0, 1 - dd / (toleranciaD * 3 + 1)) * 0.3
+      if (score >= umbralMin && (!mejor || score > mejor.score)) mejor = { s, score }
+    }
+    if (mejor) {
+      const est: EstadoConciliacion = mejor.score >= 0.85 ? 'conciliado' : 'revision'
+      const match = crearMatch([mov.id], [], [mejor.s.id], 'fuzzy', mejor.score,
+                               mov.monto, mejor.s.debito, Math.round(diffDias(mov.fecha, mejor.s.fecha)))
+      matches.push(match)
+      marcarBanco(mov, est, match.idMatch, mejor.score)
+      mejor.s.estado = est; mejor.s.matchIds.push(match.idMatch); mejor.s.confianzaMatch = mejor.score
+      n4++
+    }
+  }
+
+  // Débito banco ↔ Crédito Siigo 11xx (mismo flujo: plata sale del banco)
+  for (const mov of banco.filter(m => m.estado === 'no_conciliado' && m.tipo === 'debito')) {
+    let mejor: { s: MovimientoSiigo; score: number } | null = null
+    for (const s of siigoCr11.filter(s => s.estado === 'no_conciliado')) {
+      const dm = pctDiff(mov.monto, s.credito)
+      if (dm > 0.01) continue
+      const dd = diffDias(mov.fecha, s.fecha)
+      if (dd > toleranciaD * 3) continue
+      const score = (1 - dm) * 0.7 + Math.max(0, 1 - dd / (toleranciaD * 3 + 1)) * 0.3
+      if (score >= umbralMin && (!mejor || score > mejor.score)) mejor = { s, score }
+    }
+    if (mejor) {
+      const est: EstadoConciliacion = mejor.score >= 0.85 ? 'conciliado' : 'revision'
+      const match = crearMatch([mov.id], [], [mejor.s.id], 'fuzzy', mejor.score,
+                               mov.monto, mejor.s.credito, Math.round(diffDias(mov.fecha, mejor.s.fecha)))
+      matches.push(match)
+      marcarBanco(mov, est, match.idMatch, mejor.score)
+      mejor.s.estado = est; mejor.s.matchIds.push(match.idMatch); mejor.s.confianzaMatch = mejor.score
+      n4++
+    }
+  }
+
+  // Fallback: movimientos banco restantes ↔ cualquier Siigo restante por monto/fecha
   for (const mov of banco.filter(m => m.estado === 'no_conciliado')) {
     for (const s of siigo.filter(s => s.estado === 'no_conciliado')) {
       const dm = pctDiff(mov.monto, s.monto)
@@ -213,21 +263,27 @@ export function ejecutarConciliacion(
       if (dd > toleranciaD * 2) continue
       const score = (1 - dm) * 0.6 + (1 - dd / (toleranciaD * 2 + 1)) * 0.4
       if (score >= umbralMin) {
-        const estado: EstadoConciliacion = score >= 0.85 ? 'conciliado' : 'revision'
+        const est: EstadoConciliacion = score >= 0.85 ? 'conciliado' : 'revision'
         const match = crearMatch([mov.id], [], [s.id], 'fuzzy', score,
                                  mov.monto, s.monto, Math.round(dd))
         matches.push(match)
-        marcarBanco(mov, estado, match.idMatch, score)
-        s.estado = estado; s.matchIds.push(match.idMatch); s.confianzaMatch = score
+        marcarBanco(mov, est, match.idMatch, score)
+        s.estado = est; s.matchIds.push(match.idMatch); s.confianzaMatch = score
         n4++
         break
       }
     }
   }
-  registrar(`Etapa 4 (Siigo↔banco): ${n4} matches`)
+
+  const n11 = siigoDb11.length + siigoCr11.length
+  if (siigo.length > 0 && n11 === 0)
+    registrar('⚠ Siigo cargado sin movimientos en cuentas bancarias (PUC 11xx). Para conciliación formal, exporte Libro Auxiliar filtrando cuentas 1105/1110/1115.')
+  else if (n11 > 0)
+    registrar(`Siigo: ${n11} movimientos en cuentas bancarias (11xx) — ${siigoDb11.length} débitos, ${siigoCr11.length} créditos`)
+  registrar(`Etapa 4 (banco↔Siigo): ${n4} matches`)
 
   // ── DISCREPANCIAS ─────────────────────────────────────────────────────────
-  const discrepancias = detectarDiscrepancias(banco, facturas, matches)
+  const discrepancias = detectarDiscrepancias(banco, facturas, matches, siigo)
   registrar(`Discrepancias detectadas: ${discrepancias.length}`)
 
   const nc = banco.filter(m => m.estado === 'conciliado').length
@@ -242,35 +298,55 @@ function detectarDiscrepancias(
   banco: MovimientoBancario[],
   facturas: FacturaElectronica[],
   matches: ResultadoMatch[],
+  siigo: MovimientoSiigo[],
 ): Discrepancia[] {
   const hoy = new Date().toISOString().slice(0, 10)
   const discs: Discrepancia[] = []
+  const tieneFact  = facturas.length > 0
+  const tieneSiigo = siigo.length > 0
 
   for (const mov of banco) {
     if (mov.tipo === 'credito' && mov.estado === 'no_conciliado') {
-      const sev: SeveridadDiscrepancia = mov.monto > 1_000_000 ? 'alta' : 'media'
-      discs.push({
-        id: idDisc(),
-        tipo: 'pago_sin_factura',
-        severidad: sev,
-        descripcion: `Crédito de $${fmtCOP(mov.monto)} el ${mov.fecha} (${mov.descripcion.slice(0,50)}) sin factura DIAN asociada.`,
-        montoInvolucrado: mov.monto,
-        idsRelacionados: [mov.id],
-        recomendacion: 'Verificar si existe la factura electrónica en el portal DIAN o si es un anticipo, préstamo u otro ingreso no facturado.',
-        fechaDeteccion: hoy,
-      })
+      if (tieneFact) {
+        // Con facturas DIAN cargadas: todo crédito sin match es sospechoso
+        const sev: SeveridadDiscrepancia = mov.monto > 1_000_000 ? 'alta' : 'media'
+        discs.push({
+          id: idDisc(),
+          tipo: 'pago_sin_factura',
+          severidad: sev,
+          descripcion: `Crédito de $${fmtCOP(mov.monto)} el ${mov.fecha} (${mov.descripcion.slice(0,50)}) sin factura DIAN asociada.`,
+          montoInvolucrado: mov.monto,
+          idsRelacionados: [mov.id],
+          recomendacion: 'Verificar si existe la factura electrónica en el portal DIAN o si es un anticipo, préstamo u otro ingreso no facturado.',
+          fechaDeteccion: hoy,
+        })
+      } else if (tieneSiigo && mov.monto > 5_000_000) {
+        // Con solo Siigo: solo reportar créditos grandes sin registro contable
+        discs.push({
+          id: idDisc(),
+          tipo: 'pago_sin_factura',
+          severidad: 'media',
+          descripcion: `Crédito bancario de $${fmtCOP(mov.monto)} el ${mov.fecha} (${mov.descripcion.slice(0,50)}) sin registro en Libro Auxiliar Siigo.`,
+          montoInvolucrado: mov.monto,
+          idsRelacionados: [mov.id],
+          recomendacion: 'Verificar si este ingreso fue registrado en el Libro Auxiliar Siigo (cuentas 11xx).',
+          fechaDeteccion: hoy,
+        })
+      }
     }
     if (mov.tipo === 'debito' && mov.estado === 'no_conciliado' && mov.monto > 500_000) {
-      discs.push({
-        id: idDisc(),
-        tipo: 'debito_sin_soporte',
-        severidad: 'baja',
-        descripcion: `Débito de $${fmtCOP(mov.monto)} el ${mov.fecha} (${mov.descripcion.slice(0,50)}) sin soporte en Siigo.`,
-        montoInvolucrado: mov.monto,
-        idsRelacionados: [mov.id],
-        recomendacion: 'Verificar si existe factura de compra o gasto registrado en el sistema contable.',
-        fechaDeteccion: hoy,
-      })
+      if (tieneFact || tieneSiigo) {
+        discs.push({
+          id: idDisc(),
+          tipo: 'debito_sin_soporte',
+          severidad: 'baja',
+          descripcion: `Débito de $${fmtCOP(mov.monto)} el ${mov.fecha} (${mov.descripcion.slice(0,50)}) sin soporte en ${tieneSiigo ? 'Libro Auxiliar Siigo' : 'facturas DIAN'}.`,
+          montoInvolucrado: mov.monto,
+          idsRelacionados: [mov.id],
+          recomendacion: 'Verificar si existe factura de compra o gasto registrado en el sistema contable.',
+          fechaDeteccion: hoy,
+        })
+      }
     }
   }
 
@@ -450,49 +526,59 @@ export function calcularConciliacionBancaria(
   } else if (siigoBank.length > 0) {
     const tc = siigoBank.reduce((s, m) => s + m.credito, 0)
     const td = siigoBank.reduce((s, m) => s + m.debito,  0)
-    saldoSegunLibros = tc - td
+    saldoSegunLibros = td - tc  // 11xx es cuenta activo: débitos suman, créditos restan
   } else {
     saldoSegunLibros = saldoSegunBanco  // sin datos Siigo, no hay diferencia calculable
   }
 
-  // ── Identificar partidas conciliatorias ──────────────────────────────────
-  // Tolerancia: mismo monto ± 0.1% y fecha dentro de 10 días
-  const DIAS_TOL = 10
+  // ── Identificar partidas conciliatorias (Formato T colombiano) ───────────
+  //
+  // LADO BANCO:
+  //   (+) Depósitos en tránsito: registrados en Siigo (DÉBITO 11xx) pero
+  //       aún no aparecen en el extracto bancario.
+  //   (-) Cheques en circulación: registrados en Siigo (CRÉDITO 11xx) pero
+  //       el banco aún no los ha debitado.
+  //
+  // LADO LIBROS:
+  //   (+) Notas crédito banco: el banco acreditó la cuenta (CRÉDITO extracto)
+  //       pero aún no se contabilizó en Siigo.
+  //   (-) Notas débito banco: el banco cargó la cuenta (DÉBITO extracto)
+  //       pero aún no se contabilizó en Siigo.
 
-  // Créditos banco sin match → depósitos en tránsito
-  const depositosTransito: PartidaConciliatoria[] = banco
-    .filter(m => m.tipo === 'credito' && m.estado === 'no_conciliado')
-    .map(m => partida(
-      'deposito_transito',
-      `Depósito en tránsito — ${m.descripcion.slice(0, 60)}`,
-      m.fecha, m.monto, m.id, undefined, m.referencia,
-    ))
-
-  // Débitos en Siigo sin match en banco → cheques/pagos pendientes de cobro
-  const chequesPendientes: PartidaConciliatoria[] = siigoBank
+  // Depósitos en tránsito: DÉBITO Siigo 11xx sin match en extracto
+  const depositosTransito: PartidaConciliatoria[] = siigoBank
     .filter(s => s.debito > 0 && s.estado === 'no_conciliado')
     .map(s => partida(
-      'cheque_circulacion',
-      `Pago/cheque pendiente — ${s.descripcion?.slice(0, 60) ?? s.numeroDocumento ?? ''}`,
+      'deposito_transito',
+      `Depósito en tránsito — ${s.descripcion?.slice(0, 60) ?? s.numeroDocumento ?? ''}`,
       s.fecha, s.debito, s.id, s.cuentaContable, s.numeroDocumento,
     ))
 
-  // Débitos banco sin match → notas débito del banco no contabilizadas
+  // Cheques en circulación: CRÉDITO Siigo 11xx sin match en extracto
+  const chequesPendientes: PartidaConciliatoria[] = siigoBank
+    .filter(s => s.credito > 0 && s.estado === 'no_conciliado')
+    .map(s => partida(
+      'cheque_circulacion',
+      `Cheque/pago en circulación — ${s.descripcion?.slice(0, 60) ?? s.numeroDocumento ?? ''}`,
+      s.fecha, s.credito, s.id, s.cuentaContable, s.numeroDocumento,
+    ))
+
+  // Notas débito banco: DÉBITO extracto sin registrar en Siigo
   const notasDebitoBanco: PartidaConciliatoria[] = banco
     .filter(m => m.tipo === 'debito' && m.estado === 'no_conciliado')
     .map(m => partida(
       'nota_debito_banco',
-      `Cargo banco no contabilizado — ${m.descripcion.slice(0, 60)}`,
-      m.fecha, m.monto, m.id,
+      `Nota débito banco — ${m.descripcion.slice(0, 60)}`,
+      m.fecha, m.monto, m.id, undefined, m.referencia,
     ))
 
-  // Créditos Siigo banco sin match → notas crédito no contabilizadas
-  const notasCreditoBanco: PartidaConciliatoria[] = siigoBank
-    .filter(s => s.credito > 0 && s.estado === 'no_conciliado')
-    .map(s => partida(
+  // Notas crédito banco: CRÉDITO extracto sin registrar en Siigo
+  const notasCreditoBanco: PartidaConciliatoria[] = banco
+    .filter(m => m.tipo === 'credito' && m.estado === 'no_conciliado')
+    .map(m => partida(
       'nota_credito_banco',
-      `Abono banco no contabilizado — ${s.descripcion?.slice(0, 60) ?? ''}`,
-      s.fecha, s.credito, s.id, s.cuentaContable, s.numeroDocumento,
+      `Nota crédito banco — ${m.descripcion.slice(0, 60)}`,
+      m.fecha, m.monto, m.id, undefined, m.referencia,
     ))
 
   // Errores de registro: matches con diferencia significativa de monto
@@ -504,11 +590,11 @@ export function calcularConciliacionBancaria(
   const totalNDebito    = notasDebitoBanco.reduce((s, p) => s + p.monto, 0)
   const totalNCredito   = notasCreditoBanco.reduce((s, p) => s + p.monto, 0)
 
-  // Fórmula conciliación bancaria colombiana:
-  // Saldo ajustado banco = Saldo banco - Depósitos en tránsito + Cheques pendientes
-  // Saldo ajustado libros = Saldo libros - Notas débito + Notas crédito
-  const saldoAjustadoBanco  = saldoSegunBanco  - totalDepositos + totalCheques
-  const saldoAjustadoLibros = saldoSegunLibros - totalNDebito   + totalNCredito
+  // Fórmula Formato T colombiano:
+  // Lado banco:   saldo extracto + depósitos en tránsito − cheques en circulación = saldo conciliado
+  // Lado libros:  saldo Siigo    + notas crédito banco   − notas débito banco     = saldo conciliado
+  const saldoAjustadoBanco  = saldoSegunBanco  + totalDepositos - totalCheques
+  const saldoAjustadoLibros = saldoSegunLibros + totalNCredito  - totalNDebito
   const diferencia          = Math.abs(saldoAjustadoBanco - saldoAjustadoLibros)
 
   return {

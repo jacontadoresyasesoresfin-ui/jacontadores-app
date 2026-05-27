@@ -44,12 +44,8 @@ jobs:
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
           mkdir -p .next/standalone/tmp
-          # pdf-parse v1 se carga con require() en runtime — copiar al standalone
-          # v1 bundlea pdf.js internamente, no necesita pdfjs-dist ni workers
-          mkdir -p .next/standalone/node_modules
-          cp -r node_modules/pdf-parse .next/standalone/node_modules/pdf-parse
           echo "Package size: $(du -sh .next/standalone | cut -f1)"
-          ls -la .next/standalone/node_modules/ | tail -20
+          ls -la .next/standalone/node_modules/ | grep pdf || echo "(pdf-parse trazado por Next.js standalone)"
 
       - name: Deploy via FTP to app.jacontadores.com
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

@@ -107,29 +107,6 @@ function parsearMontoInt(raw: string): number {
   return Math.abs(parseFloat(raw.replace(/,/g, '').replace(/\$/g, '').trim()) || 0)
 }
 
-/** Monto en formato colombiano: 1.234.567,89 → 1234567.89 */
-function parsearMontoCOP(raw: string): number {
-  return Math.abs(parseFloat(raw.replace(/\./g, '').replace(',', '.').replace(/\$/g, '').trim()) || 0)
-}
-
-/**
- * Parsea un monto en cualquier formato colombiano o internacional.
- * Detecta automáticamente el separador de miles/decimal.
- */
-function parsearMontoAmbiguo(raw: string): number {
-  const s = raw.replace(/\$/g, '').replace(/\s/g, '').trim()
-  if (!s) return 0
-  // Colombiano con decimal: 1.234.567,89
-  if (/^[\d.]+,\d{1,2}$/.test(s)) return parsearMontoCOP(s)
-  // Internacional con decimal: 1,234,567.89
-  if (/^[\d,]+\.\d{1,2}$/.test(s)) return parsearMontoInt(s)
-  // Solo puntos (miles colombiano): 1.234.567
-  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return parseFloat(s.replace(/\./g, '')) || 0
-  // Solo comas (miles internacional): 1,234,567
-  if (/^\d{1,3}(,\d{3})+$/.test(s)) return parseFloat(s.replace(/,/g, '')) || 0
-  // Número plano
-  return Math.abs(parseFloat(s) || 0)
-}
 
 function nuevoMovimiento(
   banco: string, fecha: string, descripcion: string,
@@ -181,12 +158,13 @@ function detectarBanco(texto: string): { banco: BancoDetectado; nombre: string }
 //    • Descripción puede continuar en línea(s) siguiente(s) sin prefijo de fecha.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Detecta inicio de fila de transacción Davivienda: "DD MM $ AMOUNT+/-"
-// Soporta formato internacional (1,234.00) y colombiano (1.234,00)
-const RE_DAVI_TX = /^(\d{1,2})\s+(\d{1,2})\s+\$\s*([\d.,]+)\s*([+-])\s*(\d{2,})?[^\w]*(.*)/
+// pdf-parse v1 colapsa espacios → el texto real es "DDMM$ 839.00-0401Descripcion"
+// (día y mes pegados, sin espacio antes del $, doc de 4 dígitos pegado al signo)
+const RE_DAVI_TX = /^(\d{2})(\d{2})\$\s*([\d,]+(?:\.\d+)?)\s*([+-])\s*(\d{4})?(.*)/
 
-// Líneas que nunca son continuación de descripción
-const RE_DAVI_SKIP = /^(fecha\s+valor|cuenta\s+de\s+(ahorros|corriente)|banco\s+davivienda|nit\.|apreciado\s+cliente|saldo\s+(anterior|promedio|nuevo)|m[aá]s\s+cr[eé]ditos|menos\s+d[eé]bitos|informe\s+del\s+mes|este\s+producto|cualquier\s+diferencia|recuerde|h\.0|vigilado|superintendencia|\d{1,4}\s*$|la\s+importancia)/i
+// Líneas de cabecera/pie que deben ignorarse como continuación de descripción
+// Los nombres están concatenados porque pdf-parse v1 colapsa espacios
+const RE_DAVI_SKIP = /^(fechavalordoc|cuentade(ahorros|corriente)|bancodavivienda|informedelmes|saldo(anterior|promedio|nuevo)|nuevosaldo|m[aá]scr[eé]dito|menosd[eé]bito|apreciadocliente|esteproducto|cualquierdiferencia|recuerde|h\.0|vigilado|superintendencia|\d{1,4}\s*$|laimportancia|\?\?|[a-z]+\/\d{4})/i
 
 function parsearDavivienda(
   texto: string,
@@ -195,9 +173,8 @@ function parsearDavivienda(
   const movimientos: MovimientoBancario[] = []
   const errores: string[] = []
 
-  // ── Extraer año del header ─────────────────────────────────────────────────
-  const añoMatch = texto.match(/(?:INFORME\s+DEL\s+MES|\/)\s*(\d{4})/i)
-    ?? texto.match(/\b(202[0-9])\b/)
+  // ── Extraer año del header ("ABRIL/2026" → /2026 → 2026) ──────────────────
+  const añoMatch = texto.match(/\/\s*(202[0-9])/i) ?? texto.match(/\b(202[0-9])\b/)
   const año = añoMatch ? parseInt(añoMatch[1]) : new Date().getFullYear()
 
   // ── Procesar líneas con estado "transacción en curso" ─────────────────────
@@ -212,9 +189,7 @@ function parsearDavivienda(
 
   const emitirTx = () => {
     if (!tx || tx.monto <= 0) { tx = null; return }
-    const mes  = tx.mm.padStart(2, '0')
-    const dia  = tx.dd.padStart(2, '0')
-    const fecha = `${año}-${mes}-${dia}`
+    const fecha = `${año}-${tx.mm}-${tx.dd}`
     const tipo: TipoMovimiento = tx.signo === '+' ? 'credito' : 'debito'
     const desc = tx.partesDesc.join(' ').replace(/\s{2,}/g, ' ').trim()
     movimientos.push(nuevoMovimiento(
@@ -228,7 +203,8 @@ function parsearDavivienda(
     const m = linea.match(RE_DAVI_TX)
     if (m) {
       emitirTx()
-      const monto = parsearMontoAmbiguo(m[3])
+      // m[3] tiene formato internacional: 2,800,000.00 → parsearMontoInt
+      const monto = parsearMontoInt(m[3])
       if (monto > 0) {
         tx = {
           dd: m[1], mm: m[2],
@@ -238,7 +214,6 @@ function parsearDavivienda(
         }
       }
     } else if (tx) {
-      // Línea de continuación: agregar a descripción si no es ruido
       if (!RE_DAVI_SKIP.test(linea) && linea.length > 2) {
         tx.partesDesc.push(linea)
       }
@@ -248,7 +223,7 @@ function parsearDavivienda(
 
   if (movimientos.length === 0) {
     errores.push(
-      'Davivienda: no se encontraron transacciones con el formato esperado "DD MM $ monto+/-". ' +
+      'Davivienda: no se encontraron transacciones. ' +
       'Se intentará el parser genérico como alternativa.',
     )
   }

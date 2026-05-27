@@ -106,7 +106,7 @@ export class Formato1010Strategy implements IFormatoExogena<Fila1010> {
     const t = a.tercero
     const nombreRaw = t.razonSocial
       ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
-    const esPJ = t.tipoDocumento === '3' || esPersonaJuridica(nombreRaw)
+    const esPJ = esPersonaJuridica(nombreRaw)
     const nombres = !esPJ ? parsearNombreColombia(nombreRaw) : null
     const depto = t.deptoCodigo ?? (t.municipioCodigo ? t.municipioCodigo.slice(0, 2) : '')
     const muni  = t.municipioCodigo ?? (t.deptoCodigo ? (buscarMunicipio(DEPARTAMENTOS[t.deptoCodigo] ?? '') ?? '') : '')

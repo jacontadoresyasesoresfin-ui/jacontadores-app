@@ -333,7 +333,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
     const nombreRaw = t.razonSocial
       ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
 
-    const esPJ = t.tipoDocumento === '3' || esPersonaJuridica(nombreRaw)
+    const esPJ = esPersonaJuridica(nombreRaw)
     const nombres = !esPJ ? parsearNombreColombia(nombreRaw) : null
 
     // DIVIPOLA: inferir depto desde municipio y viceversa cuando falta uno.

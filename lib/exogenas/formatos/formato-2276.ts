@@ -181,12 +181,12 @@ export class Formato2276Strategy implements IFormatoExogena<Fila2276> {
 
   private filaVacia(a: AsientoContable, concepto: string): Fila2276 {
     const t = a.tercero
-    // Siigo exporta el nombre como string único → parseamos con el parser colombiano
-    const nombreRaw = t.razonSocial ?? [t.primerNombre, t.otrosNombres, t.primerApellido, t.segundoApellido].filter(Boolean).join(' ')
-    const esPN = !esPersonaJuridica(nombreRaw) || t.tipoDocumento !== '3'
-    const nombres = esPN ? parsearNombreColombia(nombreRaw) : { primerApellido: '', segundoApellido: '', primerNombre: '', otrosNombres: '' }
+    // F2276 = nómina = siempre personas naturales (empleados con contrato laboral).
+    // Reconstruir en orden DIAN: primerApellido segundoApellido primerNombre otrosNombres.
+    const nombreRaw = t.razonSocial
+      ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
+    const nombres = parsearNombreColombia(nombreRaw)
 
-    // Código departamento desde municipio si no viene explícito
     const depto = t.deptoCodigo ?? (t.municipioCodigo ? t.municipioCodigo.slice(0, 2) : '')
     const muni  = t.municipioCodigo ?? (t.deptoCodigo ? buscarMunicipio(DEPARTAMENTOS[t.deptoCodigo] ?? '') ?? '' : '')
 
@@ -196,13 +196,13 @@ export class Formato2276Strategy implements IFormatoExogena<Fila2276> {
       tipoDocumento:       t.tipoDocumento ?? '1',
       numeroId:            t.numeroId ?? '',
       dv:                  t.dv ?? '',
-      paisCodigo:          t.paisCodigo ?? 'CO',
+      paisCodigo:          (t.paisCodigo ?? 'CO').toUpperCase(),
       deptoCodigo:         depto,
       municipioCodigo:     muni,
-      primerApellido:      t.primerApellido  ?? nombres.primerApellido,
-      segundoApellido:     t.segundoApellido ?? nombres.segundoApellido,
-      primerNombre:        t.primerNombre    ?? nombres.primerNombre,
-      otrosNombres:        t.otrosNombres    ?? nombres.otrosNombres,
+      primerApellido:  nombres.primerApellido,
+      segundoApellido: nombres.segundoApellido,
+      primerNombre:    nombres.primerNombre,
+      otrosNombres:    nombres.otrosNombres,
       totalPagado:      0, aportesSalud:   0,
       aportesPension:   0, otrasDeducciones: 0,
       retefuente:       0, netoPagado:     0,

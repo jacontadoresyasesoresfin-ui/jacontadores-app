@@ -15,6 +15,69 @@
 import { createHash } from 'crypto'
 import type { MovimientoBancario, TipoMovimiento } from '../models'
 
+// ─── POLYFILL DOMMatrix ───────────────────────────────────────────────────────
+// pdf.js (usado por pdf-parse) requiere DOMMatrix para transformaciones de matriz.
+// Esta API existe en el navegador y en Node.js >= 19.2. En Node.js < 19 la
+// simulamos con un stub suficiente para que el parser funcione.
+if (typeof (globalThis as any).DOMMatrix === 'undefined') {
+  ;(globalThis as any).DOMMatrix = class DOMMatrix {
+    m11=1;m12=0;m13=0;m14=0;m21=0;m22=1;m23=0;m24=0
+    m31=0;m32=0;m33=1;m34=0;m41=0;m42=0;m43=0;m44=1
+    isIdentity=true;is2D=true
+    a=1;b=0;c=0;d=1;e=0;f=0
+    constructor(_?: string | number[]) {}
+    multiply()          { return new (globalThis as any).DOMMatrix() }
+    translate()         { return new (globalThis as any).DOMMatrix() }
+    scale()             { return new (globalThis as any).DOMMatrix() }
+    scale3d()           { return new (globalThis as any).DOMMatrix() }
+    rotate()            { return new (globalThis as any).DOMMatrix() }
+    rotateFromVector()  { return new (globalThis as any).DOMMatrix() }
+    rotateAxisAngle()   { return new (globalThis as any).DOMMatrix() }
+    skewX()             { return new (globalThis as any).DOMMatrix() }
+    skewY()             { return new (globalThis as any).DOMMatrix() }
+    flipX()             { return new (globalThis as any).DOMMatrix() }
+    flipY()             { return new (globalThis as any).DOMMatrix() }
+    inverse()           { return new (globalThis as any).DOMMatrix() }
+    invertSelf()        { return this }
+    multiplySelf()      { return this }
+    preMultiplySelf()   { return this }
+    translateSelf()     { return this }
+    scaleSelf()         { return this }
+    scale3dSelf()       { return this }
+    rotateSelf()        { return this }
+    rotateFromVectorSelf() { return this }
+    rotateAxisAngleSelf()  { return this }
+    skewXSelf()         { return this }
+    skewYSelf()         { return this }
+    setMatrixValue()    { return this }
+    transformPoint(p?: any) { return { x: p?.x ?? 0, y: p?.y ?? 0, z: 0, w: 1 } }
+    toFloat32Array()    { return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]) }
+    toFloat64Array()    { return new Float64Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]) }
+    toString()          { return 'matrix(1, 0, 0, 1, 0, 0)' }
+    toJSON()            { return { isIdentity: true, is2D: true } }
+    static fromMatrix()       { return new (globalThis as any).DOMMatrix() }
+    static fromFloat32Array() { return new (globalThis as any).DOMMatrix() }
+    static fromFloat64Array() { return new (globalThis as any).DOMMatrix() }
+  }
+}
+
+// ─── LOADER PDF-PARSE ─────────────────────────────────────────────────────────
+// pdf-parse/index.js ejecuta un test al importarse que requiere DOMMatrix.
+// Usando eval('require') para que Next.js/webpack no bundle la llamada y
+// quede como require nativo de Node.js en runtime, cargando el path interno
+// que NO ejecuta el test runner.
+async function cargarPdfParse(): Promise<(buf: Buffer) => Promise<{ text: string; numpages: number }>> {
+  // Intento 1: ruta interna sin test runner
+  try {
+    // eslint-disable-next-line no-eval
+    const req = eval('require') as NodeRequire
+    return req('pdf-parse/lib/pdf-parse')
+  } catch { /* continúa */ }
+  // Intento 2: paquete principal (el polyfill ya está activo)
+  const mod = await import('pdf-parse')
+  return ((mod as any).default ?? mod) as (buf: Buffer) => Promise<{ text: string; numpages: number }>
+}
+
 // ─── TIPOS INTERNOS ───────────────────────────────────────────────────────────
 
 export interface ResultadoParserPdf {
@@ -403,17 +466,14 @@ export async function parsearExtractoBancarioPdf(
   // ── Extraer texto del PDF ──────────────────────────────────────────────────
   let textoRaw = ''
   try {
-    const pdfMod = await import('pdf-parse')
-    const pdfFn = (
-      (pdfMod as unknown as { default?: unknown }).default ?? pdfMod
-    ) as unknown as (b: Buffer) => Promise<{ text: string }>
+    const pdfFn = await cargarPdfParse()
     const data = await pdfFn(buffer)
     textoRaw = data.text ?? ''
   } catch (e) {
     return {
       movimientos: [], errores: [
         `No se pudo extraer texto del PDF: ${String(e).slice(0, 200)}. ` +
-        'Verifique que el archivo no esté protegido con contraseña.',
+        'Si el PDF está protegido o es un escaneado, solicite el extracto en formato Excel (.xlsx).',
       ], lineasDetectadas: 0,
     }
   }

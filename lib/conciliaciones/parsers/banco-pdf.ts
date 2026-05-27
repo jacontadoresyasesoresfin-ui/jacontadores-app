@@ -61,21 +61,19 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
   }
 }
 
-// ─── LOADER PDF-PARSE ─────────────────────────────────────────────────────────
-// pdf-parse/index.js ejecuta un test al importarse que requiere DOMMatrix.
-// Usando eval('require') para que Next.js/webpack no bundle la llamada y
-// quede como require nativo de Node.js en runtime, cargando el path interno
-// que NO ejecuta el test runner.
-async function cargarPdfParse(): Promise<(buf: Buffer) => Promise<{ text: string; numpages: number }>> {
-  // Intento 1: ruta interna sin test runner
-  try {
-    // eslint-disable-next-line no-eval
-    const req = eval('require') as NodeRequire
-    return req('pdf-parse/lib/pdf-parse')
-  } catch { /* continúa */ }
-  // Intento 2: paquete principal (el polyfill ya está activo)
-  const mod = await import('pdf-parse')
-  return ((mod as any).default ?? mod) as (buf: Buffer) => Promise<{ text: string; numpages: number }>
+// ─── EXTRACTOR PDF ────────────────────────────────────────────────────────────
+// pdf-parse v2 cambió completamente la API: ya no exporta una función sino
+// la clase PDFParse con constructor({ data: Buffer }) y método getText().
+// Se carga con eval('require') para que Next.js/webpack no lo bundle como
+// módulo ESM — de lo contrario falla en el servidor standalone de cPanel.
+async function extraerTextoPdf(buffer: Buffer): Promise<string> {
+  // eslint-disable-next-line no-eval
+  const req = eval('require') as NodeRequire
+  const { PDFParse } = req('pdf-parse') as { PDFParse: new (opts: object) => { getText(opts?: object): Promise<{ pages: Array<{ text: string; num: number }>; text: string }> } }
+  const parser = new PDFParse({ data: buffer, verbosity: 0 })
+  const resultado = await parser.getText({ normalizeWhitespace: true })
+  // Unir páginas con salto de línea — más limpio que result.text que añade separadores
+  return resultado.pages.map(p => p.text).join('\n')
 }
 
 // ─── TIPOS INTERNOS ───────────────────────────────────────────────────────────
@@ -466,9 +464,7 @@ export async function parsearExtractoBancarioPdf(
   // ── Extraer texto del PDF ──────────────────────────────────────────────────
   let textoRaw = ''
   try {
-    const pdfFn = await cargarPdfParse()
-    const data = await pdfFn(buffer)
-    textoRaw = data.text ?? ''
+    textoRaw = await extraerTextoPdf(buffer)
   } catch (e) {
     return {
       movimientos: [], errores: [

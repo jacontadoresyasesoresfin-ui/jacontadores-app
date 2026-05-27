@@ -95,6 +95,7 @@ export interface ReglaMapeo {
   naturaleza?: 'debito' | 'credito'
   montoMinimo?: number
   incluyeRetencion?: boolean
+  deducible?: boolean         // false = gasto no deducible Art. 107 E.T. (default true)
   activo?: boolean
   notas?: string
 }

@@ -25,10 +25,10 @@ import type {
 } from '../types'
 import { RulesEngine, validarDvNit, calcularDvNit } from '../engine/rules-engine'
 import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
-import { buscarMunicipio } from '../config/divipola'
+import { buscarMunicipio, DEPARTAMENTOS } from '../config/divipola'
 
-// ── Conceptos que pueden tener porción no deducible ──────────────────────────
-const CONCEPTOS_REVISAR_DEDUCIBILIDAD = new Set(['5013', '5016', '5098'])
+// Conceptos donde el fallback "5098 — otros" puede incluir mezcla deducible/no deducible
+const CONCEPTOS_REVISAR_DEDUCIBILIDAD = new Set(['5098', '5013', '5016', '5019'])
 
 export interface Fila1001 extends FilaFormato {
   // Identificación del tercero
@@ -105,29 +105,86 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
   readonly columnas = COLUMNAS_1001_V11
 
   transformar(asientos: AsientoContable[], reglas: RulesEngine): Fila1001[] {
+    // ── Paso 1: indexar retenciones y IVA de cuentas auxiliares ──────────────
+    // El Libro Auxiliar de Siigo registra cada retención como una línea separada
+    // en cuentas 2365xx (renta), 2366xx/2367xx/2369xx (IVA), 2368xx/2369xx (ICA).
+    // Las vinculamos al gasto por documentoId + NIT para poblar el F1001.
+    type ReteEntry = {
+      retefuente: number          // 2365xx — retención renta practicada
+      reteIvaResp: number         // 23670x/23660x/236901 — ReteIVA a responsables
+      reteIvaNR: number           // 236711/23690x — ReteIVA no residentes/exterior
+      reteIca: number             // 2368xx/236905 — ReteICA practicada
+    }
+    const reteIdx = new Map<string, ReteEntry>()
+
+    for (const a of asientos) {
+      if (!a.tercero?.numeroId || !a.documentoId) continue
+      const acc = a.cuentaPuc
+      let tipo: keyof ReteEntry | null = null
+
+      // ReteFuente renta: todas las subcuentas 2365xx (PUC Decreto 2650/1993)
+      if      (/^2365/.test(acc))                              tipo = 'retefuente'
+      // ReteIVA a responsables de IVA: uso más frecuente en Siigo
+      else if (/^23670[1-6]|^23660[1-9]|^236901/.test(acc))   tipo = 'reteIvaResp'
+      // ReteIVA a no residentes / exterior (Art. 408 E.T.)
+      else if (/^23670[7-9]|^236711|^23690[23]/.test(acc))    tipo = 'reteIvaNR'
+      // ReteICA practicada: 2368xx o 236905
+      else if (/^2368|^236905/.test(acc))                     tipo = 'reteIca'
+
+      if (!tipo) continue
+      const key = `${a.documentoId}|${a.tercero.numeroId}`
+      const e = reteIdx.get(key) ?? { retefuente: 0, reteIvaResp: 0, reteIvaNR: 0, reteIca: 0 }
+      e[tipo] += a.monto
+      reteIdx.set(key, e)
+    }
+
+    // ── Paso 2: acumular filas F1001 desde cuentas de gasto ─────────────────
     const acum = new Map<string, Fila1001>()
+    // Rastrea qué pares documentoId+NIT ya tuvieron su retención aplicada
+    // para evitar doble conteo cuando un comprobante tiene varios gastos.
+    const reteAplicada = new Set<string>()
 
     for (const a of asientos) {
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1001') continue
       if (!a.tercero?.numeroId) continue
 
-      const clave = `${a.tercero.numeroId}|${regla.conceptoCodigo}`
-      const fila: Fila1001 = acum.get(clave) ?? this.filaVacia(a, regla.conceptoCodigo)
+      const filaKey = `${a.tercero.numeroId}|${regla.conceptoCodigo}`
+      const fila: Fila1001 = acum.get(filaKey) ?? this.filaVacia(a, regla.conceptoCodigo)
 
-      // Por defecto todo el pago se clasifica como deducible (Art. 107 E.T.).
-      // La contadora puede reclasificar los no deducibles en el módulo de excepciones.
-      fila.valorPagoDeducible       += a.monto
-      fila.valorPagoNoDeducible     += 0
-      fila.valorIvaDeducible        += a.valorIva               ?? 0
-      fila.valorIvaNoDeducible      += 0
-      fila.valorRetefuente          += a.retefuente             ?? 0
-      fila.valorRetefuenteAsumida   += a.retefuenteAsumida      ?? 0
-      fila.valorReteIva             += a.reteIva                ?? 0
-      fila.valorReteIvaNoResidentes += a.reteIvaNoResidentes    ?? 0
-      fila.valorReteIca             += a.reteIca                ?? 0
+      // Deducible / no deducible según la regla (Art. 107 E.T.)
+      const esDeducible = regla.deducible !== false
+      fila.valorPagoDeducible   += esDeducible ? a.monto : 0
+      fila.valorPagoNoDeducible += esDeducible ? 0 : a.monto
+      fila.valorIvaDeducible    += esDeducible ? (a.valorIva ?? 0) : 0
+      fila.valorIvaNoDeducible  += esDeducible ? 0 : (a.valorIva ?? 0)
 
-      // Mantener campos computados sincronizados
+      // Retenciones: usar las del propio asiento si vienen pre-cargadas (p.ej. XML CUFE),
+      // o cruzar contra el índice de cuentas 2365xx/2368xx del Libro Auxiliar.
+      const tieneRetePrecargada = (a.retefuente !== undefined)
+                                || (a.reteIva !== undefined)
+                                || (a.reteIca !== undefined)
+
+      if (tieneRetePrecargada) {
+        fila.valorRetefuente          += a.retefuente          ?? 0
+        fila.valorRetefuenteAsumida   += a.retefuenteAsumida   ?? 0
+        fila.valorReteIva             += a.reteIva             ?? 0
+        fila.valorReteIvaNoResidentes += a.reteIvaNoResidentes ?? 0
+        fila.valorReteIca             += a.reteIca             ?? 0
+      } else if (a.documentoId) {
+        const docNit = `${a.documentoId}|${a.tercero.numeroId}`
+        if (!reteAplicada.has(docNit)) {
+          const rete = reteIdx.get(docNit)
+          if (rete) {
+            fila.valorRetefuente          += rete.retefuente
+            fila.valorReteIva             += rete.reteIvaResp
+            fila.valorReteIvaNoResidentes += rete.reteIvaNR
+            fila.valorReteIca             += rete.reteIca
+          }
+          reteAplicada.add(docNit)
+        }
+      }
+
       fila.valorPago = fila.valorPagoDeducible + fila.valorPagoNoDeducible
       fila.valorIva  = fila.valorIvaDeducible  + fila.valorIvaNoDeducible
 
@@ -135,10 +192,9 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
       if (a.cuentaPuc)   fila._cuentasOrigen?.push(a.cuentaPuc)
       fila._reglaId = regla.id
 
-      acum.set(clave, fila)
+      acum.set(filaKey, fila)
     }
 
-    // No informar filas con cero en pago total y cero en retención
     return Array.from(acum.values()).filter(f =>
       Math.round(f.valorPago) !== 0 ||
       Math.round(f.valorRetefuente) !== 0 ||
@@ -204,6 +260,24 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
         })
       }
 
+      // Datos DIVIPOLA incompletos (el Libro Auxiliar de Siigo no los exporta)
+      if (f.paisCodigo === 'CO' && !f.municipioCodigo) {
+        excepciones.push({
+          fila: f, tipo: 'municipio_faltante', severidad: 'baja',
+          descripcion: `NIT ${f.numeroId} sin código de municipio (requerido para residentes en Colombia)`,
+          sugerencia: 'El Libro Auxiliar no incluye dirección del proveedor. Complete código DIVIPOLA en el módulo de terceros o en el Prevalidador.',
+        })
+      }
+
+      // Dirección del informado
+      if (!f.direccion) {
+        excepciones.push({
+          fila: f, tipo: 'direccion_faltante', severidad: 'baja',
+          descripcion: `NIT ${f.numeroId} sin dirección registrada (columna "Dirección" del F1001 v11)`,
+          sugerencia: 'Ingrese la dirección del tercero en el Prevalidador DIAN o en el catálogo de terceros de Siigo.',
+        })
+      }
+
       // Sin nombre ni razón social
       if (!f.razonSocial && !f.primerApellido && !f.primerNombre) {
         excepciones.push({
@@ -254,59 +328,31 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
   private filaVacia(a: AsientoContable, concepto: string): Fila1001 {
     const t = a.tercero
 
-    // Determinar si es persona natural: cualquier documento distinto de NIT (3),
-    // o NIT explícitamente marcado como persona_natural
-    const esPN = t.tipoTercero === 'persona_natural' || t.tipoDocumento !== '3'
+    // Nombre fuente: priorizar razonSocial (string único de Siigo),
+    // o reconstruir desde campos ya separados en orden DIAN (apellidos primero).
+    const nombreRaw = t.razonSocial
+      ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
 
-    // ── Nombres: parsear desde razonSocial si vienen como string único ────────
-    // Siigo exporta el nombre completo como un solo campo. Si ya vienen los
-    // campos separados (primerApellido, primerNombre, etc.) se usan directamente.
-    let primerApellido = '', segundoApellido = '', primerNombre = '', otrosNombres = ''
-    let razonSocial = ''
+    const esPJ = t.tipoDocumento === '3' || esPersonaJuridica(nombreRaw)
+    const nombres = !esPJ ? parsearNombreColombia(nombreRaw) : null
 
-    if (esPN) {
-      const nombreFuente = (t.razonSocial ?? [t.primerNombre, t.otrosNombres, t.primerApellido, t.segundoApellido].filter(Boolean).join(' ')).trim()
-      if (t.primerApellido) {
-        // Ya viene separado desde la fuente
-        primerApellido  = t.primerApellido  ?? ''
-        segundoApellido = t.segundoApellido ?? ''
-        primerNombre    = t.primerNombre    ?? ''
-        otrosNombres    = t.otrosNombres    ?? ''
-      } else if (nombreFuente && !esPersonaJuridica(nombreFuente)) {
-        // Parsear nombre colombiano: "GOMEZ LOPEZ JUAN CARLOS" → apellidos + nombres
-        const p = parsearNombreColombia(nombreFuente)
-        primerApellido  = p.primerApellido
-        segundoApellido = p.segundoApellido
-        primerNombre    = p.primerNombre
-        otrosNombres    = p.otrosNombres
-      } else {
-        // Nombre sin separar legible como empresa — usar como razonSocial
-        razonSocial = nombreFuente
-      }
-    } else {
-      razonSocial = t.razonSocial ?? [t.primerNombre, t.otrosNombres, t.primerApellido].filter(Boolean).join(' ')
-    }
-
-    // ── DIVIPOLA: depto desde municipio si no viene explícito ─────────────────
-    const municipioCodigo = t.municipioCodigo ?? ''
-    const deptoCodigo = t.deptoCodigo ?? (municipioCodigo ? municipioCodigo.slice(0, 2) : '')
-
-    // ── País: default Colombia ─────────────────────────────────────────────────
-    const paisCodigo = (t.paisCodigo && t.paisCodigo.trim()) ? t.paisCodigo.trim().toUpperCase() : 'CO'
+    // DIVIPOLA: inferir depto desde municipio y viceversa cuando falta uno.
+    const depto = t.deptoCodigo ?? (t.municipioCodigo ? t.municipioCodigo.slice(0, 2) : '')
+    const muni  = t.municipioCodigo ?? (t.deptoCodigo ? (buscarMunicipio(DEPARTAMENTOS[t.deptoCodigo] ?? '') ?? '') : '')
 
     return {
-      tipoDocumento:   t.tipoDocumento ?? (esPN ? '1' : '3'),
+      tipoDocumento:   t.tipoDocumento ?? (esPJ ? '3' : '1'),
       numeroId:        t.numeroId      ?? '',
       dv:              t.dv            ?? '',
-      paisCodigo,
-      deptoCodigo,
-      municipioCodigo,
-      primerApellido,
-      segundoApellido,
-      primerNombre,
-      otrosNombres,
-      razonSocial,
-      direccion:       t.direccion     ?? '',
+      paisCodigo:      (t.paisCodigo ?? 'CO').toUpperCase(),
+      deptoCodigo:     depto,
+      municipioCodigo: muni,
+      primerApellido:  nombres?.primerApellido  ?? '',
+      segundoApellido: nombres?.segundoApellido ?? '',
+      primerNombre:    nombres?.primerNombre    ?? '',
+      otrosNombres:    nombres?.otrosNombres    ?? '',
+      razonSocial:     esPJ ? (t.razonSocial ?? nombreRaw) : '',
+      direccion:       t.direccion ?? '',
       conceptoCodigo:  concepto,
       valorPagoDeducible: 0, valorPagoNoDeducible: 0,
       valorIvaDeducible:  0, valorIvaNoDeducible:  0,

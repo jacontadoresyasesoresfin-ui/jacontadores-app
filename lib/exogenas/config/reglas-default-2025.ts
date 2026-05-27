@@ -113,6 +113,15 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
   { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5019', prioridad: 40,
     tipoTercero: 'exterior', notas: 'Pagos al exterior — servicios (Art. 408 E.T.)' },
 
+  // ── NO DEDUCIBLES (Art. 107 / 115-1 E.T.) ────────────────────────────
+  // Se reportan en valorPagoNoDeducible del F1001. El concepto aplica igualmente.
+  { formatoCodigo: '1001', cuentaPucPatron: '5899%', conceptoCodigo: '5098', prioridad: 5,
+    deducible: false, notas: 'Multas, sanciones, intereses de mora — no deducibles (Art. 115-1 E.T.)' },
+  { formatoCodigo: '1001', cuentaPucPatron: '5290%', conceptoCodigo: '5098', prioridad: 5,
+    deducible: false, notas: 'Impuesto de renta y complementarios — no deducible (Art. 105 E.T.)' },
+  { formatoCodigo: '1001', cuentaPucPatron: '5295%', conceptoCodigo: '5098', prioridad: 5,
+    deducible: false, notas: 'Impuesto al patrimonio — no deducible' },
+
   // ── Fallback gastos clase 5 (excluye 511x que van en F2276) ──────────
   { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5098', prioridad: 99,
     notas: 'Otros pagos — fallback clase 5. Revisar clasificación.' },

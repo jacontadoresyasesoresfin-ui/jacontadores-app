@@ -67,13 +67,12 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
 // Se carga con eval('require') para que Next.js/webpack no lo bundle como
 // módulo ESM — de lo contrario falla en el servidor standalone de cPanel.
 async function extraerTextoPdf(buffer: Buffer): Promise<string> {
-  // serverExternalPackages en next.config.ts excluye pdf-parse del bundle de webpack.
-  // El require estático permite que el file-tracer del standalone lo incluya.
+  // pdf-parse v1.1.1 — exporta función directa, sin workers de PDF.js
+  // serverExternalPackages en next.config.ts lo excluye del bundle webpack
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PDFParse } = require('pdf-parse') as { PDFParse: new (opts: object) => { getText(opts?: object): Promise<{ pages: Array<{ text: string; num: number }>; text: string }> } }
-  const parser = new PDFParse({ data: buffer, verbosity: 0 })
-  const resultado = await parser.getText({ normalizeWhitespace: true })
-  return resultado.pages.map(p => p.text).join('\n')
+  const pdfParse = require('pdf-parse') as (buf: Buffer, opts?: Record<string, unknown>) => Promise<{ text: string; numpages: number }>
+  const data = await pdfParse(buffer, { max: 0 })
+  return data.text
 }
 
 // ─── TIPOS INTERNOS ───────────────────────────────────────────────────────────
@@ -200,10 +199,6 @@ function parsearDavivienda(
   const añoMatch = texto.match(/(?:INFORME\s+DEL\s+MES|\/)\s*(\d{4})/i)
     ?? texto.match(/\b(202[0-9])\b/)
   const año = añoMatch ? parseInt(añoMatch[1]) : new Date().getFullYear()
-
-  // ── Extraer saldos de resumen para validación ──────────────────────────────
-  const saldoNuevoMatch = texto.match(/Nuevo\s+Saldo\s+\$?\s*([\d,]+\.\d{2})/i)
-  const saldoNuevo = saldoNuevoMatch ? parsearMontoInt(saldoNuevoMatch[1]) : undefined
 
   // ── Procesar líneas con estado "transacción en curso" ─────────────────────
   const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean)

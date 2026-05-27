@@ -44,8 +44,17 @@ jobs:
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
           mkdir -p .next/standalone/tmp
+          # pdf-parse se carga con require() en runtime — copiar al standalone
+          # porque el file-tracer no lo detecta a través de módulos ESM dinámicos
+          mkdir -p .next/standalone/node_modules
+          cp -r node_modules/pdf-parse .next/standalone/node_modules/pdf-parse
+          cp -r node_modules/pdfjs-dist .next/standalone/node_modules/pdfjs-dist
+          if [ -d node_modules/@napi-rs ]; then
+            mkdir -p .next/standalone/node_modules/@napi-rs
+            cp -r node_modules/@napi-rs/canvas .next/standalone/node_modules/@napi-rs/canvas 2>/dev/null || true
+          fi
           echo "Package size: $(du -sh .next/standalone | cut -f1)"
-          ls -la .next/standalone/
+          ls -la .next/standalone/node_modules/ | tail -20
 
       - name: Deploy via FTP to app.jacontadores.com
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

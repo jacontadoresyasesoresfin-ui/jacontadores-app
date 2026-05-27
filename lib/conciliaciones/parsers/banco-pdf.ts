@@ -67,12 +67,12 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
 // Se carga con eval('require') para que Next.js/webpack no lo bundle como
 // módulo ESM — de lo contrario falla en el servidor standalone de cPanel.
 async function extraerTextoPdf(buffer: Buffer): Promise<string> {
-  // eslint-disable-next-line no-eval
-  const req = eval('require') as NodeRequire
-  const { PDFParse } = req('pdf-parse') as { PDFParse: new (opts: object) => { getText(opts?: object): Promise<{ pages: Array<{ text: string; num: number }>; text: string }> } }
+  // serverExternalPackages en next.config.ts excluye pdf-parse del bundle de webpack.
+  // El require estático permite que el file-tracer del standalone lo incluya.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PDFParse } = require('pdf-parse') as { PDFParse: new (opts: object) => { getText(opts?: object): Promise<{ pages: Array<{ text: string; num: number }>; text: string }> } }
   const parser = new PDFParse({ data: buffer, verbosity: 0 })
   const resultado = await parser.getText({ normalizeWhitespace: true })
-  // Unir páginas con salto de línea — más limpio que result.text que añade separadores
   return resultado.pages.map(p => p.text).join('\n')
 }
 

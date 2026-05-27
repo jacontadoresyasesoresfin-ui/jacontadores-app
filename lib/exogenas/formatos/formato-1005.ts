@@ -5,6 +5,8 @@
  */
 import type { IFormatoExogena, FilaFormato, ColumnaDefinicion, AsientoContable, ExcepcionGenerada } from '../types'
 import { RulesEngine } from '../engine/rules-engine'
+import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
+import { buscarMunicipio, DEPARTAMENTOS } from '../config/divipola'
 
 export interface Fila1005 extends FilaFormato {
   tipoDocumento: string
@@ -51,24 +53,39 @@ export class Formato1005Strategy implements IFormatoExogena<Fila1005> {
       if (!regla || regla.formatoCodigo !== '1005') continue
       if (!a.tercero?.numeroId) continue
       const clave = `${a.tercero.numeroId}|${regla.conceptoCodigo}`
-      const fila: Fila1005 = acum.get(clave) ?? {
-        tipoDocumento: a.tercero.tipoDocumento ?? '3',
-        numeroId: a.tercero.numeroId, dv: a.tercero.dv ?? '',
-        paisCodigo: a.tercero.paisCodigo ?? 'CO',
-        deptoCodigo: a.tercero.deptoCodigo ?? '', municipioCodigo: a.tercero.municipioCodigo ?? '',
-        primerApellido: a.tercero.primerApellido ?? '', segundoApellido: a.tercero.segundoApellido ?? '',
-        primerNombre: a.tercero.primerNombre ?? '', otrosNombres: a.tercero.otrosNombres ?? '',
-        razonSocial: a.tercero.razonSocial ?? '',
-        conceptoCodigo: regla.conceptoCodigo,
-        valorCompra: 0, valorIvaDescontable: 0,
-        _documentosIds: [], _cuentasOrigen: [],
-      }
-      fila.valorCompra        += a.monto
+      const fila: Fila1005 = acum.get(clave) ?? this.filaVacia(a, regla.conceptoCodigo)
+      fila.valorCompra         += a.monto
       fila.valorIvaDescontable += a.valorIva ?? 0
       if (a.documentoId) fila._documentosIds?.push(a.documentoId)
       acum.set(clave, fila)
     }
     return Array.from(acum.values()).filter(f => f.valorIvaDescontable !== 0)
+  }
+
+  private filaVacia(a: AsientoContable, concepto: string): Fila1005 {
+    const t = a.tercero
+    const nombreRaw = t.razonSocial
+      ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
+    const esPJ = t.tipoDocumento === '3' || esPersonaJuridica(nombreRaw)
+    const nombres = !esPJ ? parsearNombreColombia(nombreRaw) : null
+    const depto = t.deptoCodigo ?? (t.municipioCodigo ? t.municipioCodigo.slice(0, 2) : '')
+    const muni  = t.municipioCodigo ?? (t.deptoCodigo ? (buscarMunicipio(DEPARTAMENTOS[t.deptoCodigo] ?? '') ?? '') : '')
+    return {
+      tipoDocumento:   t.tipoDocumento ?? (esPJ ? '3' : '1'),
+      numeroId:        t.numeroId ?? '',
+      dv:              t.dv ?? '',
+      paisCodigo:      (t.paisCodigo ?? 'CO').toUpperCase(),
+      deptoCodigo:     depto,
+      municipioCodigo: muni,
+      primerApellido:  nombres?.primerApellido  ?? '',
+      segundoApellido: nombres?.segundoApellido ?? '',
+      primerNombre:    nombres?.primerNombre    ?? '',
+      otrosNombres:    nombres?.otrosNombres    ?? '',
+      razonSocial:     esPJ ? (t.razonSocial ?? nombreRaw) : '',
+      conceptoCodigo:  concepto,
+      valorCompra: 0, valorIvaDescontable: 0,
+      _documentosIds: [], _cuentasOrigen: [],
+    }
   }
 
   validar(filas: Fila1005[]): ExcepcionGenerada[] {

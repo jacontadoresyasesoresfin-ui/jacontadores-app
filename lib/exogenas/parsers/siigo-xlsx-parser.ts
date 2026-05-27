@@ -18,6 +18,7 @@
 import * as XLSX from 'xlsx'
 import type { AsientoContable, TerceroExogena, TipoDocumentoDIAN } from '../types'
 import type { ResultadoParseoCsv } from './siigo-csv-parser'
+import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
 
 // ── Códigos de hoja del Prevalidador DIAN (para distinguirlo del Libro Auxiliar) ──
 const DIAN_SHEET_CODES = new Set(['1001', '1005', '1006', '1007', '1010'])
@@ -222,26 +223,25 @@ function excelSerialToIso(v: unknown): string {
 
 function construirTercero(nitRaw: string, dvRaw: string, nombreRaw: string): TerceroExogena {
   const soloDigitos = nitRaw.replace(/\D/g, '')
+  // xlsx tiene columna DV separada → si existe, es NIT
   const dv = dvRaw.replace(/\D/g, '') || undefined
   const nombre = nombreRaw.trim()
 
-  // Heurística: NIT empresarial = 9 dígitos comenzando con 8 o 9, o identificado por el nombre
-  const esProbableNit = soloDigitos.length === 9 && /^[89]/.test(soloDigitos)
-  const esPJ = esProbableNit ||
-    /S\.A\.S|LTDA|S\.A\.|E\.U\.|SAS|EMPRESA|CORP|INVERSIONES|CIA\.|ASOCIACION|CONDOMINIO|COOPERATIVA|FUNDACION|FONDO/i.test(nombre)
+  const esPJ = esPersonaJuridica(nombre)
+  const tipoDocumento: TipoDocumentoDIAN = (dv || esPJ) ? '3' : '1'
 
-  let tipoDocumento: TipoDocumentoDIAN = esPJ ? '3' : '1'
+  const nombres = !esPJ ? parsearNombreColombia(nombre) : null
 
   return {
     tipoDocumento,
-    numeroId: soloDigitos,
+    numeroId:        soloDigitos,
     dv,
-    paisCodigo: 'CO',
-    razonSocial:    esPJ ? nombre : undefined,
-    primerNombre:   !esPJ && nombre ? nombre.split(/\s+/)[0] : undefined,
-    primerApellido: !esPJ && nombre && nombre.split(/\s+/).length > 1
-      ? nombre.split(/\s+/).slice(1).join(' ')
-      : undefined,
-    tipoTercero: !soloDigitos ? undefined : esPJ ? 'persona_juridica' : 'persona_natural',
+    paisCodigo:      'CO',
+    razonSocial:     esPJ ? nombre : undefined,
+    primerApellido:  nombres?.primerApellido  || undefined,
+    segundoApellido: nombres?.segundoApellido || undefined,
+    primerNombre:    nombres?.primerNombre    || undefined,
+    otrosNombres:    nombres?.otrosNombres    || undefined,
+    tipoTercero:     esPJ ? 'persona_juridica' : 'persona_natural',
   }
 }

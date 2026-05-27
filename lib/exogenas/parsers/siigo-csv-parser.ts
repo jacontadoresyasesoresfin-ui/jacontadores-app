@@ -10,6 +10,7 @@
  * - NIT con y sin dígito de verificación (900123456-1 o 900123456)
  */
 import type { AsientoContable, TerceroExogena, TipoDocumentoDIAN } from '../types'
+import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
 
 export interface ResultadoParseoCsv {
   asientos: AsientoContable[]
@@ -263,38 +264,34 @@ function normalizarCuenta(cuenta: string): string {
 }
 
 function construirTercero(idRaw: string, nombreRaw: string): TerceroExogena {
-  // Limpiar: quitar puntos de miles del NIT (900.123.456-1 → 900123456-1)
+  // Quitar puntos de miles del NIT (900.123.456-1 → 900123456-1)
   const idLimpio = idRaw.replace(/\./g, '').trim()
-
   let numeroId = idLimpio
   let dv = ''
 
-  // Extraer DV si viene con guión (900123456-1)
+  // DV separado por guión → definitivamente NIT
   const conDv = idLimpio.match(/^(\d+)-(\d)$/)
-  if (conDv) {
-    numeroId = conDv[1]
-    dv = conDv[2]
-  }
-
-  // Inferir tipo de documento
-  let tipoDocumento: TipoDocumentoDIAN = '3'  // NIT por defecto
+  if (conDv) { numeroId = conDv[1]; dv = conDv[2] }
   const soloDigitos = numeroId.replace(/\D/g, '')
-  if (soloDigitos.length === 10) tipoDocumento = '1'    // CC (10 dígitos)
-  else if (soloDigitos.length === 11) tipoDocumento = '1' // CC larga
-  else if (soloDigitos.length <= 6) tipoDocumento = '1' // CC corta
 
-  // Determinar si es persona natural o jurídica por el nombre
   const nombre = nombreRaw.trim()
-  const esPJ = /S\.A\.S|LTDA|S\.A\.|E\.U\.|SAS|LTDA|EMPRESA|CORP|GROUP|INVERSIONES|CIA|&/i.test(nombre)
+  const esPJ = esPersonaJuridica(nombre)
+
+  // tipoDocumento: tiene DV o es empresa → NIT ('3'); CC/CE → '1'
+  const tipoDocumento: TipoDocumentoDIAN = (conDv || esPJ) ? '3' : '1'
+
+  const nombres = !esPJ ? parsearNombreColombia(nombre) : null
 
   return {
     tipoDocumento,
-    numeroId: soloDigitos,
-    dv: dv || undefined,
-    paisCodigo: 'CO',
-    razonSocial: esPJ ? nombre : undefined,
-    primerNombre: !esPJ && nombre ? nombre.split(' ')[0] : undefined,
-    primerApellido: !esPJ && nombre && nombre.split(' ').length > 1 ? nombre.split(' ').slice(1).join(' ') : undefined,
-    tipoTercero: !soloDigitos ? undefined : esPJ ? 'persona_juridica' : (tipoDocumento === '3' ? 'persona_juridica' : 'persona_natural'),
+    numeroId:        soloDigitos,
+    dv:              dv || undefined,
+    paisCodigo:      'CO',
+    razonSocial:     esPJ ? nombre : undefined,
+    primerApellido:  nombres?.primerApellido  || undefined,
+    segundoApellido: nombres?.segundoApellido || undefined,
+    primerNombre:    nombres?.primerNombre    || undefined,
+    otrosNombres:    nombres?.otrosNombres    || undefined,
+    tipoTercero:     esPJ ? 'persona_juridica' : 'persona_natural',
   }
 }

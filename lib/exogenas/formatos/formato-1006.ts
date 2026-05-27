@@ -9,6 +9,8 @@
 import type { IFormatoExogena, FilaFormato, ColumnaDefinicion, AsientoContable, ExcepcionGenerada } from '../types'
 import { RulesEngine } from '../engine/rules-engine'
 import { UVT_2025 } from '../config/reglas-default-2025'
+import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
+import { buscarMunicipio, DEPARTAMENTOS } from '../config/divipola'
 
 export interface Fila1006 extends FilaFormato {
   tipoDocumento: string
@@ -117,20 +119,25 @@ export class Formato1006Strategy implements IFormatoExogena<Fila1006> {
 
   private filaVacia(a: AsientoContable, concepto: string): Fila1006 {
     const t = a.tercero
-    const esPN = t.tipoTercero === 'persona_natural' || t.tipoDocumento !== '3'
+    const nombreRaw = t.razonSocial
+      ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
+    const esPJ = t.tipoDocumento === '3' || esPersonaJuridica(nombreRaw)
+    const nombres = !esPJ ? parsearNombreColombia(nombreRaw) : null
+    const depto = t.deptoCodigo ?? (t.municipioCodigo ? t.municipioCodigo.slice(0, 2) : '')
+    const muni  = t.municipioCodigo ?? (t.deptoCodigo ? (buscarMunicipio(DEPARTAMENTOS[t.deptoCodigo] ?? '') ?? '') : '')
     return {
-      tipoDocumento: t.tipoDocumento ?? '3',
-      numeroId: t.numeroId ?? '',
-      dv: t.dv ?? '',
-      paisCodigo: t.paisCodigo ?? 'CO',
-      deptoCodigo: t.deptoCodigo ?? '',
-      municipioCodigo: t.municipioCodigo ?? '',
-      primerApellido:  esPN ? (t.primerApellido  ?? '') : '',
-      segundoApellido: esPN ? (t.segundoApellido ?? '') : '',
-      primerNombre:    esPN ? (t.primerNombre    ?? '') : '',
-      otrosNombres:    esPN ? (t.otrosNombres    ?? '') : '',
-      razonSocial:    !esPN ? (t.razonSocial     ?? '') : '',
-      conceptoCodigo: concepto,
+      tipoDocumento:   t.tipoDocumento ?? (esPJ ? '3' : '1'),
+      numeroId:        t.numeroId ?? '',
+      dv:              t.dv ?? '',
+      paisCodigo:      (t.paisCodigo ?? 'CO').toUpperCase(),
+      deptoCodigo:     depto,
+      municipioCodigo: muni,
+      primerApellido:  nombres?.primerApellido  ?? '',
+      segundoApellido: nombres?.segundoApellido ?? '',
+      primerNombre:    nombres?.primerNombre    ?? '',
+      otrosNombres:    nombres?.otrosNombres    ?? '',
+      razonSocial:     esPJ ? (t.razonSocial ?? nombreRaw) : '',
+      conceptoCodigo:  concepto,
       valorCompra: 0, valorDevolucion: 0, valorDescuento: 0, valorNetoCompra: 0,
       _documentosIds: [], _cuentasOrigen: [],
     }

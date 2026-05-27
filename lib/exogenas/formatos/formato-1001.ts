@@ -24,6 +24,8 @@ import type {
   AsientoContable, ExcepcionGenerada,
 } from '../types'
 import { RulesEngine, validarDvNit, calcularDvNit } from '../engine/rules-engine'
+import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
+import { buscarMunicipio } from '../config/divipola'
 
 // ── Conceptos que pueden tener porción no deducible ──────────────────────────
 const CONCEPTOS_REVISAR_DEDUCIBILIDAD = new Set(['5013', '5016', '5098'])
@@ -251,19 +253,59 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
 
   private filaVacia(a: AsientoContable, concepto: string): Fila1001 {
     const t = a.tercero
+
+    // Determinar si es persona natural: cualquier documento distinto de NIT (3),
+    // o NIT explícitamente marcado como persona_natural
     const esPN = t.tipoTercero === 'persona_natural' || t.tipoDocumento !== '3'
+
+    // ── Nombres: parsear desde razonSocial si vienen como string único ────────
+    // Siigo exporta el nombre completo como un solo campo. Si ya vienen los
+    // campos separados (primerApellido, primerNombre, etc.) se usan directamente.
+    let primerApellido = '', segundoApellido = '', primerNombre = '', otrosNombres = ''
+    let razonSocial = ''
+
+    if (esPN) {
+      const nombreFuente = (t.razonSocial ?? [t.primerNombre, t.otrosNombres, t.primerApellido, t.segundoApellido].filter(Boolean).join(' ')).trim()
+      if (t.primerApellido) {
+        // Ya viene separado desde la fuente
+        primerApellido  = t.primerApellido  ?? ''
+        segundoApellido = t.segundoApellido ?? ''
+        primerNombre    = t.primerNombre    ?? ''
+        otrosNombres    = t.otrosNombres    ?? ''
+      } else if (nombreFuente && !esPersonaJuridica(nombreFuente)) {
+        // Parsear nombre colombiano: "GOMEZ LOPEZ JUAN CARLOS" → apellidos + nombres
+        const p = parsearNombreColombia(nombreFuente)
+        primerApellido  = p.primerApellido
+        segundoApellido = p.segundoApellido
+        primerNombre    = p.primerNombre
+        otrosNombres    = p.otrosNombres
+      } else {
+        // Nombre sin separar legible como empresa — usar como razonSocial
+        razonSocial = nombreFuente
+      }
+    } else {
+      razonSocial = t.razonSocial ?? [t.primerNombre, t.otrosNombres, t.primerApellido].filter(Boolean).join(' ')
+    }
+
+    // ── DIVIPOLA: depto desde municipio si no viene explícito ─────────────────
+    const municipioCodigo = t.municipioCodigo ?? ''
+    const deptoCodigo = t.deptoCodigo ?? (municipioCodigo ? municipioCodigo.slice(0, 2) : '')
+
+    // ── País: default Colombia ─────────────────────────────────────────────────
+    const paisCodigo = (t.paisCodigo && t.paisCodigo.trim()) ? t.paisCodigo.trim().toUpperCase() : 'CO'
+
     return {
-      tipoDocumento:   t.tipoDocumento ?? '3',
+      tipoDocumento:   t.tipoDocumento ?? (esPN ? '1' : '3'),
       numeroId:        t.numeroId      ?? '',
       dv:              t.dv            ?? '',
-      paisCodigo:      t.paisCodigo    ?? 'CO',
-      deptoCodigo:     t.deptoCodigo   ?? '',
-      municipioCodigo: t.municipioCodigo ?? '',
-      primerApellido:  esPN ? (t.primerApellido  ?? '') : '',
-      segundoApellido: esPN ? (t.segundoApellido ?? '') : '',
-      primerNombre:    esPN ? (t.primerNombre    ?? '') : '',
-      otrosNombres:    esPN ? (t.otrosNombres    ?? '') : '',
-      razonSocial:    !esPN ? (t.razonSocial     ?? '') : '',
+      paisCodigo,
+      deptoCodigo,
+      municipioCodigo,
+      primerApellido,
+      segundoApellido,
+      primerNombre,
+      otrosNombres,
+      razonSocial,
       direccion:       t.direccion     ?? '',
       conceptoCodigo:  concepto,
       valorPagoDeducible: 0, valorPagoNoDeducible: 0,

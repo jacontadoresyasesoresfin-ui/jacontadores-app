@@ -89,32 +89,70 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
   { formatoCodigo: '1001', cuentaPucPatron: '5175%', conceptoCodigo: '5009', prioridad: 10,
     notas: 'Regalías y patentes' },
 
-  // ── Compras de bienes e inventarios ──────────────────────────────────
+  // ── Compras de inventarios — Clase 14 PUC ────────────────────────────
+  // Clase 14 = inventarios (mercancías, M.P., productos terminados)
+  // Concepto 5007: Compras de bienes — ReteFuente 2.5%, base mín. 27 UVT
+  { formatoCodigo: '1001', cuentaPucPatron: '1430%', conceptoCodigo: '5007', prioridad: 28,
+    notas: 'Mercancías no fabricadas por la empresa' },
+  { formatoCodigo: '1001', cuentaPucPatron: '1435%', conceptoCodigo: '5007', prioridad: 28,
+    notas: 'Materias primas e insumos' },
+  { formatoCodigo: '1001', cuentaPucPatron: '1440%', conceptoCodigo: '5007', prioridad: 28,
+    notas: 'Productos en proceso' },
+  { formatoCodigo: '1001', cuentaPucPatron: '1445%', conceptoCodigo: '5007', prioridad: 28,
+    notas: 'Productos terminados' },
   { formatoCodigo: '1001', cuentaPucPatron: '14%', conceptoCodigo: '5007', prioridad: 30,
-    notas: 'Compras — activos circulantes/inventarios (Clase 14)' },
+    notas: 'Compras inventarios — Clase 14 PUC (fallback)' },
+
+  // ── Costos de ventas — Clase 6 PUC ───────────────────────────────────
   { formatoCodigo: '1001', cuentaPucPatron: '6205%', conceptoCodigo: '5007', prioridad: 30,
     notas: 'Costo de ventas — compras de mercancías' },
   { formatoCodigo: '1001', cuentaPucPatron: '7205%', conceptoCodigo: '5007', prioridad: 30,
-    notas: 'Materias primas' },
+    notas: 'Materias primas — Clase 7 (costos industriales)' },
 
   // ── Pagos al exterior ─────────────────────────────────────────────────
   { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5019', prioridad: 40,
-    tipoTercero: 'exterior', notas: 'Pagos al exterior — servicios' },
+    tipoTercero: 'exterior', notas: 'Pagos al exterior — servicios (Art. 408 E.T.)' },
 
-  // ── Pagos por contrato independiente (NO salarios directos) ──────────
-  // La cuenta 5110 agrupa TODA la nómina. Solo informar en F1001 los pagos
-  // a trabajadores independientes (honorarios por nómina), nunca los salarios
-  // de empleados vinculados por contrato laboral (esos van en declaración de
-  // retención mensual, formulario 350, no en exógenas).
-  // Usar subcuenta específica 5110-05 para independientes; la regla genérica
-  // 5110% se desactiva para evitar duplicar toda la nómina en F1001.
-  { formatoCodigo: '1001', cuentaPucPatron: '5110-05', conceptoCodigo: '5001', prioridad: 50,
-    tipoTercero: 'persona_natural',
-    notas: 'Honorarios a independientes registrados en nómina — solo sub-cuenta 5110-05' },
-
-  // ── Fallback general (gastos clase 5 no clasificados) ─────────────────
+  // ── Fallback gastos clase 5 (excluye 511x que van en F2276) ──────────
   { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5098', prioridad: 99,
-    notas: 'Otros pagos — fallback clase 5. Revisar clasificación más específica.' },
+    notas: 'Otros pagos — fallback clase 5. Revisar clasificación.' },
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  FORMATO 2276 — Información de pagos laborales (Nómina)
+  //  Res. DIAN 000227/2025 — Art. 631 E.T.
+  //  Reporta SALARIOS de empleados con contrato laboral.
+  //  Honorarios a independientes → F1001 concepto 5001/5017.
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── Sueldos y jornales ────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511005', conceptoCodigo: '6001', prioridad: 10,
+    notas: 'Sueldos y jornales (salario básico mensual)' },
+  // ── Prima de servicios ────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511010', conceptoCodigo: '6002', prioridad: 10,
+    notas: 'Prima de servicios semestral legal' },
+  // ── Cesantías e intereses ─────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511015', conceptoCodigo: '6003', prioridad: 10,
+    notas: 'Cesantías' },
+  { formatoCodigo: '2276', cuentaPucPatron: '511020', conceptoCodigo: '6003', prioridad: 10,
+    notas: 'Intereses sobre cesantías (12% anual)' },
+  // ── Vacaciones ────────────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511025', conceptoCodigo: '6004', prioridad: 10,
+    notas: 'Vacaciones (15 días hábiles / año)' },
+  // ── Horas extras ──────────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511030', conceptoCodigo: '6005', prioridad: 10,
+    notas: 'Horas extras, recargos nocturnos y dominicales' },
+  // ── Incapacidades ─────────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511035', conceptoCodigo: '6008', prioridad: 10,
+    notas: 'Incapacidades reconocidas por la empresa (días 1-2)' },
+  // ── Bonificaciones ────────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511040', conceptoCodigo: '6006', prioridad: 10,
+    notas: 'Bonificaciones y auxilios no salariales' },
+  // ── Aportes empleador ─────────────────────────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '5105%', conceptoCodigo: '6009', prioridad: 10,
+    notas: 'Aportes empleador: salud 8.5%, pensión 12%, ARL, SENA 2%, ICBF 3%, CCF 4%' },
+  // ── Otros gastos de personal (fallback) ───────────────────────────────
+  { formatoCodigo: '2276', cuentaPucPatron: '511%', conceptoCodigo: '6099', prioridad: 50,
+    notas: 'Otros gastos de personal — fallback. Revisar subcuenta.' },
 
   // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 1005 — IVA por pagar (IVA descontable por compras)

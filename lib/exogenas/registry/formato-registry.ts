@@ -10,6 +10,7 @@ import { Formato1005Strategy } from '../formatos/formato-1005'
 import { Formato1006Strategy } from '../formatos/formato-1006'
 import { Formato1007Strategy } from '../formatos/formato-1007'
 import { Formato1010Strategy } from '../formatos/formato-1010'
+import { Formato2276Strategy } from '../formatos/formato-2276'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFormato = IFormatoExogena<any>
@@ -21,6 +22,7 @@ const FORMATOS: Record<string, () => AnyFormato> = {
   '1006': () => new Formato1006Strategy(),
   '1007': () => new Formato1007Strategy(),
   '1010': () => new Formato1010Strategy(),
+  '2276': () => new Formato2276Strategy(),
 }
 
 /** Versiones vigentes por año gravable */
@@ -31,6 +33,7 @@ export const VERSION_POR_ANIO: Record<number, Record<string, string>> = {
     '1006': 'v7',
     '1007': 'v7',
     '1010': 'v7',
+    '2276': 'v1',
   },
 }
 
@@ -38,7 +41,7 @@ export const VERSION_POR_ANIO: Record<number, Record<string, string>> = {
 export const INFO_FORMATOS: Record<string, { nombre: string; descripcion: string; prioridad: number }> = {
   '1001': {
     nombre: 'Pagos o abonos en cuenta y retenciones practicadas',
-    descripcion: 'Informa pagos a terceros y retenciones en la fuente, IVA e ICA practicadas.',
+    descripcion: 'Informa pagos a terceros (proveedores, servicios, compras) y retenciones practicadas. Excluye nómina de empleados.',
     prioridad: 1,
   },
   '1005': {
@@ -48,7 +51,7 @@ export const INFO_FORMATOS: Record<string, { nombre: string; descripcion: string
   },
   '1006': {
     nombre: 'Información de compras',
-    descripcion: 'Detalle de compras de bienes y servicios por tercero (umbral > 500 UVT).',
+    descripcion: 'Detalle de compras de bienes (Clase 14 PUC) y servicios por tercero (umbral > 500 UVT).',
     prioridad: 3,
   },
   '1007': {
@@ -60,6 +63,11 @@ export const INFO_FORMATOS: Record<string, { nombre: string; descripcion: string
     nombre: 'Socios, accionistas, comuneros, cooperados y asociados',
     descripcion: 'Relación de terceros con quienes se tienen saldos en cuentas de balance.',
     prioridad: 5,
+  },
+  '2276': {
+    nombre: 'Información de pagos laborales (Nómina)',
+    descripcion: 'Informa pagos a empleados vinculados por contrato laboral: sueldos, prima, cesantías, vacaciones y aportes parafiscales. Cuentas PUC 511x y 5105x.',
+    prioridad: 6,
   },
 }
 

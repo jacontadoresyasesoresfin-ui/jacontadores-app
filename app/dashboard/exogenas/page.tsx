@@ -75,7 +75,139 @@ const ETAPAS_XLSX_INICIALES: EtapaUI[] = [
 ]
 
 const STORAGE_KEY = 'ja_exogenas_config_v2'
-const FORMATOS_DISPONIBLES = ['1001', '1005', '1006', '1007', '1010']
+const FORMATOS_DISPONIBLES = ['1001', '1003', '1005', '1006', '1007', '1008', '1009', '1010', '2276']
+
+// ── Conceptos por formato para la pantalla de configuración ───────────────────
+const CONCEPTOS_POR_FORMATO: Record<string, { valor: string; label: string }[]> = {
+  '1001': [
+    { valor: '5001', label: '5001 — Honorarios personas naturales' },
+    { valor: '5002', label: '5002 — Comisiones' },
+    { valor: '5003', label: '5003 — Servicios generales' },
+    { valor: '5004', label: '5004 — Arrendamiento inmuebles' },
+    { valor: '5005', label: '5005 — Arrendamiento muebles y equipos' },
+    { valor: '5006', label: '5006 — Intereses y rendimientos financieros' },
+    { valor: '5007', label: '5007 — Compras de bienes (inventario/activos)' },
+    { valor: '5009', label: '5009 — Regalías y patentes' },
+    { valor: '5011', label: '5011 — Consultoría y administración delegada' },
+    { valor: '5017', label: '5017 — Honorarios personas jurídicas' },
+    { valor: '5018', label: '5018 — Servicios técnicos y asistencia técnica' },
+    { valor: '5019', label: '5019 — Pagos al exterior' },
+    { valor: '5027', label: '5027 — Contribuciones y afiliaciones (parafiscales)' },
+    { valor: '5028', label: '5028 — Aseo y vigilancia' },
+    { valor: '5029', label: '5029 — Transporte de carga' },
+    { valor: '5030', label: '5030 — Transporte de pasajeros' },
+    { valor: '5039', label: '5039 — Publicidad y propaganda' },
+    { valor: '5040', label: '5040 — Seguros (primas)' },
+    { valor: '5051', label: '5051 — Mantenimiento y reparaciones' },
+    { valor: '5098', label: '5098 — Otros pagos (incluye no deducibles)' },
+    { valor: '5099', label: '5099 — Otros pagos o abonos en cuenta' },
+  ],
+  '1003': [
+    { valor: '1302', label: '1302 — Retención renta y complementarios' },
+    { valor: '1303', label: '1303 — Retención a título de ventas (IVA)' },
+    { valor: '1305', label: '1305 — Retención CREE' },
+    { valor: '1307', label: '1307 — Retención rendimientos financieros' },
+    { valor: '1310', label: '1310 — Retención ICA (ReteICA)' },
+    { valor: '1399', label: '1399 — Otras retenciones practicadas al declarante' },
+  ],
+  '1005': [
+    { valor: '9997', label: '9997 — IVA descontable (compras)' },
+  ],
+  '1006': [
+    { valor: '9998', label: '9998 — IVA generado (ventas)' },
+  ],
+  '1007': [
+    { valor: '4001', label: '4001 — Ingresos operacionales (ventas)' },
+    { valor: '4002', label: '4002 — Ingresos no operacionales' },
+  ],
+  '1008': [
+    { valor: '1315', label: '1315 — Clientes nacionales (CxC)' },
+    { valor: '1316', label: '1316 — Clientes del exterior' },
+    { valor: '1317', label: '1317 — Anticipos e impuestos a favor' },
+    { valor: '1318', label: '1318 — Provisiones cartera' },
+    { valor: '1399', label: '1399 — Otras cuentas por cobrar' },
+  ],
+  '1009': [
+    { valor: '2201', label: '2201 — Proveedores nacionales' },
+    { valor: '2202', label: '2202 — Proveedores del exterior' },
+    { valor: '2203', label: '2203 — Socios y accionistas (CxP)' },
+    { valor: '2204', label: '2204 — Costos y gastos por pagar' },
+    { valor: '2205', label: '2205 — Retenciones y aportes de nómina por pagar' },
+    { valor: '2208', label: '2208 — Acreedores varios' },
+    { valor: '2214', label: '2214 — Prestaciones sociales y aportes parafiscales' },
+    { valor: '2215', label: '2215 — Salarios por pagar' },
+    { valor: '2299', label: '2299 — Otros pasivos corrientes' },
+  ],
+  '1010': [
+    { valor: 'proveedor', label: 'Proveedor' },
+    { valor: 'cliente', label: 'Cliente' },
+    { valor: 'empleado', label: 'Empleado' },
+    { valor: 'socio', label: 'Socio / Accionista' },
+  ],
+  '2276': [
+    { valor: '6001', label: '6001 — Sueldos y jornales' },
+    { valor: '6002', label: '6002 — Prima de servicios' },
+    { valor: '6003', label: '6003 — Cesantías e intereses' },
+    { valor: '6004', label: '6004 — Vacaciones' },
+    { valor: '6005', label: '6005 — Horas extras y recargos' },
+    { valor: '6006', label: '6006 — Bonificaciones y auxilios' },
+    { valor: '6007', label: '6007 — Auxilio de transporte' },
+    { valor: '6008', label: '6008 — Incapacidades' },
+    { valor: '6009', label: '6009 — Aportes seguridad social empleador' },
+    { valor: '6010', label: '6010 — Aportes parafiscales (SENA, ICBF, CCF)' },
+    { valor: '9996', label: '9996 — Aportes obligatorios por nómina (agrupado)' },
+    { valor: '6099', label: '6099 — Otros pagos laborales' },
+  ],
+}
+
+// Descripciones + documentos recomendados por formato (guía práctica)
+const GUIA_FORMATOS: Record<string, { fuente: string; concilia: string; tip: string }> = {
+  '1001': {
+    fuente: 'Libro Auxiliar Siigo — cuentas clase 5 (gastos) y clase 6 (costos)',
+    concilia: 'Formulario 350 (retenciones practicadas) y Formulario 110/210 (deducciones renta)',
+    tip: 'Incluye honorarios, servicios, arrendamientos, compras de bienes y otros pagos a terceros. Excluye nómina de empleados.',
+  },
+  '1003': {
+    fuente: 'Libro Auxiliar Siigo — cuentas 1355xx (Anticipo de impuestos y retenciones a favor)',
+    concilia: 'Formulario 350 sección "retenciones que le practicaron" y Formulario 110/210 activo corriente',
+    tip: 'Informe las retenciones que SUS CLIENTES le descontaron. Estas son activos de la empresa que se recuperan al declarar renta.',
+  },
+  '1005': {
+    fuente: 'Libro Auxiliar Siigo — cuenta 2408 subcuentas IVA descontable (compras)',
+    concilia: 'Formulario 300 sección de compras y servicios gravados con IVA',
+    tip: 'Solo IVA que la empresa puede descontar (compras con derecho a descuento). Excluye IVA no descontable.',
+  },
+  '1006': {
+    fuente: 'Libro Auxiliar Siigo — cuenta 2408 subcuentas IVA generado (ventas)',
+    concilia: 'Formulario 300 sección de ingresos y operaciones gravadas',
+    tip: 'Ingresos sobre los que cobró IVA a sus clientes. La base debe coincidir con el F1007.',
+  },
+  '1007': {
+    fuente: 'Libro Auxiliar Siigo — cuentas clase 41 (ingresos operacionales) y 42 (no operacionales)',
+    concilia: 'Formulario 110/210 (ingresos brutos) y Formulario 300 (total ingresos)',
+    tip: 'Solo informar clientes con ingresos superiores a 500 UVT (~$24.9M). Menores se consolidan en NIT 222222222.',
+  },
+  '1008': {
+    fuente: 'Libro Auxiliar Siigo — cuentas clase 13 (deudores, clientes, retenciones a favor)',
+    concilia: 'Formulario 110/210 activo corriente — deudores al 31 de diciembre',
+    tip: 'Reporta el SALDO al cierre del año, no los movimientos. Debe coincidir con el balance general.',
+  },
+  '1009': {
+    fuente: 'Libro Auxiliar Siigo — cuentas clases 22, 23 y 25 (proveedores, CxP, pasivos laborales)',
+    concilia: 'Formulario 110/210 pasivos corrientes y laborales al 31 de diciembre',
+    tip: 'Reporta el SALDO al cierre del año. Incluye proveedores, retenciones por pagar, nómina, prestaciones y aportes.',
+  },
+  '1010': {
+    fuente: 'Libro Auxiliar Siigo — cuentas clase 31 (capital social) y 31xx (socios/accionistas)',
+    concilia: 'Formulario 110 — patrimonio neto, capital suscrito y pagado',
+    tip: 'Reporta la participación de socios y accionistas. Para empresas unipersonales informar el único socio.',
+  },
+  '2276': {
+    fuente: 'Libro Auxiliar Siigo — cuentas 511xxx (gastos de personal) y 5105xx (aportes empleador)',
+    concilia: 'Declaración de renta — salarios y prestaciones como deducción de renta',
+    tip: 'Solo empleados con CONTRATO LABORAL. Honorarios a independientes van en F1001 concepto 5001.',
+  },
+}
 
 interface ConfigGuardada {
   nitDeclarante: string
@@ -124,6 +256,7 @@ export default function ExogenasPage() {
   const { tenant } = useClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const [tab, setTab] = useState<'generar' | 'configuracion'>('generar')
   const [vista, setVista] = useState<Vista>('inicio')
   const [archivo, setArchivo] = useState<File | null>(null)
   const [tipoArchivo, setTipoArchivo] = useState<'csv' | 'xlsx' | null>(null)
@@ -473,7 +606,33 @@ export default function ExogenasPage() {
         )}
       </div>
 
-      <div style={{ maxWidth: '820px', margin: '0 auto', padding: '28px 20px' }}>
+      {/* ── Barra de pestañas ── */}
+      <div style={{ background: JA.NAVY, borderBottom: '1px solid rgba(255,255,255,0.12)', paddingLeft: '28px',
+        display: 'flex', gap: '4px' }}>
+        {([
+          { id: 'generar',       label: 'Generar Exógenas',          icon: 'bolt' },
+          { id: 'configuracion', label: 'Configuración de mapeo PUC', icon: 'hashtag' },
+        ] as { id: 'generar' | 'configuracion'; label: string; icon: string }[]).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={{ padding: '10px 16px', border: 'none', background: 'transparent', cursor: 'pointer',
+              fontSize: '12px', fontWeight: tab === t.id ? 700 : 400,
+              color: tab === t.id ? JA.WHITE : '#94A3B8',
+              borderBottom: `2px solid ${tab === t.id ? JA.GOLD : 'transparent'}`,
+              display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s' }}>
+            <Icon name={t.icon} size={13} />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ maxWidth: tab === 'configuracion' ? '1100px' : '820px', margin: '0 auto', padding: '28px 20px' }}>
+
+        {/* ══════════════════════════════════════════════════════════
+            TAB: CONFIGURACIÓN DE MAPEO PUC
+        ══════════════════════════════════════════════════════════ */}
+        {tab === 'configuracion' && <ConfiguracionPUC />}
+
+        {tab !== 'configuracion' && <>
 
         {/* Error global */}
         {error && (
@@ -709,6 +868,19 @@ export default function ExogenasPage() {
                         <div style={{ fontSize: '11px', color: JA.GREY, lineHeight: '1.5', paddingLeft: '44px' }}>
                           {info?.descripcion}
                         </div>
+                        {seleccionado && GUIA_FORMATOS[codigo] && (
+                          <div style={{ paddingLeft: '44px', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div style={{ fontSize: '10px', color: JA.BLUE }}>
+                              <strong>Fuente PUC:</strong> {GUIA_FORMATOS[codigo].fuente}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#059669' }}>
+                              <strong>Concilia con:</strong> {GUIA_FORMATOS[codigo].concilia}
+                            </div>
+                            <div style={{ fontSize: '10px', color: JA.AMBER }}>
+                              <strong>Tip:</strong> {GUIA_FORMATOS[codigo].tip}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </label>
                   )
@@ -1216,6 +1388,8 @@ export default function ExogenasPage() {
             </button>
           </div>
         )}
+
+        </> /* fin tab generar */}
       </div>
 
       <style>{`
@@ -1299,6 +1473,382 @@ function etiquetaAccion(accion: AccionExcepcion): string {
     confirmar_correcto: 'Confirmado correcto', diferir: 'Pendiente de revisión',
   }
   return m[accion] ?? accion
+}
+
+// ── Pantalla de Configuración de Mapeo PUC ────────────────────────────────────
+interface ReglaUI {
+  id?: string
+  formatoCodigo: string
+  cuentaPucPatron: string
+  conceptoCodigo: string
+  naturaleza: '' | 'debito' | 'credito'
+  notas: string
+  esDefault?: boolean
+}
+
+function ConfiguracionPUC() {
+  const [reglas, setReglas] = useState<{ default: ReglaUI[]; custom: ReglaUI[] }>({ default: [], custom: [] })
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [msgGuardado, setMsgGuardado] = useState('')
+  const [formatoFiltro, setFormatoFiltro] = useState<string>('todos')
+  const [mostrarDefault, setMostrarDefault] = useState(false)
+  const [nuevaRegla, setNuevaRegla] = useState<ReglaUI>({
+    formatoCodigo: '1001', cuentaPucPatron: '', conceptoCodigo: '', naturaleza: '', notas: '',
+  })
+  const [mostrarFormNueva, setMostrarFormNueva] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/exogenas/reglas')
+      .then(r => r.json())
+      .then((d: { reglasDefault?: ReglaUI[]; reglasOverride?: ReglaUI[] }) => {
+        setReglas({
+          default: (d.reglasDefault ?? []).map(r => ({ ...r, esDefault: true })),
+          custom: d.reglasOverride ?? [],
+        })
+      })
+      .catch(() => { /* ignorar */ })
+      .finally(() => setCargando(false))
+  }, [])
+
+  const guardarReglas = async () => {
+    setGuardando(true)
+    setMsgGuardado('')
+    try {
+      const res = await fetch('/api/exogenas/reglas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reglas: reglas.custom.map(r => ({
+            formato_codigo:   r.formatoCodigo,
+            cuenta_puc_patron: r.cuentaPucPatron,
+            concepto_codigo:  r.conceptoCodigo,
+            prioridad:        1,
+            naturaleza:       r.naturaleza || null,
+            notas:            r.notas || null,
+          })),
+        }),
+      })
+      const d = await res.json() as { reglasGuardadas?: number; error?: string }
+      if (d.error) throw new Error(d.error)
+      setMsgGuardado(`${d.reglasGuardadas ?? 0} regla(s) guardadas correctamente`)
+    } catch (e) {
+      setMsgGuardado(`Error: ${e instanceof Error ? e.message : 'Error desconocido'}`)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const agregarRegla = () => {
+    if (!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo.trim()) return
+    setReglas(prev => ({ ...prev, custom: [...prev.custom, { ...nuevaRegla }] }))
+    setNuevaRegla({ formatoCodigo: nuevaRegla.formatoCodigo, cuentaPucPatron: '', conceptoCodigo: '', naturaleza: '', notas: '' })
+    setMostrarFormNueva(false)
+    setMsgGuardado('')
+  }
+
+  const eliminarCustom = (idx: number) => {
+    setReglas(prev => ({ ...prev, custom: prev.custom.filter((_, i) => i !== idx) }))
+    setMsgGuardado('')
+  }
+
+  const reglasFiltradas = (lista: ReglaUI[]) =>
+    formatoFiltro === 'todos' ? lista : lista.filter(r => r.formatoCodigo === formatoFiltro)
+
+  const COLOR_FORMATO: Record<string, string> = {
+    '1001': '#1D4ED8', '1003': '#7C3AED', '1005': '#0891B2', '1006': '#0369A1',
+    '1007': '#059669', '1008': '#D97706', '1009': '#DC2626', '1010': '#9333EA', '2276': '#B45309',
+  }
+
+  const NOMBRE_NATURALEZA: Record<string, string> = {
+    '': 'Saldo final', 'debito': 'Saldo Débito', 'credito': 'Saldo Crédito',
+  }
+
+  if (cargando) return (
+    <div style={{ textAlign: 'center', padding: '60px', color: JA.GREY, fontSize: '13px' }}>
+      Cargando configuración de mapeo PUC…
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+      {/* ── Encabezado explicativo ── */}
+      <div style={{ background: JA.NAVY, borderRadius: '2px', padding: '16px 20px', color: JA.WHITE }}>
+        <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>
+          Configuración personalizada de mapeo PUC → Formato DIAN
+        </div>
+        <div style={{ fontSize: '12px', color: '#94A3B8', lineHeight: '1.6' }}>
+          Este módulo replica la pantalla &quot;Asistente medios magnéticos — Configuración de formatos&quot; de Siigo.
+          Defina qué cuenta PUC alimenta cada formato exógena. Las reglas personalizadas tienen prioridad sobre las predeterminadas.
+          El Excel generado cumplirá exactamente con la estructura del Prevalidador DIAN por formato (F1001 v11, F1003 v8, F1005 v9…).
+        </div>
+      </div>
+
+      {/* ── Guía práctica por formato ── */}
+      <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 16px', background: JA.SURFACE, borderBottom: `1px solid ${JA.BORDER}`,
+          fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: JA.GREY }}>
+          Guía rápida — Formatos disponibles
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '0' }}>
+          {FORMATOS_DISPONIBLES.map(cod => {
+            const guia = GUIA_FORMATOS[cod]
+            const info = INFO_FORMATOS[cod]
+            const color = COLOR_FORMATO[cod] ?? JA.NAVY
+            if (!guia || !info) return null
+            return (
+              <div key={cod} style={{ padding: '12px 16px', borderBottom: `1px solid ${JA.BORDER}`,
+                borderRight: `1px solid ${JA.BORDER}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ padding: '2px 8px', background: color, color: JA.WHITE,
+                    borderRadius: '2px', fontSize: '10px', fontWeight: 800 }}>{cod}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: JA.TEXT }}>{info.nombre}</span>
+                </div>
+                <div style={{ fontSize: '10px', color: JA.GREY, lineHeight: '1.7' }}>
+                  <div><strong style={{ color: '#1D4ED8' }}>Fuente PUC:</strong> {guia.fuente}</div>
+                  <div><strong style={{ color: '#059669' }}>Concilia con:</strong> {guia.concilia}</div>
+                  <div><strong style={{ color: JA.AMBER }}>Tip:</strong> {guia.tip}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Filtro por formato ── */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', color: JA.GREY, fontWeight: 600 }}>Filtrar:</span>
+        {(['todos', ...FORMATOS_DISPONIBLES]).map(f => (
+          <button key={f} onClick={() => setFormatoFiltro(f)}
+            style={{ padding: '4px 10px', borderRadius: '2px', border: 'none', cursor: 'pointer', fontSize: '11px',
+              fontWeight: formatoFiltro === f ? 700 : 400,
+              background: formatoFiltro === f ? (COLOR_FORMATO[f] ?? JA.NAVY) : JA.SURFACE,
+              color: formatoFiltro === f ? JA.WHITE : JA.GREY }}>
+            {f === 'todos' ? 'Todos los formatos' : `F${f}`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Reglas personalizadas del tenant ── */}
+      <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', background: JA.SURFACE, borderBottom: `1px solid ${JA.BORDER}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: JA.TEXT }}>
+              Mis reglas personalizadas ({reglasFiltradas(reglas.custom).length})
+            </div>
+            <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '2px' }}>
+              Se aplican con prioridad máxima sobre las reglas predeterminadas DIAN 2025
+            </div>
+          </div>
+          <button onClick={() => setMostrarFormNueva(!mostrarFormNueva)}
+            style={{ padding: '7px 14px', background: JA.NAVY, color: JA.WHITE, border: 'none',
+              borderRadius: '2px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px' }}>
+            + Agregar regla
+          </button>
+        </div>
+
+        {/* Formulario nueva regla */}
+        {mostrarFormNueva && (
+          <div style={{ padding: '14px 16px', background: '#EFF6FF', borderBottom: `1px solid #BFDBFE` }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: JA.BLUE, marginBottom: '10px' }}>
+              Nueva regla de mapeo PUC → Formato
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '130px 180px 1fr 130px', gap: '10px', alignItems: 'end' }}>
+              <div>
+                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Formato *</div>
+                <select value={nuevaRegla.formatoCodigo}
+                  onChange={e => setNuevaRegla(p => ({ ...p, formatoCodigo: e.target.value, conceptoCodigo: '' }))}
+                  style={inputStConf}>
+                  {FORMATOS_DISPONIBLES.map(f => <option key={f} value={f}>Formato {f}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Cuenta PUC *</div>
+                <input value={nuevaRegla.cuentaPucPatron} placeholder="Ej: 51050601 ó 5105%"
+                  onChange={e => setNuevaRegla(p => ({ ...p, cuentaPucPatron: e.target.value }))}
+                  style={inputStConf} />
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Concepto DIAN *</div>
+                <select value={nuevaRegla.conceptoCodigo}
+                  onChange={e => setNuevaRegla(p => ({ ...p, conceptoCodigo: e.target.value }))}
+                  style={inputStConf}>
+                  <option value="">-- Seleccionar --</option>
+                  {(CONCEPTOS_POR_FORMATO[nuevaRegla.formatoCodigo] ?? []).map(c => (
+                    <option key={c.valor} value={c.valor}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Valor a reportar</div>
+                <select value={nuevaRegla.naturaleza}
+                  onChange={e => setNuevaRegla(p => ({ ...p, naturaleza: e.target.value as '' | 'debito' | 'credito' }))}
+                  style={inputStConf}>
+                  <option value="">Saldo final cuenta</option>
+                  <option value="debito">Saldo Débito</option>
+                  <option value="credito">Saldo Crédito</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'end' }}>
+              <div>
+                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Notas (opcional)</div>
+                <input value={nuevaRegla.notas} placeholder="Ej: Sueldos empleados planta Medellín"
+                  onChange={e => setNuevaRegla(p => ({ ...p, notas: e.target.value }))}
+                  style={inputStConf} />
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button onClick={agregarRegla}
+                  disabled={!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo}
+                  style={{ padding: '8px 16px', background: JA.NAVY, color: JA.WHITE, border: 'none',
+                    borderRadius: '2px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                    opacity: (!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo) ? 0.5 : 1 }}>
+                  Agregar
+                </button>
+                <button onClick={() => setMostrarFormNueva(false)}
+                  style={{ padding: '8px 12px', background: 'transparent', color: JA.GREY,
+                    border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '12px', cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '8px', lineHeight: '1.6' }}>
+              Use <strong>%</strong> como comodín al final de la cuenta. Ej: <code>5120%</code> = todas las subcuentas de honorarios.
+              Para cuenta exacta use el código completo. Ej: <code>51050601</code> = solo sueldos.
+            </div>
+          </div>
+        )}
+
+        {/* Tabla de reglas custom */}
+        {reglasFiltradas(reglas.custom).length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: JA.GREY, fontSize: '12px' }}>
+            No tiene reglas personalizadas.
+            {formatoFiltro !== 'todos' && ` Use "Todos los formatos" para ver todas o `}
+            {' '}Haga clic en <strong>+ Agregar regla</strong> para personalizar el mapeo de sus cuentas PUC.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: JA.SURFACE }}>
+                {['Formato', 'Cuenta PUC', 'Concepto DIAN', 'Valor a reportar', 'Notas', ''].map(h => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', borderBottom: `1px solid ${JA.BORDER}`,
+                    fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {reglasFiltradas(reglas.custom).map((r, idx) => (
+                <tr key={idx} style={{ borderBottom: `1px solid ${JA.BORDER}` }}>
+                  <td style={{ padding: '8px 12px' }}>
+                    <span style={{ padding: '2px 8px', background: COLOR_FORMATO[r.formatoCodigo] ?? JA.NAVY,
+                      color: JA.WHITE, borderRadius: '2px', fontSize: '10px', fontWeight: 700 }}>{r.formatoCodigo}</span>
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: JA.NAVY }}>{r.cuentaPucPatron}</td>
+                  <td style={{ padding: '8px 12px' }}>
+                    {r.conceptoCodigo}
+                    <span style={{ color: JA.GREY, marginLeft: '4px', fontSize: '11px' }}>
+                      {(CONCEPTOS_POR_FORMATO[r.formatoCodigo] ?? []).find(c => c.valor === r.conceptoCodigo)?.label.split(' — ')[1] ?? ''}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px 12px', color: JA.GREY, fontSize: '11px' }}>
+                    {NOMBRE_NATURALEZA[r.naturaleza] ?? 'Saldo final'}
+                  </td>
+                  <td style={{ padding: '8px 12px', color: JA.GREY, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {r.notas}
+                  </td>
+                  <td style={{ padding: '8px 12px' }}>
+                    <button onClick={() => eliminarCustom(reglas.custom.indexOf(r))}
+                      style={{ padding: '3px 8px', background: '#FEE2E2', color: JA.RED, border: 'none',
+                        borderRadius: '2px', fontSize: '11px', cursor: 'pointer' }}>
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Botón guardar ── */}
+      {reglas.custom.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button onClick={guardarReglas} disabled={guardando}
+            style={{ padding: '11px 24px', background: JA.NAVY, color: JA.WHITE, border: 'none',
+              borderRadius: '2px', fontSize: '13px', fontWeight: 700, cursor: guardando ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {guardando ? 'Guardando…' : 'Guardar configuración personalizada'}
+          </button>
+          {msgGuardado && (
+            <span style={{ fontSize: '12px', color: msgGuardado.startsWith('Error') ? JA.RED : JA.GREEN }}>
+              {msgGuardado}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── Reglas predeterminadas (colapsables) ── */}
+      <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
+        <button onClick={() => setMostrarDefault(!mostrarDefault)}
+          style={{ width: '100%', padding: '12px 16px', background: JA.SURFACE, border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: mostrarDefault ? `1px solid ${JA.BORDER}` : 'none' }}>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: JA.TEXT }}>
+              Reglas predeterminadas DIAN 2025 ({reglasFiltradas(reglas.default).length} reglas)
+            </div>
+            <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '2px' }}>
+              Basadas en Res. 000227/2025 + configuración Siigo Nube. Las reglas personalizadas tienen prioridad.
+            </div>
+          </div>
+          <span style={{ fontSize: '12px', color: JA.GREY }}>{mostrarDefault ? '▲ Ocultar' : '▼ Ver todas'}</span>
+        </button>
+        {mostrarDefault && (
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+              <thead>
+                <tr style={{ background: JA.SURFACE, position: 'sticky', top: 0 }}>
+                  {['Formato', 'Cuenta PUC', 'Concepto', 'Valor a reportar', 'Descripción'].map(h => (
+                    <th key={h} style={{ padding: '7px 12px', textAlign: 'left', borderBottom: `1px solid ${JA.BORDER}`,
+                      fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {reglasFiltradas(reglas.default).map((r, idx) => (
+                  <tr key={idx} style={{ borderBottom: `1px solid ${JA.BORDER}`, background: idx % 2 ? JA.BG : JA.WHITE }}>
+                    <td style={{ padding: '6px 12px' }}>
+                      <span style={{ padding: '1px 6px', background: COLOR_FORMATO[r.formatoCodigo] ?? JA.NAVY,
+                        color: JA.WHITE, borderRadius: '2px', fontSize: '9px', fontWeight: 700 }}>{r.formatoCodigo}</span>
+                    </td>
+                    <td style={{ padding: '6px 12px', fontFamily: 'monospace', color: JA.NAVY, fontSize: '11px' }}>
+                      {r.cuentaPucPatron}
+                    </td>
+                    <td style={{ padding: '6px 12px', color: JA.TEXT }}>{r.conceptoCodigo}</td>
+                    <td style={{ padding: '6px 12px', color: JA.GREY }}>
+                      {NOMBRE_NATURALEZA[(r as ReglaUI).naturaleza ?? ''] ?? 'Saldo final'}
+                    </td>
+                    <td style={{ padding: '6px 12px', color: JA.GREY, maxWidth: '240px',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.notas}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const inputStConf: React.CSSProperties = {
+  width: '100%', padding: '7px 9px', border: `1px solid ${JA.BORDER}`, borderRadius: '2px',
+  fontSize: '12px', color: JA.TEXT, background: JA.WHITE, boxSizing: 'border-box',
+  fontFamily: 'Inter, sans-serif', outline: 'none',
 }
 
 // ── Iconos SVG — sin emojis ───────────────────────────────────────────────────

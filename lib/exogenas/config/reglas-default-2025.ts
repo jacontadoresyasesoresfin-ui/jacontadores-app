@@ -127,6 +127,121 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'Otros pagos — fallback clase 5. Revisar clasificación.' },
 
   // ══════════════════════════════════════════════════════════════════════
+  //  FORMATO 1003 — Retenciones que le practicaron al declarante
+  //  Fuente: cuentas 1355xx (Anticipo de impuestos y retenciones a favor)
+  //  Valor a reportar: Saldo Débito (movimientos que aumentan el activo)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── Retención renta (1302) ────────────────────────────────────────────
+  { formatoCodigo: '1003', cuentaPucPatron: '13551501', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteFuente renta — salarios y pagos generales' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551503', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteFuente renta — honorarios 3.5%' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551505', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteFuente 3.5%' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551507', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteFuente 2%' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551509', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteFuente 1%' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551513', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteFuente otros conceptos renta' },
+  // ── Retención IVA (1303) ──────────────────────────────────────────────
+  { formatoCodigo: '1003', cuentaPucPatron: '13551701', conceptoCodigo: '1303', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo IVA retenido por clientes (ReteIVA a favor)' },
+  // ── ReteICA (1310) ────────────────────────────────────────────────────
+  { formatoCodigo: '1003', cuentaPucPatron: '13551801', conceptoCodigo: '1310', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteICA — Bogotá' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551805', conceptoCodigo: '1310', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteICA — otros municipios' },
+  { formatoCodigo: '1003', cuentaPucPatron: '13551811', conceptoCodigo: '1310', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo ReteICA — servicios' },
+  // ── Fallback 1355xx ───────────────────────────────────────────────────
+  { formatoCodigo: '1003', cuentaPucPatron: '1355%', conceptoCodigo: '1302', prioridad: 50, naturaleza: 'debito',
+    notas: 'Anticipo retención genérico — fallback. Revisar subcuenta.' },
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  FORMATO 1008 — Saldos cuentas por cobrar (31-dic)
+  //  Fuente: clase 13 PUC (Deudores)
+  //  Valor a reportar: Saldo final cuenta (neto débitos - créditos)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── Clientes nacionales (1315) ────────────────────────────────────────
+  { formatoCodigo: '1008', cuentaPucPatron: '1305%', conceptoCodigo: '1315', prioridad: 10,
+    notas: 'Clientes nacionales — saldo CxC al 31-dic' },
+  { formatoCodigo: '1008', cuentaPucPatron: '1306%', conceptoCodigo: '1315', prioridad: 10,
+    notas: 'Clientes del exterior — saldo CxC al 31-dic' },
+  // ── Anticipos e impuestos a favor (1317) ─────────────────────────────
+  { formatoCodigo: '1008', cuentaPucPatron: '135505', conceptoCodigo: '1317', prioridad: 10,
+    notas: 'Anticipo de impuestos — saldo final' },
+  { formatoCodigo: '1008', cuentaPucPatron: '1360%', conceptoCodigo: '1317', prioridad: 10,
+    notas: 'Anticipos y avances a proveedores' },
+  { formatoCodigo: '1008', cuentaPucPatron: '1365%', conceptoCodigo: '1317', prioridad: 10,
+    notas: 'Préstamos a trabajadores y otras CxC' },
+  // ── Fallback clase 13 (excluye 1355xx que van en F1003) ───────────────
+  { formatoCodigo: '1008', cuentaPucPatron: '13%', conceptoCodigo: '1399', prioridad: 80,
+    notas: 'Otras cuentas por cobrar clase 13 — fallback. Verificar concepto.' },
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  FORMATO 1009 — Saldos cuentas por pagar (31-dic)
+  //  Fuente: clases 22, 23, 25 PUC (Pasivos corrientes y laborales)
+  //  Valor a reportar: Saldo final cuenta (neto créditos - débitos)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── Proveedores nacionales (2201) ─────────────────────────────────────
+  { formatoCodigo: '1009', cuentaPucPatron: '2205%', conceptoCodigo: '2201', prioridad: 10,
+    notas: 'Proveedores nacionales — saldo CxP al 31-dic' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2206%', conceptoCodigo: '2202', prioridad: 10,
+    notas: 'Proveedores del exterior — saldo CxP al 31-dic' },
+  // ── Costos y gastos por pagar (2204) ─────────────────────────────────
+  { formatoCodigo: '1009', cuentaPucPatron: '23651%', conceptoCodigo: '2204', prioridad: 10,
+    notas: 'Honorarios, comisiones, servicios por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23652%', conceptoCodigo: '2204', prioridad: 10,
+    notas: 'Servicios por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23653%', conceptoCodigo: '2204', prioridad: 10,
+    notas: 'Arrendamientos por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23654001', conceptoCodigo: '2205', prioridad: 10,
+    notas: 'Retención en la fuente por pagar (agente retenedor)' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23654%', conceptoCodigo: '2205', prioridad: 15,
+    notas: 'Retenciones por pagar (fallback 23654x)' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23680515', conceptoCodigo: '2205', prioridad: 10,
+    notas: 'ReteICA por pagar — servicios' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2368%', conceptoCodigo: '2205', prioridad: 15,
+    notas: 'ReteICA por pagar (fallback 2368x)' },
+  // ── Aportes parafiscales y prestaciones sociales (2214) ───────────────
+  { formatoCodigo: '1009', cuentaPucPatron: '23700501', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Aportes a EPS (salud empleador) por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23700601', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Aportes AFP (pensión empleador) por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23701001', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Aportes ICBF, SENA, CCF por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23701501', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Aportes ARL por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23803001', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Fondos de cesantías por consignar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2510100101', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Cesantías consolidadas por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2510100102', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Cesantías consolidadas (administrativos)' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2510100202', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Intereses sobre cesantías por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2510100302', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Vacaciones consolidadas por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '2510100402', conceptoCodigo: '2214', prioridad: 10,
+    notas: 'Prima de servicios consolidada por pagar' },
+  // ── Salarios por pagar (2215) ─────────────────────────────────────────
+  { formatoCodigo: '1009', cuentaPucPatron: '25050501', conceptoCodigo: '2215', prioridad: 10,
+    notas: 'Salarios y prestaciones del mes por pagar' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23650501', conceptoCodigo: '2215', prioridad: 10,
+    notas: 'Nómina del mes pendiente de pago' },
+  // ── Fallback clases 22-25 ─────────────────────────────────────────────
+  { formatoCodigo: '1009', cuentaPucPatron: '22%', conceptoCodigo: '2201', prioridad: 90,
+    notas: 'Proveedores clase 22 — fallback. Verificar concepto.' },
+  { formatoCodigo: '1009', cuentaPucPatron: '23%', conceptoCodigo: '2204', prioridad: 95,
+    notas: 'Cuentas por pagar clase 23 — fallback. Verificar concepto.' },
+  { formatoCodigo: '1009', cuentaPucPatron: '25%', conceptoCodigo: '2215', prioridad: 95,
+    notas: 'Pasivos laborales clase 25 — fallback. Verificar concepto.' },
+
+  // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 2276 — Información de pagos laborales (Nómina)
   //  Res. DIAN 000227/2025 — Art. 631 E.T.
   //  Reporta SALARIOS de empleados con contrato laboral.

@@ -5,6 +5,7 @@ import { MUNICIPIOS_LISTA, DEPARTAMENTOS } from '@/lib/exogenas/config/divipola'
 import { INFO_FORMATOS, VERSION_POR_ANIO } from '@/lib/exogenas/registry/formato-registry'
 import ConfiguracionMagnetica from './ConfiguracionMagnetica'
 import type { TarjetaExcepcion, AccionExcepcion } from '@/lib/exogenas/engine/humanizador'
+import { InformacionLegal } from './components/InformacionLegal'
 
 // ── Paleta J&A ────────────────────────────────────────────────────────────────
 const JA = {
@@ -673,6 +674,10 @@ export default function ExogenasPage() {
         {vista === 'inicio' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+            <div style={{ alignSelf: 'flex-start', marginTop: '-8px' }}>
+              <InformacionLegal />
+            </div>
+
             {/* ─── BANNER: Flujo recomendado ─── */}
             <div style={{ padding: '12px 16px', background: '#EFF6FF', border: '1px solid #BFDBFE',
               borderRadius: '2px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -1232,7 +1237,7 @@ export default function ExogenasPage() {
             {/* Acciones */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {resultado.tarjetasExcepciones.length > 0 && (
-                <button onClick={() => { setVista('excepciones'); setIndiceExcepcion(0) }}
+                <button onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setVista('excepciones'); setIndiceExcepcion(0) }}
                   style={{ padding: '15px', background: JA.NAVY, color: JA.WHITE, border: 'none',
                     borderRadius: '4px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>

@@ -583,6 +583,15 @@ export default function TabNavigation() {
                                                         <Link
                                                             key={item.href}
                                                             href={item.href}
+                                                            onClick={(e) => {
+                                                                if (e.currentTarget instanceof HTMLElement) {
+                                                                    e.currentTarget.blur()
+                                                                }
+                                                                const activeEl = document.activeElement
+                                                                if (activeEl instanceof HTMLElement) {
+                                                                    activeEl.blur()
+                                                                }
+                                                            }}
                                                             className={`ja-mod-card${isItemActive ? ' is-active' : ''}`}
                                                             role="menuitem"
                                                         >

@@ -145,16 +145,9 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'Anticipo ReteFuente 1%' },
   { formatoCodigo: '1003', cuentaPucPatron: '13551513', conceptoCodigo: '1302', prioridad: 10, naturaleza: 'debito',
     notas: 'Anticipo ReteFuente otros conceptos renta' },
-  // ── Retención IVA (1303) ──────────────────────────────────────────────
-  { formatoCodigo: '1003', cuentaPucPatron: '13551701', conceptoCodigo: '1303', prioridad: 10, naturaleza: 'debito',
-    notas: 'Anticipo IVA retenido por clientes (ReteIVA a favor)' },
-  // ── ReteICA (1310) ────────────────────────────────────────────────────
-  { formatoCodigo: '1003', cuentaPucPatron: '13551801', conceptoCodigo: '1310', prioridad: 10, naturaleza: 'debito',
-    notas: 'Anticipo ReteICA — Bogotá' },
-  { formatoCodigo: '1003', cuentaPucPatron: '13551805', conceptoCodigo: '1310', prioridad: 10, naturaleza: 'debito',
-    notas: 'Anticipo ReteICA — otros municipios' },
-  { formatoCodigo: '1003', cuentaPucPatron: '13551811', conceptoCodigo: '1310', prioridad: 10, naturaleza: 'debito',
-    notas: 'Anticipo ReteICA — servicios' },
+  // ── Retención IVA (1309) — concepto DIAN para ReteIVA ─────────────────
+  { formatoCodigo: '1003', cuentaPucPatron: '13551701', conceptoCodigo: '1309', prioridad: 10, naturaleza: 'debito',
+    notas: 'Anticipo IVA retenido por clientes (ReteIVA a favor) — concepto 1309 según Siigo' },
   // ── Fallback 1355xx ───────────────────────────────────────────────────
   { formatoCodigo: '1003', cuentaPucPatron: '1355%', conceptoCodigo: '1302', prioridad: 50, naturaleza: 'debito',
     notas: 'Anticipo retención genérico — fallback. Revisar subcuenta.' },
@@ -170,6 +163,13 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'Clientes nacionales — saldo CxC al 31-dic' },
   { formatoCodigo: '1008', cuentaPucPatron: '1306%', conceptoCodigo: '1315', prioridad: 10,
     notas: 'Clientes del exterior — saldo CxC al 31-dic' },
+  // ── ReteICA a favor (1317) — según Siigo va en F1008, no F1003 ────────
+  { formatoCodigo: '1008', cuentaPucPatron: '13551801', conceptoCodigo: '1317', prioridad: 5, naturaleza: 'debito',
+    notas: 'ReteICA Bogotá a favor — saldo débito (F1008 concepto 1317 según Siigo)' },
+  { formatoCodigo: '1008', cuentaPucPatron: '13551805', conceptoCodigo: '1317', prioridad: 5, naturaleza: 'debito',
+    notas: 'ReteICA otros municipios a favor — saldo débito' },
+  { formatoCodigo: '1008', cuentaPucPatron: '13551811', conceptoCodigo: '1317', prioridad: 5, naturaleza: 'debito',
+    notas: 'ReteICA servicios a favor — saldo débito' },
   // ── Anticipos e impuestos a favor (1317) ─────────────────────────────
   { formatoCodigo: '1008', cuentaPucPatron: '135505', conceptoCodigo: '1317', prioridad: 10,
     notas: 'Anticipo de impuestos — saldo final' },

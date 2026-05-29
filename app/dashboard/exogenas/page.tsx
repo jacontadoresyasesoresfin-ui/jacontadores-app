@@ -1487,12 +1487,13 @@ interface ReglaUI {
 }
 
 function ConfiguracionPUC() {
-  const [reglas, setReglas] = useState<{ default: ReglaUI[]; custom: ReglaUI[] }>({ default: [], custom: [] })
+  const [defaultReglas, setDefaultReglas] = useState<ReglaUI[]>([])
+  const [customReglas, setCustomReglas] = useState<ReglaUI[]>([])
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [msgGuardado, setMsgGuardado] = useState('')
   const [formatoFiltro, setFormatoFiltro] = useState<string>('todos')
-  const [mostrarDefault, setMostrarDefault] = useState(false)
+  const [busqueda, setBusqueda] = useState('')
   const [nuevaRegla, setNuevaRegla] = useState<ReglaUI>({
     formatoCodigo: '1001', cuentaPucPatron: '', conceptoCodigo: '', naturaleza: '', notas: '',
   })
@@ -1502,10 +1503,8 @@ function ConfiguracionPUC() {
     fetch('/api/exogenas/reglas')
       .then(r => r.json())
       .then((d: { reglasDefault?: ReglaUI[]; reglasOverride?: ReglaUI[] }) => {
-        setReglas({
-          default: (d.reglasDefault ?? []).map(r => ({ ...r, esDefault: true })),
-          custom: d.reglasOverride ?? [],
-        })
+        setDefaultReglas((d.reglasDefault ?? []).map(r => ({ ...r, esDefault: true })))
+        setCustomReglas(d.reglasOverride ?? [])
       })
       .catch(() => { /* ignorar */ })
       .finally(() => setCargando(false))
@@ -1519,327 +1518,287 @@ function ConfiguracionPUC() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reglas: reglas.custom.map(r => ({
-            formato_codigo:   r.formatoCodigo,
+          reglas: customReglas.map(r => ({
+            formato_codigo:    r.formatoCodigo,
             cuenta_puc_patron: r.cuentaPucPatron,
-            concepto_codigo:  r.conceptoCodigo,
-            prioridad:        1,
-            naturaleza:       r.naturaleza || null,
-            notas:            r.notas || null,
+            concepto_codigo:   r.conceptoCodigo,
+            prioridad:         1,
+            naturaleza:        r.naturaleza || null,
+            notas:             r.notas || null,
           })),
         }),
       })
       const d = await res.json() as { reglasGuardadas?: number; error?: string }
       if (d.error) throw new Error(d.error)
-      setMsgGuardado(`${d.reglasGuardadas ?? 0} regla(s) guardadas correctamente`)
+      setMsgGuardado(`${d.reglasGuardadas ?? 0} regla(s) guardadas`)
     } catch (e) {
       setMsgGuardado(`Error: ${e instanceof Error ? e.message : 'Error desconocido'}`)
-    } finally {
-      setGuardando(false)
-    }
+    } finally { setGuardando(false) }
   }
 
   const agregarRegla = () => {
     if (!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo.trim()) return
-    setReglas(prev => ({ ...prev, custom: [...prev.custom, { ...nuevaRegla }] }))
+    setCustomReglas(prev => [...prev, { ...nuevaRegla }])
     setNuevaRegla({ formatoCodigo: nuevaRegla.formatoCodigo, cuentaPucPatron: '', conceptoCodigo: '', naturaleza: '', notas: '' })
     setMostrarFormNueva(false)
     setMsgGuardado('')
   }
 
-  const eliminarCustom = (idx: number) => {
-    setReglas(prev => ({ ...prev, custom: prev.custom.filter((_, i) => i !== idx) }))
+  const eliminarCustom = (cuentaPuc: string, concepto: string) => {
+    setCustomReglas(prev => prev.filter(r => !(r.cuentaPucPatron === cuentaPuc && r.conceptoCodigo === concepto)))
     setMsgGuardado('')
   }
-
-  const reglasFiltradas = (lista: ReglaUI[]) =>
-    formatoFiltro === 'todos' ? lista : lista.filter(r => r.formatoCodigo === formatoFiltro)
 
   const COLOR_FORMATO: Record<string, string> = {
     '1001': '#1D4ED8', '1003': '#7C3AED', '1005': '#0891B2', '1006': '#0369A1',
     '1007': '#059669', '1008': '#D97706', '1009': '#DC2626', '1010': '#9333EA', '2276': '#B45309',
   }
+  const LABEL_NAT: Record<string, string> = { '': 'Saldo final cuenta', 'debito': 'Saldo Débito', 'credito': 'Saldo Crédito' }
 
-  const NOMBRE_NATURALEZA: Record<string, string> = {
-    '': 'Saldo final', 'debito': 'Saldo Débito', 'credito': 'Saldo Crédito',
-  }
+  // Combinar todas las reglas en una vista unificada (igual que Siigo)
+  const todasLasReglas = [
+    ...customReglas.map(r => ({ ...r, esCustom: true })),
+    ...defaultReglas.map(r => ({ ...r, esCustom: false })),
+  ]
+
+  const reglasFiltradas = todasLasReglas.filter(r => {
+    const pasaFormato = formatoFiltro === 'todos' || r.formatoCodigo === formatoFiltro
+    const pasaBusqueda = !busqueda || r.cuentaPucPatron.toLowerCase().includes(busqueda.toLowerCase()) ||
+      r.conceptoCodigo.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (r.notas ?? '').toLowerCase().includes(busqueda.toLowerCase())
+    return pasaFormato && pasaBusqueda
+  })
+
+  const conceptoLabel = (fmt: string, cod: string) =>
+    (CONCEPTOS_POR_FORMATO[fmt] ?? []).find(c => c.valor === cod)?.label ?? cod
 
   if (cargando) return (
-    <div style={{ textAlign: 'center', padding: '60px', color: JA.GREY, fontSize: '13px' }}>
-      Cargando configuración de mapeo PUC…
+    <div style={{ textAlign: 'center', padding: '80px', color: JA.GREY, fontSize: '13px' }}>
+      Cargando configuración de formatos…
     </div>
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
 
-      {/* ── Encabezado explicativo ── */}
-      <div style={{ background: JA.NAVY, borderRadius: '2px', padding: '16px 20px', color: JA.WHITE }}>
-        <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>
-          Configuración personalizada de mapeo PUC → Formato DIAN
+      {/* ── Encabezado estilo Siigo ── */}
+      <div style={{ background: JA.WHITE, borderBottom: `1px solid ${JA.BORDER}`, padding: '16px 20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: JA.NAVY }}>
+            Asistente medios magnéticos — Configuración de formatos
+          </h2>
+          <p style={{ margin: '4px 0 0', fontSize: '12px', color: JA.GREY }}>
+            Año 2025 · Defina qué cuenta PUC alimenta cada formato DIAN. Las reglas de &quot;Mi empresa&quot; tienen prioridad.
+          </p>
         </div>
-        <div style={{ fontSize: '12px', color: '#94A3B8', lineHeight: '1.6' }}>
-          Este módulo replica la pantalla &quot;Asistente medios magnéticos — Configuración de formatos&quot; de Siigo.
-          Defina qué cuenta PUC alimenta cada formato exógena. Las reglas personalizadas tienen prioridad sobre las predeterminadas.
-          El Excel generado cumplirá exactamente con la estructura del Prevalidador DIAN por formato (F1001 v11, F1003 v8, F1005 v9…).
-        </div>
-      </div>
-
-      {/* ── Guía práctica por formato ── */}
-      <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 16px', background: JA.SURFACE, borderBottom: `1px solid ${JA.BORDER}`,
-          fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: JA.GREY }}>
-          Guía rápida — Formatos disponibles
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '0' }}>
-          {FORMATOS_DISPONIBLES.map(cod => {
-            const guia = GUIA_FORMATOS[cod]
-            const info = INFO_FORMATOS[cod]
-            const color = COLOR_FORMATO[cod] ?? JA.NAVY
-            if (!guia || !info) return null
-            return (
-              <div key={cod} style={{ padding: '12px 16px', borderBottom: `1px solid ${JA.BORDER}`,
-                borderRight: `1px solid ${JA.BORDER}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <span style={{ padding: '2px 8px', background: color, color: JA.WHITE,
-                    borderRadius: '2px', fontSize: '10px', fontWeight: 800 }}>{cod}</span>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: JA.TEXT }}>{info.nombre}</span>
-                </div>
-                <div style={{ fontSize: '10px', color: JA.GREY, lineHeight: '1.7' }}>
-                  <div><strong style={{ color: '#1D4ED8' }}>Fuente PUC:</strong> {guia.fuente}</div>
-                  <div><strong style={{ color: '#059669' }}>Concilia con:</strong> {guia.concilia}</div>
-                  <div><strong style={{ color: JA.AMBER }}>Tip:</strong> {guia.tip}</div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── Filtro por formato ── */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: JA.GREY, fontWeight: 600 }}>Filtrar:</span>
-        {(['todos', ...FORMATOS_DISPONIBLES]).map(f => (
-          <button key={f} onClick={() => setFormatoFiltro(f)}
-            style={{ padding: '4px 10px', borderRadius: '2px', border: 'none', cursor: 'pointer', fontSize: '11px',
-              fontWeight: formatoFiltro === f ? 700 : 400,
-              background: formatoFiltro === f ? (COLOR_FORMATO[f] ?? JA.NAVY) : JA.SURFACE,
-              color: formatoFiltro === f ? JA.WHITE : JA.GREY }}>
-            {f === 'todos' ? 'Todos los formatos' : `F${f}`}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Reglas personalizadas del tenant ── */}
-      <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', background: JA.SURFACE, borderBottom: `1px solid ${JA.BORDER}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: JA.TEXT }}>
-              Mis reglas personalizadas ({reglasFiltradas(reglas.custom).length})
-            </div>
-            <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '2px' }}>
-              Se aplican con prioridad máxima sobre las reglas predeterminadas DIAN 2025
-            </div>
-          </div>
-          <button onClick={() => setMostrarFormNueva(!mostrarFormNueva)}
-            style={{ padding: '7px 14px', background: JA.NAVY, color: JA.WHITE, border: 'none',
-              borderRadius: '2px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px' }}>
-            + Agregar regla
-          </button>
-        </div>
-
-        {/* Formulario nueva regla */}
-        {mostrarFormNueva && (
-          <div style={{ padding: '14px 16px', background: '#EFF6FF', borderBottom: `1px solid #BFDBFE` }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: JA.BLUE, marginBottom: '10px' }}>
-              Nueva regla de mapeo PUC → Formato
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '130px 180px 1fr 130px', gap: '10px', alignItems: 'end' }}>
-              <div>
-                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Formato *</div>
-                <select value={nuevaRegla.formatoCodigo}
-                  onChange={e => setNuevaRegla(p => ({ ...p, formatoCodigo: e.target.value, conceptoCodigo: '' }))}
-                  style={inputStConf}>
-                  {FORMATOS_DISPONIBLES.map(f => <option key={f} value={f}>Formato {f}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Cuenta PUC *</div>
-                <input value={nuevaRegla.cuentaPucPatron} placeholder="Ej: 51050601 ó 5105%"
-                  onChange={e => setNuevaRegla(p => ({ ...p, cuentaPucPatron: e.target.value }))}
-                  style={inputStConf} />
-              </div>
-              <div>
-                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Concepto DIAN *</div>
-                <select value={nuevaRegla.conceptoCodigo}
-                  onChange={e => setNuevaRegla(p => ({ ...p, conceptoCodigo: e.target.value }))}
-                  style={inputStConf}>
-                  <option value="">-- Seleccionar --</option>
-                  {(CONCEPTOS_POR_FORMATO[nuevaRegla.formatoCodigo] ?? []).map(c => (
-                    <option key={c.valor} value={c.valor}>{c.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Valor a reportar</div>
-                <select value={nuevaRegla.naturaleza}
-                  onChange={e => setNuevaRegla(p => ({ ...p, naturaleza: e.target.value as '' | 'debito' | 'credito' }))}
-                  style={inputStConf}>
-                  <option value="">Saldo final cuenta</option>
-                  <option value="debito">Saldo Débito</option>
-                  <option value="credito">Saldo Crédito</option>
-                </select>
-              </div>
-            </div>
-            <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'end' }}>
-              <div>
-                <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '4px', fontWeight: 600 }}>Notas (opcional)</div>
-                <input value={nuevaRegla.notas} placeholder="Ej: Sueldos empleados planta Medellín"
-                  onChange={e => setNuevaRegla(p => ({ ...p, notas: e.target.value }))}
-                  style={inputStConf} />
-              </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={agregarRegla}
-                  disabled={!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo}
-                  style={{ padding: '8px 16px', background: JA.NAVY, color: JA.WHITE, border: 'none',
-                    borderRadius: '2px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-                    opacity: (!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo) ? 0.5 : 1 }}>
-                  Agregar
-                </button>
-                <button onClick={() => setMostrarFormNueva(false)}
-                  style={{ padding: '8px 12px', background: 'transparent', color: JA.GREY,
-                    border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '12px', cursor: 'pointer' }}>
-                  Cancelar
-                </button>
-              </div>
-            </div>
-            <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '8px', lineHeight: '1.6' }}>
-              Use <strong>%</strong> como comodín al final de la cuenta. Ej: <code>5120%</code> = todas las subcuentas de honorarios.
-              Para cuenta exacta use el código completo. Ej: <code>51050601</code> = solo sueldos.
-            </div>
-          </div>
-        )}
-
-        {/* Tabla de reglas custom */}
-        {reglasFiltradas(reglas.custom).length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: JA.GREY, fontSize: '12px' }}>
-            No tiene reglas personalizadas.
-            {formatoFiltro !== 'todos' && ` Use "Todos los formatos" para ver todas o `}
-            {' '}Haga clic en <strong>+ Agregar regla</strong> para personalizar el mapeo de sus cuentas PUC.
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ background: JA.SURFACE }}>
-                {['Formato', 'Cuenta PUC', 'Concepto DIAN', 'Valor a reportar', 'Notas', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', borderBottom: `1px solid ${JA.BORDER}`,
-                    fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {reglasFiltradas(reglas.custom).map((r, idx) => (
-                <tr key={idx} style={{ borderBottom: `1px solid ${JA.BORDER}` }}>
-                  <td style={{ padding: '8px 12px' }}>
-                    <span style={{ padding: '2px 8px', background: COLOR_FORMATO[r.formatoCodigo] ?? JA.NAVY,
-                      color: JA.WHITE, borderRadius: '2px', fontSize: '10px', fontWeight: 700 }}>{r.formatoCodigo}</span>
-                  </td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: JA.NAVY }}>{r.cuentaPucPatron}</td>
-                  <td style={{ padding: '8px 12px' }}>
-                    {r.conceptoCodigo}
-                    <span style={{ color: JA.GREY, marginLeft: '4px', fontSize: '11px' }}>
-                      {(CONCEPTOS_POR_FORMATO[r.formatoCodigo] ?? []).find(c => c.valor === r.conceptoCodigo)?.label.split(' — ')[1] ?? ''}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px 12px', color: JA.GREY, fontSize: '11px' }}>
-                    {NOMBRE_NATURALEZA[r.naturaleza] ?? 'Saldo final'}
-                  </td>
-                  <td style={{ padding: '8px 12px', color: JA.GREY, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {r.notas}
-                  </td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <button onClick={() => eliminarCustom(reglas.custom.indexOf(r))}
-                      style={{ padding: '3px 8px', background: '#FEE2E2', color: JA.RED, border: 'none',
-                        borderRadius: '2px', fontSize: '11px', cursor: 'pointer' }}>
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* ── Botón guardar ── */}
-      {reglas.custom.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={guardarReglas} disabled={guardando}
-            style={{ padding: '11px 24px', background: JA.NAVY, color: JA.WHITE, border: 'none',
-              borderRadius: '2px', fontSize: '13px', fontWeight: 700, cursor: guardando ? 'wait' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {guardando ? 'Guardando…' : 'Guardar configuración personalizada'}
-          </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {msgGuardado && (
-            <span style={{ fontSize: '12px', color: msgGuardado.startsWith('Error') ? JA.RED : JA.GREEN }}>
+            <span style={{ fontSize: '12px', color: msgGuardado.startsWith('Error') ? JA.RED : JA.GREEN,
+              padding: '4px 10px', background: msgGuardado.startsWith('Error') ? '#FEE2E2' : '#D1FAE5',
+              borderRadius: '2px' }}>
               {msgGuardado}
             </span>
           )}
+          {customReglas.length > 0 && (
+            <button onClick={guardarReglas} disabled={guardando}
+              style={{ padding: '8px 18px', background: JA.GOLD, color: JA.NAVY, border: 'none',
+                borderRadius: '2px', fontSize: '12px', fontWeight: 700, cursor: guardando ? 'wait' : 'pointer' }}>
+              {guardando ? 'Guardando…' : 'Guardar configuración'}
+            </button>
+          )}
+          <button onClick={() => setMostrarFormNueva(!mostrarFormNueva)}
+            style={{ padding: '8px 16px', background: JA.NAVY, color: JA.WHITE, border: 'none',
+              borderRadius: '2px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px' }}>
+            + Adicionar nuevo registro
+          </button>
+        </div>
+      </div>
+
+      {/* ── Barra de filtros (estilo Siigo) ── */}
+      <div style={{ background: JA.SURFACE, borderBottom: `1px solid ${JA.BORDER}`, padding: '10px 20px',
+        display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+          placeholder="Buscar cuenta PUC o concepto…"
+          style={{ ...inputStConf, maxWidth: '260px', padding: '6px 10px' }} />
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {(['todos', ...FORMATOS_DISPONIBLES]).map(f => (
+            <button key={f} onClick={() => setFormatoFiltro(f)}
+              style={{ padding: '5px 11px', borderRadius: '2px', border: `1px solid ${formatoFiltro === f ? 'transparent' : JA.BORDER}`,
+                cursor: 'pointer', fontSize: '11px', fontWeight: formatoFiltro === f ? 700 : 400,
+                background: formatoFiltro === f ? (COLOR_FORMATO[f] ?? JA.NAVY) : JA.WHITE,
+                color: formatoFiltro === f ? JA.WHITE : JA.TEXT }}>
+              {f === 'todos' ? 'Todos' : `F${f}`}
+            </button>
+          ))}
+        </div>
+        <span style={{ fontSize: '11px', color: JA.GREY, marginLeft: 'auto' }}>
+          {reglasFiltradas.length} registro(s) · {customReglas.length} personalizados · {defaultReglas.length} DIAN 2025
+        </span>
+      </div>
+
+      {/* ── Formulario nueva regla (debajo de la barra) ── */}
+      {mostrarFormNueva && (
+        <div style={{ background: '#EFF6FF', borderBottom: `2px solid #BFDBFE`, padding: '14px 20px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: JA.BLUE, marginBottom: '10px' }}>
+            Nuevo registro — asigne una cuenta PUC a un formato DIAN
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '160px 200px 1fr 150px auto', gap: '10px', alignItems: 'end' }}>
+            <div>
+              <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '3px', fontWeight: 700 }}>Cuenta contable *</div>
+              <input value={nuevaRegla.cuentaPucPatron} placeholder="Ej: 51050601 o 5120%"
+                onChange={e => setNuevaRegla(p => ({ ...p, cuentaPucPatron: e.target.value }))}
+                style={inputStConf} autoFocus />
+            </div>
+            <div>
+              <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '3px', fontWeight: 700 }}>Formato *</div>
+              <select value={nuevaRegla.formatoCodigo}
+                onChange={e => setNuevaRegla(p => ({ ...p, formatoCodigo: e.target.value, conceptoCodigo: '' }))}
+                style={inputStConf}>
+                {FORMATOS_DISPONIBLES.map(f => <option key={f} value={f}>Formato {f}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '3px', fontWeight: 700 }}>Concepto DIAN *</div>
+              <select value={nuevaRegla.conceptoCodigo}
+                onChange={e => setNuevaRegla(p => ({ ...p, conceptoCodigo: e.target.value }))}
+                style={inputStConf}>
+                <option value="">— Seleccionar concepto —</option>
+                {(CONCEPTOS_POR_FORMATO[nuevaRegla.formatoCodigo] ?? []).map(c => (
+                  <option key={c.valor} value={c.valor}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: '10px', color: JA.GREY, marginBottom: '3px', fontWeight: 700 }}>Valor a reportar</div>
+              <select value={nuevaRegla.naturaleza}
+                onChange={e => setNuevaRegla(p => ({ ...p, naturaleza: e.target.value as '' | 'debito' | 'credito' }))}
+                style={inputStConf}>
+                <option value="">Saldo final cuenta</option>
+                <option value="debito">Saldo Débito</option>
+                <option value="credito">Saldo Crédito</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', paddingBottom: '1px' }}>
+              <button onClick={agregarRegla}
+                disabled={!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo}
+                style={{ padding: '8px 14px', background: JA.NAVY, color: JA.WHITE, border: 'none',
+                  borderRadius: '2px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                  opacity: (!nuevaRegla.cuentaPucPatron.trim() || !nuevaRegla.conceptoCodigo) ? 0.4 : 1 }}>
+                Agregar
+              </button>
+              <button onClick={() => setMostrarFormNueva(false)}
+                style={{ padding: '8px 10px', background: 'transparent', color: JA.GREY,
+                  border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '12px', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '8px' }}>
+            Use <strong>%</strong> al final como comodín. Ej: <code>5120%</code> = todas las subcuentas 5120xx.
+            Cuenta exacta: <code>51050601</code> = solo esa subcuenta específica.
+          </div>
         </div>
       )}
 
-      {/* ── Reglas predeterminadas (colapsables) ── */}
-      <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
-        <button onClick={() => setMostrarDefault(!mostrarDefault)}
-          style={{ width: '100%', padding: '12px 16px', background: JA.SURFACE, border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: mostrarDefault ? `1px solid ${JA.BORDER}` : 'none' }}>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: JA.TEXT }}>
-              Reglas predeterminadas DIAN 2025 ({reglasFiltradas(reglas.default).length} reglas)
-            </div>
-            <div style={{ fontSize: '10px', color: JA.GREY, marginTop: '2px' }}>
-              Basadas en Res. 000227/2025 + configuración Siigo Nube. Las reglas personalizadas tienen prioridad.
-            </div>
-          </div>
-          <span style={{ fontSize: '12px', color: JA.GREY }}>{mostrarDefault ? '▲ Ocultar' : '▼ Ver todas'}</span>
-        </button>
-        {mostrarDefault && (
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-              <thead>
-                <tr style={{ background: JA.SURFACE, position: 'sticky', top: 0 }}>
-                  {['Formato', 'Cuenta PUC', 'Concepto', 'Valor a reportar', 'Descripción'].map(h => (
-                    <th key={h} style={{ padding: '7px 12px', textAlign: 'left', borderBottom: `1px solid ${JA.BORDER}`,
-                      fontSize: '9px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reglasFiltradas(reglas.default).map((r, idx) => (
-                  <tr key={idx} style={{ borderBottom: `1px solid ${JA.BORDER}`, background: idx % 2 ? JA.BG : JA.WHITE }}>
-                    <td style={{ padding: '6px 12px' }}>
-                      <span style={{ padding: '1px 6px', background: COLOR_FORMATO[r.formatoCodigo] ?? JA.NAVY,
-                        color: JA.WHITE, borderRadius: '2px', fontSize: '9px', fontWeight: 700 }}>{r.formatoCodigo}</span>
-                    </td>
-                    <td style={{ padding: '6px 12px', fontFamily: 'monospace', color: JA.NAVY, fontSize: '11px' }}>
+      {/* ── Tabla unificada estilo Siigo ── */}
+      <div style={{ overflowX: 'auto', background: JA.WHITE }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <thead>
+            <tr style={{ background: JA.SURFACE, position: 'sticky', top: 0, zIndex: 1 }}>
+              <th style={thSt}>Cuenta contable</th>
+              <th style={{ ...thSt, width: '70px' }}>Formato</th>
+              <th style={{ ...thSt, width: '80px' }}>Concepto</th>
+              <th style={{ ...thSt, minWidth: '180px' }}>Categoría</th>
+              <th style={{ ...thSt, width: '140px' }}>Valor a reportar</th>
+              <th style={{ ...thSt, width: '36px' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {reglasFiltradas.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: JA.GREY, fontSize: '13px' }}>
+                  No hay registros con los filtros aplicados.
+                </td>
+              </tr>
+            )}
+            {reglasFiltradas.map((r, idx) => {
+              const colorFmt = COLOR_FORMATO[r.formatoCodigo] ?? JA.NAVY
+              const conceptoDesc = conceptoLabel(r.formatoCodigo, r.conceptoCodigo)
+              const catLabel = conceptoDesc.includes('—') ? conceptoDesc.split('—')[1].trim() : conceptoDesc
+              return (
+                <tr key={idx} style={{
+                  borderBottom: `1px solid ${JA.BORDER}`,
+                  background: r.esCustom ? '#FFFBEB' : idx % 2 === 0 ? JA.WHITE : JA.BG,
+                }}>
+                  {/* Cuenta contable */}
+                  <td style={{ padding: '9px 14px' }}>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: JA.NAVY, fontSize: '12px' }}>
                       {r.cuentaPucPatron}
-                    </td>
-                    <td style={{ padding: '6px 12px', color: JA.TEXT }}>{r.conceptoCodigo}</td>
-                    <td style={{ padding: '6px 12px', color: JA.GREY }}>
-                      {NOMBRE_NATURALEZA[(r as ReglaUI).naturaleza ?? ''] ?? 'Saldo final'}
-                    </td>
-                    <td style={{ padding: '6px 12px', color: JA.GREY, maxWidth: '240px',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.notas}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    </span>
+                    {r.esCustom && (
+                      <span style={{ marginLeft: '8px', fontSize: '9px', padding: '1px 6px', background: '#FEF3C7',
+                        color: '#92400E', borderRadius: '2px', fontWeight: 700 }}>MI EMPRESA</span>
+                    )}
+                    {r.notas && (
+                      <span style={{ marginLeft: '6px', fontSize: '10px', color: JA.GREY }}>— {r.notas}</span>
+                    )}
+                  </td>
+                  {/* Formato */}
+                  <td style={{ padding: '9px 14px' }}>
+                    {r.formatoCodigo && (
+                      <span style={{ padding: '2px 8px', background: colorFmt, color: JA.WHITE,
+                        borderRadius: '2px', fontSize: '10px', fontWeight: 800 }}>{r.formatoCodigo}</span>
+                    )}
+                  </td>
+                  {/* Concepto */}
+                  <td style={{ padding: '9px 14px', fontWeight: 600, color: JA.TEXT }}>
+                    {r.conceptoCodigo}
+                  </td>
+                  {/* Categoría (descripción del concepto) */}
+                  <td style={{ padding: '9px 14px', color: JA.GREY, fontSize: '11px', maxWidth: '220px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {catLabel}
+                  </td>
+                  {/* Valor a reportar */}
+                  <td style={{ padding: '9px 14px', color: JA.GREY, fontSize: '11px' }}>
+                    {LABEL_NAT[r.naturaleza ?? ''] ?? 'Saldo final cuenta'}
+                  </td>
+                  {/* Eliminar (solo custom) */}
+                  <td style={{ padding: '9px 8px', textAlign: 'center' }}>
+                    {r.esCustom && (
+                      <button onClick={() => eliminarCustom(r.cuentaPucPatron, r.conceptoCodigo)}
+                        title="Eliminar esta regla personalizada"
+                        style={{ width: '26px', height: '26px', background: '#FEE2E2', color: JA.RED,
+                          border: 'none', borderRadius: '2px', cursor: 'pointer', fontSize: '13px',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                        ␡
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Leyenda ── */}
+      <div style={{ padding: '10px 20px', background: JA.SURFACE, borderTop: `1px solid ${JA.BORDER}`,
+        display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: JA.GREY }}>
+          <span style={{ width: '14px', height: '14px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '2px', display: 'inline-block' }} />
+          Reglas de mi empresa (mayor prioridad — editables)
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: JA.GREY }}>
+          <span style={{ width: '14px', height: '14px', background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', display: 'inline-block' }} />
+          Reglas predeterminadas DIAN 2025 (basadas en Siigo Nube + Res. 000227/2025)
+        </div>
+        <div style={{ marginLeft: 'auto', fontSize: '10px', color: JA.GREY }}>
+          Las reglas predeterminadas garantizan el mapeo correcto para la mayoría de empresas colombianas.
+          Agregue reglas propias solo para cuentas auxiliares específicas de su plan de cuentas.
+        </div>
       </div>
     </div>
   )
@@ -1849,6 +1808,12 @@ const inputStConf: React.CSSProperties = {
   width: '100%', padding: '7px 9px', border: `1px solid ${JA.BORDER}`, borderRadius: '2px',
   fontSize: '12px', color: JA.TEXT, background: JA.WHITE, boxSizing: 'border-box',
   fontFamily: 'Inter, sans-serif', outline: 'none',
+}
+
+const thSt: React.CSSProperties = {
+  padding: '9px 14px', textAlign: 'left', borderBottom: `2px solid ${JA.BORDER}`,
+  fontSize: '10px', fontWeight: 700, color: JA.GREY, textTransform: 'uppercase',
+  letterSpacing: '0.05em', background: JA.SURFACE, whiteSpace: 'nowrap',
 }
 
 // ── Iconos SVG — sin emojis ───────────────────────────────────────────────────

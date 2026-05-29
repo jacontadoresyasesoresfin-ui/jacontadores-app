@@ -49,6 +49,7 @@ export class Formato1005Strategy implements IFormatoExogena<Fila1005> {
   transformar(asientos: AsientoContable[], reglas: RulesEngine): Fila1005[] {
     const acum = new Map<string, Fila1005>()
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1005') continue
       if (!a.tercero?.numeroId) continue

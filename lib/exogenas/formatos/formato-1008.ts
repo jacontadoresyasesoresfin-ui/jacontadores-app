@@ -107,7 +107,7 @@ export class Formato1008Strategy implements IFormatoExogena<Fila1008> {
           fila: f, tipo: 'deudor_sin_identificar', severidad: 'alta',
           descripcion: `Deudor sin NIT — saldo CxC $${fmt(f.valorSaldo)}`,
           valorInvolucrado: f.valorSaldo,
-          sugerencia: 'Identifique el NIT del deudor en el sistema contable.',
+          sugerencia: '¡Atención! Vaya al módulo de Terceros en Siigo y asigne el NIT correcto a este cliente o deudor. Este formato exige identificación.',
         })
       }
       if (f.valorSaldo < 0) {
@@ -115,7 +115,7 @@ export class Formato1008Strategy implements IFormatoExogena<Fila1008> {
           fila: f, tipo: 'saldo_cxc_negativo', severidad: 'media',
           descripcion: `Saldo CxC negativo $${fmt(f.valorSaldo)} para ${f.razonSocial || f.numeroId} — concepto ${f.conceptoCodigo}`,
           valorInvolucrado: f.valorSaldo,
-          sugerencia: 'Un saldo negativo en CxC indica que le pagaron de más o hay una nota crédito sin aplicar. Verifique los comprobantes.',
+          sugerencia: '¡Revisión contable urgente! Un cliente no debería tener saldo a favor (negativo) en CxC a fin de año. Reclasifique ese saldo a la cuenta 28 (Anticipos) en Siigo o aplique el cruce de facturas.',
         })
       }
     }

@@ -13,7 +13,6 @@
  *   fin           — proceso completo, lleva el resultado completo
  *   error         — falla irrecuperable
  */
-export const dynamic = 'force-dynamic'
 import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { parsearSiigoCsv } from '@/lib/exogenas/parsers/siigo-csv-parser'
@@ -25,12 +24,25 @@ import { FormatoRegistry } from '@/lib/exogenas/registry/formato-registry'
 import { REGLAS_DEFAULT_2025 } from '@/lib/exogenas/config/reglas-default-2025'
 import type { ConfigExogena, FilaFormato, ResultadoTransformacion } from '@/lib/exogenas/types'
 
+export const dynamic = 'force-dynamic'
+
 const DEFAULT_FORMATOS = ['1001', '1005', '1006', '1007', '1010']
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
 export async function POST(req: NextRequest) {
   // ── Auth + datos del request (ANTES del stream) ────────────────────────
-  const supabase = await createClient()
+  let supabase: Awaited<ReturnType<typeof createClient>>
+  try {
+    supabase = await createClient()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[exogenas/generar] Error al crear cliente Supabase:', msg)
+    return new Response(
+      JSON.stringify({ tipo: 'error', mensaje: `Error de configuración del servidor: ${msg}` }) + '\n',
+      { status: 500, headers: { 'Content-Type': 'application/x-ndjson' } }
+    )
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return new Response(JSON.stringify({ tipo: 'error', mensaje: 'No autorizado' }) + '\n', { status: 401 })
@@ -48,38 +60,48 @@ export async function POST(req: NextRequest) {
     formatos: DEFAULT_FORMATOS,
   }
 
-  if (contentType.includes('multipart/form-data')) {
-    const formData = await req.formData()
-    const archivo = formData.get('archivo') as File | null
-    if (!archivo) {
-      return new Response(JSON.stringify({ tipo: 'error', mensaje: 'Se requiere el archivo (CSV de Siigo o xlsx del prevalidador DIAN).' }) + '\n', { status: 400 })
-    }
-    archivoBuffer = Buffer.from(await archivo.arrayBuffer())
-    nombreArchivo = archivo.name.toLowerCase()
-    const esArchivoXlsx = nombreArchivo.endsWith('.xlsx') || nombreArchivo.endsWith('.xls')
-
-    if (esArchivoXlsx) {
-      // Distinguir: ¿es el Prevalidador DIAN (hojas 1001, 1005…) o el Libro Auxiliar de Siigo?
-      if (esDianPrevalidador(archivoBuffer)) {
-        esXlsx = true           // Flujo DIAN prevalidador (sin RulesEngine)
-      } else {
-        esSiigoXlsx = true      // Flujo Siigo xlsx → parsear a AsientoContable[] → RulesEngine
+  // ── Parsear request (multipart/form-data o JSON) — envolver en try/catch ──
+  try {
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData()
+      const archivo = formData.get('archivo') as File | null
+      if (!archivo) {
+        return new Response(JSON.stringify({ tipo: 'error', mensaje: 'Se requiere el archivo (CSV de Siigo o xlsx del prevalidador DIAN).' }) + '\n', { status: 400 })
       }
+      archivoBuffer = Buffer.from(await archivo.arrayBuffer())
+      nombreArchivo = archivo.name.toLowerCase()
+      const esArchivoXlsx = nombreArchivo.endsWith('.xlsx') || nombreArchivo.endsWith('.xls')
+
+      if (esArchivoXlsx) {
+        // Distinguir: ¿es el Prevalidador DIAN (hojas 1001, 1005…) o el Libro Auxiliar de Siigo?
+        if (esDianPrevalidador(archivoBuffer)) {
+          esXlsx = true           // Flujo DIAN prevalidador (sin RulesEngine)
+        } else {
+          esSiigoXlsx = true      // Flujo Siigo xlsx → parsear a AsientoContable[] → RulesEngine
+        }
+      } else {
+        csvTexto = archivoBuffer.toString('utf-8')
+        if (csvTexto.includes('')) csvTexto = archivoBuffer.toString('latin1')
+      }
+      const configStr = formData.get('config') as string | null
+      if (configStr) config = { ...config, ...JSON.parse(configStr) }
     } else {
-      csvTexto = archivoBuffer.toString('utf-8')
-      if (csvTexto.includes('�')) csvTexto = archivoBuffer.toString('latin1')
+      const body = await req.json() as { config?: ConfigExogena }
+      if (body.config) config = body.config
     }
-    const configStr = formData.get('config') as string | null
-    if (configStr) config = { ...config, ...JSON.parse(configStr) }
-  } else {
-    const body = await req.json() as { config?: ConfigExogena }
-    if (body.config) config = body.config
+  } catch (initErr) {
+    const msg = initErr instanceof Error ? initErr.message : String(initErr)
+    console.error('[exogenas/generar] Error al parsear request:', msg)
+    return new Response(
+      JSON.stringify({ tipo: 'error', mensaje: `Error al leer el archivo: ${msg}` }) + '\n',
+      { status: 400, headers: { 'Content-Type': 'application/x-ndjson' } }
+    )
   }
 
   // ── Cargar reglas del tenant (flujo CSV y Siigo xlsx — no en Prevalidador DIAN) ──
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
   const reglasExtra: typeof REGLAS_DEFAULT_2025 = []
-  if (!esXlsx && profile?.tenant_id) {
+  if (!esXlsx && profile?.tenant_id && config.usarConfiguracionPersonalizada !== false) {
     const { data } = await supabase.from('exogenas_reglas_mapeo').select('*').eq('tenant_id', profile.tenant_id).eq('activo', true)
     if (data) reglasExtra.push(...(data as typeof REGLAS_DEFAULT_2025))
   }
@@ -257,6 +279,16 @@ export async function POST(req: NextRequest) {
             : parsearSiigoCsv(csvTexto)
           const { asientos, advertencias, empresaDetectada, periodoDetectado, totalFilas, filasFallidas } = parseado
 
+          // Resolver de forma fabulosa los municipios faltantes: 
+          // Heredan el municipio del declarante por defecto si no lo tienen.
+          if (config.municipioCodigo) {
+            for (const a of asientos) {
+              if (a.tercero && a.tercero.paisCodigo === 'CO' && !a.tercero.municipioCodigo) {
+                a.tercero.municipioCodigo = config.municipioCodigo
+              }
+            }
+          }
+
           if (!asientos.length) {
             emit({
               tipo: 'error',
@@ -357,7 +389,7 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         emit({ tipo: 'error', mensaje: err instanceof Error ? err.message : 'Error inesperado al generar las exógenas.' })
       } finally {
-        controller.close()
+        try { controller.close() } catch {}
       }
     },
   })

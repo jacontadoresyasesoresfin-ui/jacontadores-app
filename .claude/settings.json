@@ -16,7 +16,14 @@
       "Bash(curl -s -X PATCH 'https://zxpookuhrwcohhryyxyv.supabase.co/rest/v1/profiles?id=eq.e2289575-afc8-4a7b-80e2-56c5b44526d0' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4cG9va3Vocndjb2hocnl5eHl2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjI2NTEzNCwiZXhwIjoyMDkxODQxMTM0fQ.JtYLQB7gOaCxBafZnGock1ZTuuMRlyvB2wJ1Xh-q0fQ' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4cG9va3Vocndjb2hocnl5eHl2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjI2NTEzNCwiZXhwIjoyMDkxODQxMTM0fQ.JtYLQB7gOaCxBafZnGock1ZTuuMRlyvB2wJ1Xh-q0fQ' -H 'Content-Type: application/json' -H 'Prefer: return=representation' -d '{ *)",
       "Bash(node -e \"const lr = require\\('lucide-react'\\); console.log\\('Info:', typeof lr.Info\\)\")",
       "Bash(cat next.config.ts)",
-      "Bash(cat next.config.js)"
+      "Bash(cat next.config.js)",
+      "Bash(timeout 15 bash -c 'until curl -sf http://localhost:3000 > /dev/null 2>&1; do sleep 1; done; echo READY')",
+      "Bash(timeout 25 bash -c 'until curl -sf http://localhost:3001 > /dev/null 2>&1; do sleep 1; done; echo READY')",
+      "Bash(netstat -ano)",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr \":300\")",
+      "Bash(Get-Process -Id 33160)",
+      "Bash(Get-Process -Id 2264)"
     ]
   }
 }

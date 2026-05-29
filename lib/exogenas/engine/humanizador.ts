@@ -27,6 +27,7 @@ export interface TarjetaExcepcion {
     documentoId?: string
     fecha?: string
     terceroId?: string
+    nombreTercero?: string
   }
 }
 
@@ -53,6 +54,7 @@ function construirTarjeta(e: ExcepcionGenerada): TarjetaExcepcion {
     documentoId: (fila?.documentoId ?? (fila?._documentosIds as string[] | undefined)?.[0] ?? '') as string,
     fecha: (fila?.fecha ?? '') as string,
     terceroId: (fila?.numeroId ?? '') as string,
+    nombreTercero: (fila?.razonSocial || [fila?.primerNombre, fila?.otrosNombres, fila?.primerApellido, fila?.segundoApellido].filter(Boolean).join(' ') || '') as string,
   }
 
   switch (e.tipo) {

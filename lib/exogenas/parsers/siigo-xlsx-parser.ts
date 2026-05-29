@@ -69,6 +69,14 @@ export function parsearSiigoXlsx(buffer: Buffer): ResultadoParseoCsv {
     }
   }
 
+  // ── Route to Balance Parser if detected ─────────────────────────────────────
+  const tituloSecundario = str(safeGet(rows, 1, 0)).toUpperCase()
+  if (tituloSecundario.includes('BALANCE DE PRUEBA')) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { parsearSiigoBalance } = require('./siigo-balance-parser')
+    return parsearSiigoBalance(buffer)
+  }
+
   // ── Extraer metadata (empresa, período) ──────────────────────────────────────
   let empresa: string | undefined
   let periodo: string | undefined

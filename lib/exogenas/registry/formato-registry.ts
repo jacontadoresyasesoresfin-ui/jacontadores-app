@@ -13,6 +13,7 @@ import { Formato1007Strategy } from '../formatos/formato-1007'
 import { Formato1008Strategy } from '../formatos/formato-1008'
 import { Formato1009Strategy } from '../formatos/formato-1009'
 import { Formato1010Strategy } from '../formatos/formato-1010'
+import { Formato1012Strategy } from '../formatos/formato-1012'
 import { Formato2276Strategy } from '../formatos/formato-2276'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,6 +29,7 @@ const FORMATOS: Record<string, () => AnyFormato> = {
   '1008': () => new Formato1008Strategy(),
   '1009': () => new Formato1009Strategy(),
   '1010': () => new Formato1010Strategy(),
+  '1012': () => new Formato1012Strategy(),
   '2276': () => new Formato2276Strategy(),
 }
 
@@ -42,6 +44,7 @@ export const VERSION_POR_ANIO: Record<number, Record<string, string>> = {
     '1008': 'v6',
     '1009': 'v8',
     '1010': 'v7',
+    '1012': 'v8',
     '2276': 'v1',
   },
 }
@@ -87,6 +90,11 @@ export const INFO_FORMATOS: Record<string, { nombre: string; descripcion: string
     nombre: 'Socios, accionistas, comuneros, cooperados y asociados',
     descripcion: 'Relación de socios con su participación en el capital social. Fuente: cuentas clase 31.',
     prioridad: 8,
+  },
+  '1012': {
+    nombre: 'Saldos en cuentas bancarias, inversiones y fondos',
+    descripcion: 'Saldos al 31-dic en cuentas bancarias (corriente/ahorro), CDT, fondos de inversión y acciones. Fuente: cuentas grupos 11 (efectivo) y 12 (inversiones).',
+    prioridad: 9,
   },
   '2276': {
     nombre: 'Información de pagos laborales (Nómina)',

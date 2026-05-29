@@ -60,6 +60,7 @@ export class Formato1007Strategy implements IFormatoExogena<Fila1007> {
     const acum = new Map<string, Fila1007>()
 
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1007') continue
       if (!a.tercero?.numeroId) continue
@@ -80,9 +81,35 @@ export class Formato1007Strategy implements IFormatoExogena<Fila1007> {
       acum.set(clave, fila)
     }
 
-    return Array.from(acum.values())
-      .map(f => ({ ...f, valorNetoIngreso: f.valorIngreso - f.valorDevolucion - f.valorDescuento }))
-      .filter(f => f.valorNetoIngreso > UMBRAL_1007)   // Art. 631 E.T.: "superiores a 500 UVT"
+    const filasFinales: Fila1007[] = []
+    const cuantiasMenoresPorConcepto = new Map<string, Fila1007>()
+
+    for (const f of acum.values()) {
+      const neto = f.valorIngreso - f.valorDevolucion - f.valorDescuento
+      f.valorNetoIngreso = neto
+
+      if (neto >= UMBRAL_1007 || f.numeroId === '222222222') {
+        if (Math.round(neto) !== 0) {
+          filasFinales.push(f)
+        }
+        continue
+      }
+
+      // Cuantías menores
+      if (Math.round(neto) === 0) continue
+      const cm = cuantiasMenoresPorConcepto.get(f.conceptoCodigo) ?? this.filaVaciaGenericaCM(f.conceptoCodigo)
+      cm.valorIngreso += f.valorIngreso
+      cm.valorDevolucion += f.valorDevolucion
+      cm.valorDescuento += f.valorDescuento
+      cm.valorNetoIngreso += neto
+      cuantiasMenoresPorConcepto.set(f.conceptoCodigo, cm)
+    }
+
+    for (const cm of cuantiasMenoresPorConcepto.values()) {
+      if (Math.round(cm.valorNetoIngreso) !== 0) filasFinales.push(cm)
+    }
+
+    return filasFinales
   }
 
   validar(filas: Fila1007[]): ExcepcionGenerada[] {
@@ -138,6 +165,25 @@ export class Formato1007Strategy implements IFormatoExogena<Fila1007> {
       primerNombre:    nombres?.primerNombre    ?? '',
       otrosNombres:    nombres?.otrosNombres    ?? '',
       razonSocial:     esPJ ? (t.razonSocial ?? nombreRaw) : '',
+      conceptoCodigo:  concepto,
+      valorIngreso: 0, valorDevolucion: 0, valorDescuento: 0, valorNetoIngreso: 0,
+      _documentosIds: [], _cuentasOrigen: [],
+    }
+  }
+
+  private filaVaciaGenericaCM(concepto: string): Fila1007 {
+    return {
+      tipoDocumento:   '3',
+      numeroId:        '222222222',
+      dv:              '7',
+      paisCodigo:      'CO',
+      deptoCodigo:     '',
+      municipioCodigo: '',
+      primerApellido:  '',
+      segundoApellido: '',
+      primerNombre:    '',
+      otrosNombres:    '',
+      razonSocial:     'CUANTIAS MENORES',
       conceptoCodigo:  concepto,
       valorIngreso: 0, valorDevolucion: 0, valorDescuento: 0, valorNetoIngreso: 0,
       _documentosIds: [], _cuentasOrigen: [],

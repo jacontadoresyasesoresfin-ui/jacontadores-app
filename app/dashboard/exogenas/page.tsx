@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { useClient } from '../ClientContext'
 import { MUNICIPIOS_LISTA, DEPARTAMENTOS } from '@/lib/exogenas/config/divipola'
 import { INFO_FORMATOS, VERSION_POR_ANIO } from '@/lib/exogenas/registry/formato-registry'
+import ConfiguracionMagnetica from './ConfiguracionMagnetica'
 import type { TarjetaExcepcion, AccionExcepcion } from '@/lib/exogenas/engine/humanizador'
 
 // ── Paleta J&A ────────────────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ const ETAPAS_XLSX_INICIALES: EtapaUI[] = [
 ]
 
 const STORAGE_KEY = 'ja_exogenas_config_v2'
-const FORMATOS_DISPONIBLES = ['1001', '1003', '1005', '1006', '1007', '1008', '1009', '1010', '2276']
+const FORMATOS_DISPONIBLES = ['1001', '1003', '1005', '1006', '1007', '1008', '1009', '1010', '1012', '2276']
 
 // ── Conceptos por formato para la pantalla de configuración ───────────────────
 const CONCEPTOS_POR_FORMATO: Record<string, { valor: string; label: string }[]> = {
@@ -144,6 +145,15 @@ const CONCEPTOS_POR_FORMATO: Record<string, { valor: string; label: string }[]> 
     { valor: 'empleado', label: 'Empleado' },
     { valor: 'socio', label: 'Socio / Accionista' },
   ],
+  '1012': [
+    { valor: '1204', label: '1204 — Efectivo y cuentas bancarias (corriente/ahorro)' },
+    { valor: '1208', label: '1208 — Fondos fiduciarios y patrimonios autónomos' },
+    { valor: '1209', label: '1209 — Fondos de inversión colectiva' },
+    { valor: '1210', label: '1210 — Acciones y cuotas de interés social' },
+    { valor: '1211', label: '1211 — CDT y certificados de depósito a término' },
+    { valor: '1212', label: '1212 — Bonos y otros títulos de deuda' },
+    { valor: '1299', label: '1299 — Otras inversiones y equivalentes' },
+  ],
   '2276': [
     { valor: '6001', label: '6001 — Sueldos y jornales' },
     { valor: '6002', label: '6002 — Prima de servicios' },
@@ -202,6 +212,11 @@ const GUIA_FORMATOS: Record<string, { fuente: string; concilia: string; tip: str
     concilia: 'Formulario 110 — patrimonio neto, capital suscrito y pagado',
     tip: 'Reporta la participación de socios y accionistas. Para empresas unipersonales informar el único socio.',
   },
+  '1012': {
+    fuente: 'Libro Auxiliar Siigo — grupos 11 (caja y bancos) y 12 (inversiones). Fuente: 1110xx cuentas bancarias, 1120xx fondos, 1205xx acciones, 1220xx CDT',
+    concilia: 'Formulario 110/210 — sección efectivo y equivalentes de efectivo + inversiones a corto y largo plazo',
+    tip: 'Reporta saldo al 31-dic en cada cuenta bancaria y de inversión. El tercero es el banco o entidad financiera (por NIT). Concilia con el extracto bancario del cierre.',
+  },
   '2276': {
     fuente: 'Libro Auxiliar Siigo — cuentas 511xxx (gastos de personal) y 5105xx (aportes empleador)',
     concilia: 'Declaración de renta — salarios y prestaciones como deducción de renta',
@@ -217,6 +232,7 @@ interface ConfigGuardada {
   municipioCodigo: string
   formatosSeleccionados: string[]
   anioGravable: number
+  usarConfiguracionPersonalizada: boolean
 }
 
 const CONFIG_DEFECTO: ConfigGuardada = {
@@ -227,6 +243,7 @@ const CONFIG_DEFECTO: ConfigGuardada = {
   municipioCodigo: '11001',
   formatosSeleccionados: FORMATOS_DISPONIBLES,
   anioGravable: 2025,
+  usarConfiguracionPersonalizada: true,
 }
 
 // ── Algoritmo DV módulo 11 (DIAN) ────────────────────────────────────────────
@@ -301,7 +318,7 @@ export default function ExogenasPage() {
     }
   }, [config.nitDeclarante]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const actualizarConfig = (campo: keyof ConfigGuardada, valor: string | string[] | number) => {
+  const actualizarConfig = (campo: keyof ConfigGuardada, valor: string | string[] | number | boolean) => {
     setConfig(prev => {
       const next = { ...prev, [campo]: valor }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -459,6 +476,7 @@ export default function ExogenasPage() {
       tipoDeclarante: config.tipoDeclarante,
       municipioCodigo: config.municipioCodigo,
       formatos: config.formatosSeleccionados,
+      usarConfiguracionPersonalizada: config.usarConfiguracionPersonalizada,
     }))
 
     let recibiFinEvent = false
@@ -630,7 +648,12 @@ export default function ExogenasPage() {
         {/* ══════════════════════════════════════════════════════════
             TAB: CONFIGURACIÓN DE MAPEO PUC
         ══════════════════════════════════════════════════════════ */}
-        {tab === 'configuracion' && <ConfiguracionPUC />}
+        {tab === 'configuracion' && (
+          <ConfiguracionMagnetica
+            anioInicial={config.anioGravable}
+            onVolver={() => setTab('generar')}
+          />
+        )}
 
         {tab !== 'configuracion' && <>
 
@@ -649,6 +672,32 @@ export default function ExogenasPage() {
         ══════════════════════════════════════════════════════════ */}
         {vista === 'inicio' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+            {/* ─── BANNER: Flujo recomendado ─── */}
+            <div style={{ padding: '12px 16px', background: '#EFF6FF', border: '1px solid #BFDBFE',
+              borderRadius: '2px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: '20px', flexShrink: 0 }}>💡</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: JA.BLUE, marginBottom: '4px' }}>
+                  Flujo recomendado para la mejor precisión en su exógena
+                </div>
+                <div style={{ fontSize: '11px', color: JA.GREY, lineHeight: '1.7' }}>
+                  <strong>Paso 1:</strong> Configure su mapeo PUC en la pestaña{' '}
+                  <button onClick={() => setTab('configuracion')}
+                    style={{ background: 'none', border: 'none', color: JA.BLUE, cursor: 'pointer',
+                      fontWeight: 700, fontSize: '11px', textDecoration: 'underline', padding: 0 }}>
+                    "Configuración de mapeo PUC"
+                  </button>
+                  {' '}— asigne cada cuenta a su formato y concepto DIAN.
+                  <br/>
+                  <strong>Paso 2:</strong> Vuelva aquí, complete los datos del declarante y genere.
+                  <br/>
+                  <strong>Principio DIAN:</strong> Grupos 11-12 → F1012 · Grupo 13 → F1008 · Grupos 21-28 → F1009 ·
+                  Grupos 41-42 → F1007 · Grupos 51-53/61-65/71-74 → F1001 · Grupos 1355xx → F1003.
+                  Pagos &lt; $100.000 sin retención → se consolidan bajo NIT 222.222.222 (cuantías menores).
+                </div>
+              </div>
+            </div>
 
             {/* ─── SECCIÓN 1: Datos del declarante ─── */}
             <Seccion num="1" titulo="Datos del declarante" requerido>
@@ -690,6 +739,24 @@ export default function ExogenasPage() {
                     </button>
                   )}
                 </Campo>
+              </div>
+
+              <div style={{
+                background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px',
+                padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px'
+              }}>
+                <input type="checkbox"
+                  checked={config.usarConfiguracionPersonalizada}
+                  onChange={e => actualizarConfig('usarConfiguracionPersonalizada', e.target.checked)}
+                  style={{ marginTop: '2px', cursor: 'pointer' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: '#333' }}>
+                    Aplicar Configuración de Mapeo PUC
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                    Si se activa, el motor de reglas utilizará las reglas personalizadas que definiste en la pantalla de "Configuración de Mapeo PUC" para asignar cuentas a conceptos DIAN. Si lo desactivas, solo se usará el mapeo estándar por defecto de Siigo.
+                  </div>
+                </div>
               </div>
 
               {/* Razón social */}
@@ -1224,6 +1291,84 @@ export default function ExogenasPage() {
                     </button>
                   ))}
                 </div>
+                
+                {/* Botones de acción masiva */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px', paddingTop: '14px', borderTop: `1px solid ${JA.BORDER}` }}>
+                  <button onClick={() => {
+                    setExcepcionesResueltas(prev => {
+                      const n = new Map(prev)
+                      tarjetas.forEach((t, i) => {
+                        if (!n.has(i) && t.dvSugerido) n.set(i, { accion: 'corregir_dv', datos: t.dvSugerido })
+                      })
+                      return n
+                    })
+                  }} style={{ padding: '6px 12px', background: JA.SURFACE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Icon name="check-circle" size={14} /> DVs Calculados
+                  </button>
+
+                  <button onClick={async () => {
+                    const filas = tarjetas.map((t, i) => {
+                      if (excepcionesResueltas.has(i)) return null
+                      return {
+                        'No.': i + 1,
+                        'Situación': t.titulo,
+                        'NIT': t.contexto?.terceroId ?? '',
+                        'Nombre': t.contexto?.nombreTercero ?? '',
+                        'Cuenta': t.contexto?.cuenta ?? '',
+                        'Monto': t.contexto?.monto ?? '',
+                        'Severidad': t.excepcionOriginal.severidad,
+                        'Resolución': ''
+                      }
+                    }).filter(Boolean)
+                    const XLSX = await import('xlsx')
+                    const ws = XLSX.utils.json_to_sheet(filas)
+                    const wb = XLSX.utils.book_new()
+                    XLSX.utils.book_append_sheet(wb, ws, 'Pendientes')
+                    XLSX.writeFile(wb, `Pendientes_Exogena_${config.anioGravable}.xlsx`)
+                  }} style={{ padding: '6px 12px', background: JA.SURFACE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Icon name="arrow-down-tray" size={14} /> Descargar XLSX
+                  </button>
+
+                  <label style={{ padding: '6px 12px', background: JA.SURFACE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Icon name="arrow-up-tray" size={14} /> Subir Corregido (XLSX)
+                    <input type="file" accept=".xlsx" style={{ display: 'none' }} onChange={async (e) => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      try {
+                        const XLSX = await import('xlsx'); const data = await file.arrayBuffer()
+                        const wb = XLSX.read(data); const ws = wb.Sheets[wb.SheetNames[0]]
+                        const json = XLSX.utils.sheet_to_json(ws) as any[]
+                        setExcepcionesResueltas(prev => {
+                          const n = new Map(prev)
+                          json.forEach(row => {
+                            const no = parseInt(row['No.'] || 0)
+                            if (!no) return
+                            const res = row['Resolución']?.toString().trim()
+                            if (res) {
+                              let act: any = 'asignar_tercero'
+                              const l = res.toLowerCase()
+                              if (l.includes('excluir')) act = 'excluir'
+                              else if (l.includes('ok') || l.includes('bien')) act = 'confirmar_correcto'
+                              else if (l.includes('diferir')) act = 'diferir'
+                              n.set(no - 1, { accion: act, datos: res })
+                            }
+                          })
+                          return n
+                        }); e.target.value = ''
+                      } catch (err) { alert('Error al leer el archivo Excel.') }
+                    }} />
+                  </label>
+
+                  <div style={{ width: '1px', background: JA.BORDER, margin: '0 4px' }} />
+
+                  <button onClick={() => setExcepcionesResueltas(prev => { const n = new Map(prev); tarjetas.forEach((_, i) => !n.has(i) && n.set(i, { accion: 'confirmar_correcto' })); return n })}
+                    style={{ padding: '6px 12px', background: JA.WHITE, border: `1px solid ${JA.GREEN}`, color: JA.GREEN, borderRadius: '2px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>Está bien todo</button>
+
+                  <button onClick={() => setExcepcionesResueltas(prev => { const n = new Map(prev); tarjetas.forEach((_, i) => !n.has(i) && n.set(i, { accion: 'excluir' })); return n })}
+                    style={{ padding: '6px 12px', background: JA.WHITE, border: `1px solid ${JA.RED}`, color: JA.RED, borderRadius: '2px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>Excluir todo</button>
+
+                  <button onClick={() => setExcepcionesResueltas(prev => { const n = new Map(prev); tarjetas.forEach((_, i) => !n.has(i) && n.set(i, { accion: 'diferir' })); return n })}
+                    style={{ padding: '6px 12px', background: JA.WHITE, border: `1px solid ${JA.GREY}`, color: JA.GREY, borderRadius: '2px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>Revisar después</button>
+                </div>
               </div>
 
               {/* Tarjeta */}
@@ -1262,7 +1407,7 @@ export default function ExogenasPage() {
                           {tarjeta.contexto.cuenta && <InfoDato label="Cuenta" valor={`${tarjeta.contexto.cuenta}${tarjeta.contexto.nombreCuenta ? ` — ${tarjeta.contexto.nombreCuenta}` : ''}`} />}
                           {tarjeta.contexto.monto != null && <InfoDato label="Valor" valor={fmtCOP(tarjeta.contexto.monto)} />}
                           {tarjeta.contexto.documentoId && <InfoDato label="Comprobante" valor={tarjeta.contexto.documentoId} />}
-                          {tarjeta.contexto.terceroId && <InfoDato label="NIT/Doc." valor={tarjeta.contexto.terceroId} />}
+                          {tarjeta.contexto.terceroId && <InfoDato label="NIT/Doc. (A quién)" valor={`${tarjeta.contexto.terceroId}${tarjeta.contexto.nombreTercero ? ` — ${tarjeta.contexto.nombreTercero}` : ''}`} />}
                         </div>
                       )}
                       <div style={{ fontSize: '12px', color: JA.GREY, padding: '10px 13px',
@@ -1292,7 +1437,20 @@ export default function ExogenasPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {tarjeta.acciones.map(accion => (
                           <button key={accion.tipo}
-                            onClick={() => { if (accion.tipo === 'asignar_tercero') { setMostrarBusqueda(true); return } resolverExcepcion(accion.tipo) }}
+                            onClick={() => { 
+                              if (accion.tipo === 'asignar_tercero') { setMostrarBusqueda(true); return } 
+                              if (accion.tipo === 'corregir_dv' && !tarjeta.dvSugerido) {
+                                const dv = window.prompt('Ingrese el dígito de verificación (un número del 0 al 9):')
+                                if (dv) resolverExcepcion(accion.tipo, dv)
+                                return
+                              }
+                              if (accion.tipo === 'asignar_concepto') {
+                                const concepto = window.prompt('Ingrese el código de concepto DIAN (ej. 5001):')
+                                if (concepto) resolverExcepcion(accion.tipo, concepto)
+                                return
+                              }
+                              resolverExcepcion(accion.tipo, tarjeta.dvSugerido) 
+                            }}
                             style={{ padding: '11px 14px', border: `1px solid ${accion.primaria ? JA.NAVY : JA.BORDER}`,
                               borderRadius: '2px', background: accion.primaria ? JA.NAVY : JA.WHITE,
                               color: accion.primaria ? JA.WHITE : JA.TEXT,
@@ -1475,7 +1633,9 @@ function etiquetaAccion(accion: AccionExcepcion): string {
   return m[accion] ?? accion
 }
 
-// ── Pantalla de Configuración de Mapeo PUC ────────────────────────────────────
+// (ConfiguracionMagnetica se importa desde ./ConfiguracionMagnetica.tsx)
+
+// ── [obsoleto — kept for unused-var suppression] ──────────────────────────────
 interface ReglaUI {
   id?: string
   formatoCodigo: string

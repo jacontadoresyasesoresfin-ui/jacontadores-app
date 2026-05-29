@@ -125,7 +125,7 @@ export class Formato1009Strategy implements IFormatoExogena<Fila1009> {
           fila: f, tipo: 'acreedor_sin_identificar', severidad: 'alta',
           descripcion: `Acreedor sin NIT — saldo CxP $${fmt(f.valorSaldo)}`,
           valorInvolucrado: f.valorSaldo,
-          sugerencia: 'Identifique el NIT del proveedor o acreedor en el sistema contable.',
+          sugerencia: '¡Atención! Vaya al módulo de Terceros en Siigo y asigne el NIT correcto a este proveedor o acreedor.',
         })
       }
       if (f.valorSaldo < 0) {
@@ -133,7 +133,7 @@ export class Formato1009Strategy implements IFormatoExogena<Fila1009> {
           fila: f, tipo: 'saldo_cxp_negativo', severidad: 'baja',
           descripcion: `Saldo CxP negativo $${fmt(f.valorSaldo)} para ${f.razonSocial || f.numeroId} — concepto ${f.conceptoCodigo}`,
           valorInvolucrado: f.valorSaldo,
-          sugerencia: 'Un saldo negativo en CxP indica anticipo pagado de más o ajuste pendiente. Verifique los comprobantes.',
+          sugerencia: '¡Revisión contable urgente! Un saldo negativo en Cuentas por Pagar significa que se le pagó de más a un proveedor o falta contabilizar una factura. Reclasifique a la cuenta 13 (Anticipos a proveedores) en Siigo.',
         })
       }
     }

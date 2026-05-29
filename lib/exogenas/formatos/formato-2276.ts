@@ -112,6 +112,7 @@ export class Formato2276Strategy implements IFormatoExogena<Fila2276> {
     const acum = new Map<string, Fila2276>()
 
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       // Solo procesar cuentas de nómina (511x) dirigidas a formato 2276
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '2276') continue

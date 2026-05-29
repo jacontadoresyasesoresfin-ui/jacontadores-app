@@ -82,6 +82,7 @@ export interface AsientoContable {
   documentoId?: string        // CUFE, ID Siigo, referencia interna
   descripcion?: string
   tipoDocSoporte?: string
+  esSaldoInicial?: boolean    // Para balances de prueba (Formato 1008/1009/1012)
 }
 
 // ─── Regla de mapeo (motor declarativo) ──────────────────────────────────
@@ -172,6 +173,7 @@ export interface ConfigExogena {
   tipoDeclarante: TipoDeclarante
   municipioCodigo: string
   formatos: string[]
+  usarConfiguracionPersonalizada?: boolean
 }
 
 // ─── Línea de reconciliación ─────────────────────────────────────────────

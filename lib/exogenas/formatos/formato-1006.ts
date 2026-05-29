@@ -60,6 +60,7 @@ export class Formato1006Strategy implements IFormatoExogena<Fila1006> {
     const acum = new Map<string, Fila1006>()
 
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1006') continue
       if (!a.tercero?.numeroId) continue
@@ -79,10 +80,35 @@ export class Formato1006Strategy implements IFormatoExogena<Fila1006> {
       acum.set(clave, fila)
     }
 
-    // Calcular neto y aplicar umbral
-    return Array.from(acum.values())
-      .map(f => ({ ...f, valorNetoCompra: f.valorCompra - f.valorDevolucion - f.valorDescuento }))
-      .filter(f => f.valorNetoCompra > UMBRAL_1006)   // Art. 631 E.T.: "superiores a 500 UVT"
+    const filasFinales: Fila1006[] = []
+    const cuantiasMenoresPorConcepto = new Map<string, Fila1006>()
+
+    for (const f of acum.values()) {
+      const neto = f.valorCompra - f.valorDevolucion - f.valorDescuento
+      f.valorNetoCompra = neto
+
+      if (neto >= UMBRAL_1006 || f.numeroId === '222222222') {
+        if (Math.round(neto) !== 0) {
+          filasFinales.push(f)
+        }
+        continue
+      }
+
+      // Cuantías menores
+      if (Math.round(neto) === 0) continue
+      const cm = cuantiasMenoresPorConcepto.get(f.conceptoCodigo) ?? this.filaVaciaGenericaCM(f.conceptoCodigo)
+      cm.valorCompra += f.valorCompra
+      cm.valorDevolucion += f.valorDevolucion
+      cm.valorDescuento += f.valorDescuento
+      cm.valorNetoCompra += neto
+      cuantiasMenoresPorConcepto.set(f.conceptoCodigo, cm)
+    }
+
+    for (const cm of cuantiasMenoresPorConcepto.values()) {
+      if (Math.round(cm.valorNetoCompra) !== 0) filasFinales.push(cm)
+    }
+
+    return filasFinales
   }
 
   validar(filas: Fila1006[]): ExcepcionGenerada[] {
@@ -137,6 +163,25 @@ export class Formato1006Strategy implements IFormatoExogena<Fila1006> {
       primerNombre:    nombres?.primerNombre    ?? '',
       otrosNombres:    nombres?.otrosNombres    ?? '',
       razonSocial:     esPJ ? (t.razonSocial ?? nombreRaw) : '',
+      conceptoCodigo:  concepto,
+      valorCompra: 0, valorDevolucion: 0, valorDescuento: 0, valorNetoCompra: 0,
+      _documentosIds: [], _cuentasOrigen: [],
+    }
+  }
+
+  private filaVaciaGenericaCM(concepto: string): Fila1006 {
+    return {
+      tipoDocumento:   '3',
+      numeroId:        '222222222',
+      dv:              '7',
+      paisCodigo:      'CO',
+      deptoCodigo:     '',
+      municipioCodigo: '',
+      primerApellido:  '',
+      segundoApellido: '',
+      primerNombre:    '',
+      otrosNombres:    '',
+      razonSocial:     'CUANTIAS MENORES',
       conceptoCodigo:  concepto,
       valorCompra: 0, valorDevolucion: 0, valorDescuento: 0, valorNetoCompra: 0,
       _documentosIds: [], _cuentasOrigen: [],

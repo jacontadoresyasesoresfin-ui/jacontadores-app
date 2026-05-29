@@ -26,6 +26,7 @@ import type {
 import { RulesEngine, validarDvNit, calcularDvNit } from '../engine/rules-engine'
 import { parsearNombreColombia, esPersonaJuridica } from '../utils/nombre-parser'
 import { buscarMunicipio, DEPARTAMENTOS } from '../config/divipola'
+import { UMBRAL_CUANTIAS_MENORES_1001 } from '../config/reglas-default-2025'
 
 // Conceptos donde el fallback "5098 — otros" puede incluir mezcla deducible/no deducible
 const CONCEPTOS_REVISAR_DEDUCIBILIDAD = new Set(['5098', '5013', '5016', '5019'])
@@ -118,6 +119,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
     const reteIdx = new Map<string, ReteEntry>()
 
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       if (!a.tercero?.numeroId || !a.documentoId) continue
       const acc = a.cuentaPuc
       let tipo: keyof ReteEntry | null = null
@@ -145,6 +147,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
     const reteAplicada = new Set<string>()
 
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1001') continue
       if (!a.tercero?.numeroId) continue
@@ -188,6 +191,14 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
       fila.valorPago = fila.valorPagoDeducible + fila.valorPagoNoDeducible
       fila.valorIva  = fila.valorIvaDeducible  + fila.valorIvaNoDeducible
 
+      // Nunca permitir que retención > pago en F1001
+      const totalRete = fila.valorRetefuente + fila.valorRetefuenteAsumida
+      if (totalRete > fila.valorPago && fila.valorPago > 0) {
+        const proporcion = fila.valorPago / totalRete
+        fila.valorRetefuente = Math.round(fila.valorRetefuente * proporcion)
+        fila.valorRetefuenteAsumida = Math.round(fila.valorRetefuenteAsumida * proporcion)
+      }
+
       if (a.documentoId) fila._documentosIds?.push(a.documentoId)
       if (a.cuentaPuc)   fila._cuentasOrigen?.push(a.cuentaPuc)
       fila._reglaId = regla.id
@@ -195,11 +206,53 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
       acum.set(filaKey, fila)
     }
 
-    return Array.from(acum.values()).filter(f =>
-      Math.round(f.valorPago) !== 0 ||
-      Math.round(f.valorRetefuente) !== 0 ||
-      Math.round(f.valorRetefuenteAsumida) !== 0
-    )
+    // ── Paso 3: Cuantías menores (Art. 631 E.T. + Res. 000227/2025) ─────────────
+    // Terceros con pagos acumulados en el año INFERIORES al umbral establecido
+    // Y SIN retención practicada se consolidan bajo el NIT genérico 222222222
+    // (nueve veces el número 2 — "cuantías menores").
+    // EXCEPCIÓN: si hubo cualquier retención practicada, SIEMPRE se reporta
+    // individualmente sin importar el monto (Art. 631 §2 E.T.).
+    const filasFinales: Fila1001[] = []
+    const cuantiasMenoresPorConcepto = new Map<string, Fila1001>()
+
+    for (const fila of acum.values()) {
+      const tieneRetencion = (
+        Math.round(fila.valorRetefuente) !== 0 ||
+        Math.round(fila.valorRetefuenteAsumida) !== 0 ||
+        Math.round(fila.valorReteIva) !== 0 ||
+        Math.round(fila.valorReteIvaNoResidentes) !== 0 ||
+        Math.round(fila.valorReteIca) !== 0
+      )
+      const totalPago = Math.abs(fila.valorPago)
+
+      // Siempre reportar individualmente si: tiene retención, supera el umbral,
+      // o ya ES el NIT genérico de cuantías menores
+      if (tieneRetencion || totalPago >= UMBRAL_CUANTIAS_MENORES_1001 || fila.numeroId === '222222222') {
+        if (Math.round(fila.valorPago) !== 0 || tieneRetencion) {
+          filasFinales.push(fila)
+        }
+        continue
+      }
+
+      // Acumular en cuantías menores por concepto (un renglón por concepto)
+      if (Math.round(fila.valorPago) === 0) continue
+      const clave = fila.conceptoCodigo
+      const cm = cuantiasMenoresPorConcepto.get(clave) ?? this.filaVaciaGenericaCM(fila.conceptoCodigo)
+      cm.valorPagoDeducible   += fila.valorPagoDeducible
+      cm.valorPagoNoDeducible += fila.valorPagoNoDeducible
+      cm.valorIvaDeducible    += fila.valorIvaDeducible
+      cm.valorIvaNoDeducible  += fila.valorIvaNoDeducible
+      cm.valorPago             = cm.valorPagoDeducible + cm.valorPagoNoDeducible
+      cm.valorIva              = cm.valorIvaDeducible  + cm.valorIvaNoDeducible
+      cuantiasMenoresPorConcepto.set(clave, cm)
+    }
+
+    // Agregar filas de cuantías menores (una por concepto)
+    for (const cm of cuantiasMenoresPorConcepto.values()) {
+      if (Math.round(cm.valorPago) !== 0) filasFinales.push(cm)
+    }
+
+    return filasFinales
   }
 
   validar(filas: Fila1001[]): ExcepcionGenerada[] {
@@ -212,7 +265,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
           fila: f, tipo: 'tercero_sin_identificar', severidad: 'alta',
           descripcion: `Tercero sin número de identificación. Concepto ${f.conceptoCodigo}, valor ${fmtCOP(f.valorPago)}`,
           valorInvolucrado: f.valorPago,
-          sugerencia: 'Identifique al tercero en la contabilidad y asigne el NIT o documento.',
+          sugerencia: 'Vaya a Siigo > Módulo de Terceros, busque a este beneficiario y asígnele su NIT o Cédula.',
         })
         continue
       }
@@ -247,7 +300,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
           fila: f, tipo: 'retencion_inconsistente', severidad: 'alta',
           descripcion: `Retención total ${fmtCOP(totalRete)} supera el pago ${fmtCOP(f.valorPago)} para ${f.razonSocial || f.numeroId}`,
           valorInvolucrado: totalRete,
-          sugerencia: 'Revise los asientos de retención en la fuente y los abonos asociados.',
+          sugerencia: 'Revise el comprobante en Siigo. ¡La retención no puede ser mayor al pago! Verifique si hay un error de digitación en la cuenta 2365.',
         })
       }
 
@@ -265,7 +318,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
         excepciones.push({
           fila: f, tipo: 'municipio_faltante', severidad: 'baja',
           descripcion: `NIT ${f.numeroId} sin código de municipio (requerido para residentes en Colombia)`,
-          sugerencia: 'El Libro Auxiliar no incluye dirección del proveedor. Complete código DIVIPOLA en el módulo de terceros o en el Prevalidador.',
+          sugerencia: 'Siigo no exporta el municipio en el Auxiliar. Actualice el código DIVIPOLA de este tercero en Siigo o complételo manualmente en el Prevalidador DIAN.',
         })
       }
 
@@ -283,7 +336,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
         excepciones.push({
           fila: f, tipo: 'tercero_sin_nombre', severidad: 'baja',
           descripcion: `NIT/documento ${f.numeroId} sin nombre registrado`,
-          sugerencia: 'Complete el nombre o razón social del tercero.',
+          sugerencia: 'Vaya al catálogo de terceros en Siigo y asigne el Nombre o Razón Social correcto. La DIAN rechazará el formato si va en blanco.',
         })
       }
 
@@ -292,7 +345,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
         excepciones.push({
           fila: f, tipo: 'concepto_invalido', severidad: 'alta',
           descripcion: `Código de concepto "${f.conceptoCodigo}" no válido para Formato 1001`,
-          sugerencia: 'Los conceptos válidos son del 5001 al 5099. Revise las reglas de mapeo.',
+          sugerencia: 'Vaya a la pestaña "Configuración de Mapeo PUC" y asigne un concepto válido de la DIAN (del 5001 al 5099) para esta cuenta.',
         })
       }
 
@@ -302,7 +355,7 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
           fila: f, tipo: 'deducibilidad_no_confirmada', severidad: 'baja',
           descripcion: `Concepto ${f.conceptoCodigo}: verifique si el pago ${fmtCOP(f.valorPago)} es deducible (Art. 107 E.T.)`,
           valorInvolucrado: f.valorPago,
-          sugerencia: 'Si el gasto no cumple Art. 107 E.T., mueva el valor al campo "no deducible".',
+          sugerencia: 'Consulte con su asesor tributario si este gasto cumple el Art. 107 del E.T. Si no es deducible, mueva el valor a la columna "Pago no deducible".',
         })
       }
     }
@@ -353,6 +406,36 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
       otrosNombres:    nombres?.otrosNombres    ?? '',
       razonSocial:     esPJ ? (t.razonSocial ?? nombreRaw) : '',
       direccion:       t.direccion ?? '',
+      conceptoCodigo:  concepto,
+      valorPagoDeducible: 0, valorPagoNoDeducible: 0,
+      valorIvaDeducible:  0, valorIvaNoDeducible:  0,
+      valorRetefuente: 0, valorRetefuenteAsumida: 0,
+      valorReteIva:    0, valorReteIvaNoResidentes: 0,
+      valorReteIca:    0,
+      valorPago: 0, valorIva: 0,
+      _documentosIds: [], _cuentasOrigen: [],
+    }
+  }
+
+  /**
+   * Fila genérica de CUANTÍAS MENORES bajo NIT 222222222.
+   * Art. 631 E.T.: pagos inferiores al umbral y sin retención se consolidan
+   * aquí. La DIAN acepta un renglón por concepto bajo este NIT.
+   */
+  private filaVaciaGenericaCM(concepto: string): Fila1001 {
+    return {
+      tipoDocumento:   '3',
+      numeroId:        '222222222',
+      dv:              '0',
+      paisCodigo:      'CO',
+      deptoCodigo:     '',
+      municipioCodigo: '',
+      primerApellido:  '',
+      segundoApellido: '',
+      primerNombre:    '',
+      otrosNombres:    '',
+      razonSocial:     'CUANTIAS MENORES',
+      direccion:       '',
       conceptoCodigo:  concepto,
       valorPagoDeducible: 0, valorPagoNoDeducible: 0,
       valorIvaDeducible:  0, valorIvaNoDeducible:  0,

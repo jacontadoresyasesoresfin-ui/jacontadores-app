@@ -83,6 +83,7 @@ export class Formato1003Strategy implements IFormatoExogena<Fila1003> {
     const acum = new Map<string, Fila1003>()
 
     for (const a of asientos) {
+      if (a.esSaldoInicial) continue
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1003') continue
       if (!a.tercero?.numeroId) continue

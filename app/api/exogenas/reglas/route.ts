@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
   )
   if (formato) defaults = defaults.filter(r => r.formato_codigo === formato)
 
-  const propiasMapped = (propias ?? []).map(r => ({
+  const propiasMapped = (propias ?? []).map((r: any) => ({
     ...r,
     categoria: CATEGORIA_POR_CONCEPTO[(r as { concepto_codigo: string }).concepto_codigo] ?? null,
     esDefault: false,

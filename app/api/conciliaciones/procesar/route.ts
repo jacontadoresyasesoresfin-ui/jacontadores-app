@@ -18,7 +18,7 @@ import type { ResultadoConciliacion, ConfiguracionConciliacion, KpisConciliacion
 import { FORMATOS_BANCO }            from '@/lib/conciliaciones/config'
 
 // Desactivar el body parser de Next.js para manejar FormData directamente
-export const config = { api: { bodyParser: false } }
+// export const config = { api: { bodyParser: false } }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {

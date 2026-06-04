@@ -237,6 +237,10 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'Salarios y prestaciones del mes por pagar' },
   { formatoCodigo: '1009', cuentaPucPatron: '23650501', conceptoCodigo: '2215', prioridad: 10,
     notas: 'Nómina del mes pendiente de pago' },
+  // ── Obligaciones financieras (clase 21 — bancos, leasing, créditos) ─────
+  //  Sin esta regla, los bancos caen al catch-all de F1010 como "proveedor"
+  { formatoCodigo: '1009', cuentaPucPatron: '21%', conceptoCodigo: '2208', prioridad: 85,
+    notas: 'Obligaciones financieras clase 21 (bancos, leasing) → F1009 concepto 2208' },
   // ── Fallback clases 22-25 ─────────────────────────────────────────────
   { formatoCodigo: '1009', cuentaPucPatron: '22%', conceptoCodigo: '2201', prioridad: 90,
     notas: 'Proveedores clase 22 — fallback. Verificar concepto.' },
@@ -297,16 +301,19 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'IVA por pagar en compras' },
 
   // ══════════════════════════════════════════════════════════════════════
-  //  FORMATO 1006 — Información de compras
+  //  FORMATO 1006 — IVA Generado / Ventas (concepto Siigo 9998)
+  //
+  //  IMPORTANTE: F1006 debe construirse EXCLUSIVAMENTE con cuentas de
+  //  ingresos/ventas (41xx, 42xx). NUNCA con compras, inventarios ni
+  //  gastos de clase 5.
+  //
+  //  Las reglas anteriores (14%, 6205%, 5%) causaban que F1006 acumulara
+  //  compras y gastos por error → valores de billones incorrectos.
+  //
+  //  Si su empresa vende bienes/servicios gravados configure aquí las
+  //  cuentas 41xx con concepto 'iva_generado' vía ConfiguracionMagnetica.
   // ══════════════════════════════════════════════════════════════════════
-  { formatoCodigo: '1006', cuentaPucPatron: '14%', conceptoCodigo: 'compra_bienes', prioridad: 10,
-    notas: 'Compras inventario/activos circulantes' },
-  { formatoCodigo: '1006', cuentaPucPatron: '6205%', conceptoCodigo: 'compra_bienes', prioridad: 10,
-    notas: 'Compra mercancías (costo)' },
-  { formatoCodigo: '1006', cuentaPucPatron: '7205%', conceptoCodigo: 'compra_materia_prima', prioridad: 10,
-    notas: 'Compra materias primas' },
-  { formatoCodigo: '1006', cuentaPucPatron: '5%', conceptoCodigo: 'compra_servicios', prioridad: 50,
-    notas: 'Compras de servicios (gastos)' },
+  // (Sin reglas por defecto — el usuario configura vía mapeo PUC en Siigo concepto 9998)
 
   // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 1007 — Información de ingresos / ventas
@@ -320,13 +327,14 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
   //  FORMATO 1010 — Información de terceros
   //  (se extrae de todos los formatos, no requiere cuentas PUC directas)
   // ══════════════════════════════════════════════════════════════════════
-  // Catch-all de terceros: prioridad 99 para no pisar reglas específicas (F1005, F1009, F1008, F1001)
-  { formatoCodigo: '1010', cuentaPucPatron: '2%', conceptoCodigo: 'proveedor', prioridad: 99,
-    notas: 'Terceros — proveedores (cuentas por pagar) — catch-all clase 2' },
-  { formatoCodigo: '1010', cuentaPucPatron: '13%', conceptoCodigo: 'cliente', prioridad: 99,
-    notas: 'Terceros — clientes (cuentas por cobrar) — catch-all clase 13' },
-  { formatoCodigo: '1010', cuentaPucPatron: '5105%', conceptoCodigo: 'empleado', prioridad: 99,
-    notas: 'Terceros — empleados — catch-all 5105' },
+  // F1010 = SOCIOS / ACCIONISTAS / ASOCIADOS — SOLO clase 31 (capital)
+  //
+  // ERROR GRAVE: antes incluía 2%, 13%, 5105% que causaba que bancos y
+  // proveedores aparecieran en F1010. La clase 31 es el único origen correcto.
+  //
+  // Las cuentas 2x → F1009, las 13x → F1008, las 51xx → F1001/F2276.
+  { formatoCodigo: '1010', cuentaPucPatron: '31%', conceptoCodigo: 'socio', prioridad: 10,
+    notas: 'Capital social y reservas (clase 31) — socios y accionistas' },
 
   // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 1012 — Saldos en cuentas bancarias, inversiones y fondos

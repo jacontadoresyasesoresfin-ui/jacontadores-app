@@ -52,6 +52,15 @@ interface ResultadoFinal {
   }>
   tarjetasExcepciones: TarjetaExcepcion[]
   resumenExcepciones: { criticas: number; alertas: number; informativas: number; descripcionResumen: string }
+  informeValidacion?: {
+    puedeExportar: boolean
+    resumenTexto: string
+    criticos:      Array<{ codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number; terceroId?: string }>
+    altos:         Array<{ codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number; terceroId?: string }>
+    medios:        Array<{ codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number }>
+    observaciones: Array<{ codigo: string; titulo: string; detalle: string; accion: string }>
+    totalesPorFormato: Array<{ formatoCodigo: string; nombreFormato: string; totalFilas: number; montosPrincipales: Array<{ etiqueta: string; valor: number }>; estado: string }>
+  }
   asientosParaExportar: unknown[]
   filasFormatoParaExportar?: Array<{ formatoCodigo: string; filas: unknown[] }>
   configParaExportar: unknown
@@ -1153,6 +1162,120 @@ export default function ExogenasPage() {
               </div>
             </div>
 
+            {/* ══ PANEL AUDITORÍA ValidadorExperto ════════════════════════════ */}
+            {resultado.informeValidacion && (() => {
+              const inf = resultado.informeValidacion!
+              const totalHallazgos = inf.criticos.length + inf.altos.length + inf.medios.length
+              if (totalHallazgos === 0 && inf.observaciones.length === 0) return null
+
+              const nivelConfig = {
+                critico:     { bg: JA.RED_BG,   border: '#FECACA', texto: JA.RED,   icono: '🔴', etiqueta: 'CRÍTICO' },
+                alto:        { bg: JA.AMBER_BG,  border: '#FDE68A', texto: JA.AMBER, icono: '🟠', etiqueta: 'ALTO' },
+                medio:       { bg: JA.BLUE_BG,   border: '#BFDBFE', texto: JA.BLUE,  icono: '🟡', etiqueta: 'MEDIO' },
+                observacion: { bg: JA.SURFACE,   border: JA.BORDER, texto: JA.GREY,  icono: '📋', etiqueta: 'INFO' },
+              }
+
+              type NivelKey = keyof typeof nivelConfig
+              const grupos: Array<{ nivel: NivelKey; items: typeof inf.criticos }> = [
+                { nivel: 'critico',     items: inf.criticos },
+                { nivel: 'alto',        items: inf.altos },
+                { nivel: 'medio',       items: inf.medios },
+                { nivel: 'observacion', items: inf.observaciones },
+              ].filter(g => g.items.length > 0)
+
+              return (
+                <div style={{ border: `2px solid ${inf.puedeExportar ? '#FDE68A' : '#FECACA'}`,
+                  borderRadius: '2px', overflow: 'hidden', background: JA.WHITE }}>
+
+                  {/* Cabecera del informe */}
+                  <div style={{ padding: '12px 18px', background: inf.puedeExportar ? JA.AMBER_BG : JA.RED_BG,
+                    borderBottom: `1px solid ${inf.puedeExportar ? '#FDE68A' : '#FECACA'}`,
+                    display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '18px' }}>{inf.puedeExportar ? '⚠️' : '🚫'}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase',
+                        letterSpacing: '0.06em', color: inf.puedeExportar ? JA.AMBER : JA.RED, marginBottom: '2px' }}>
+                        Informe de Auditoría DIAN — ValidadorExperto
+                      </div>
+                      <div style={{ fontSize: '12px', color: JA.TEXT }}>{inf.resumenTexto}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      {inf.criticos.length > 0 && (
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: JA.RED }}>
+                          {inf.criticos.length} CRÍTICO{inf.criticos.length > 1 ? 'S' : ''}
+                        </div>
+                      )}
+                      {inf.altos.length > 0 && (
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: JA.AMBER }}>
+                          {inf.altos.length} ALTO{inf.altos.length > 1 ? 'S' : ''}
+                        </div>
+                      )}
+                      {inf.medios.length > 0 && (
+                        <div style={{ fontSize: '11px', color: JA.BLUE }}>
+                          {inf.medios.length} MEDIO{inf.medios.length > 1 ? 'S' : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Hallazgos agrupados por nivel */}
+                  {grupos.map(({ nivel, items }) => {
+                    const cfg = nivelConfig[nivel]
+                    return (
+                      <div key={nivel}>
+                        <div style={{ padding: '7px 18px', background: JA.SURFACE,
+                          borderBottom: `1px solid ${JA.BORDER}`, borderTop: `1px solid ${JA.BORDER}`,
+                          fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
+                          letterSpacing: '0.07em', color: cfg.texto }}>
+                          {cfg.icono} {cfg.etiqueta} — {items.length} hallazgo{items.length > 1 ? 's' : ''}
+                        </div>
+                        {items.map((h, idx) => (
+                          <details key={`${nivel}-${idx}`}
+                            style={{ borderBottom: `1px solid ${JA.BORDER}` }}
+                            open={nivel === 'critico'}>
+                            <summary style={{ padding: '11px 18px', cursor: 'pointer',
+                              display: 'flex', alignItems: 'flex-start', gap: '10px',
+                              background: JA.WHITE, listStyle: 'none' }}>
+                              <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '2px',
+                                background: cfg.bg, color: cfg.texto, fontWeight: 700,
+                                border: `1px solid ${cfg.border}`, flexShrink: 0, marginTop: '1px' }}>
+                                {cfg.etiqueta}
+                              </span>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: JA.TEXT, flex: 1 }}>
+                                {h.titulo}
+                              </span>
+                              {h.formato && (
+                                <span style={{ fontSize: '10px', padding: '1px 6px', background: JA.NAVY,
+                                  color: JA.WHITE, borderRadius: '2px', flexShrink: 0, marginTop: '2px' }}>
+                                  F{h.formato}
+                                </span>
+                              )}
+                            </summary>
+                            <div style={{ padding: '0 18px 14px 18px', marginLeft: '0',
+                              borderTop: `1px solid ${JA.BORDER}`, background: cfg.bg }}>
+                              <div style={{ fontSize: '12px', color: JA.TEXT, lineHeight: '1.65',
+                                paddingTop: '12px', marginBottom: '10px' }}>{h.detalle}</div>
+                              <div style={{ fontSize: '11px', background: JA.WHITE, border: `1px solid ${cfg.border}`,
+                                borderRadius: '2px', padding: '8px 12px', color: JA.TEXT }}>
+                                <span style={{ fontWeight: 700, color: cfg.texto }}>▶ Acción requerida: </span>
+                                {h.accion}
+                              </div>
+                              {h.valorRef != null && Math.abs(h.valorRef) > 0 && (
+                                <div style={{ marginTop: '6px', fontSize: '11px', color: JA.GREY }}>
+                                  Monto involucrado: <strong>{fmtCOP(Math.abs(h.valorRef))}</strong>
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+            {/* ══ FIN PANEL AUDITORÍA ══════════════════════════════════════════ */}
+
             {/* Tabla de formatos */}
             <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{ padding: '10px 18px', background: JA.SURFACE, borderBottom: `1px solid ${JA.BORDER}`,
@@ -1244,17 +1367,35 @@ export default function ExogenasPage() {
                   <Icon name="magnifying-glass" size={16} /> Revisar {resultado.tarjetasExcepciones.length} situación(es) pendientes
                 </button>
               )}
-              <button onClick={exportarExcel} disabled={exportando}
-                style={{ padding: '13px',
-                  background: resultado.tarjetasExcepciones.length === 0 ? JA.GOLD : JA.WHITE,
-                  color: resultado.tarjetasExcepciones.length === 0 ? JA.NAVY : JA.GREY,
-                  border: `1px solid ${resultado.tarjetasExcepciones.length === 0 ? JA.GOLD : JA.BORDER}`,
-                  borderRadius: '4px', fontSize: '13px',
-                  fontWeight: resultado.tarjetasExcepciones.length === 0 ? 700 : 400,
-                  cursor: exportando ? 'wait' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                <Icon name="arrow-down-tray" size={16} /> {exportando ? 'Generando Excel…' : 'Descargar Excel para el Prevalidador DIAN'}
-              </button>
+              {(() => {
+                const bloqueado = resultado.informeValidacion?.puedeExportar === false
+                const limpio = resultado.tarjetasExcepciones.length === 0 && !bloqueado
+                return (
+                  <>
+                    {bloqueado && (
+                      <div style={{ padding: '11px 14px', background: JA.RED_BG,
+                        border: '1px solid #FECACA', borderRadius: '2px',
+                        fontSize: '12px', color: JA.RED, display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                        <span>🚫</span>
+                        <span><strong>Exportación bloqueada.</strong> Corrija los errores CRÍTICOS del informe de auditoría antes de descargar el archivo. La DIAN rechazaría el archivo en su estado actual.</span>
+                      </div>
+                    )}
+                    <button onClick={exportarExcel} disabled={exportando || bloqueado}
+                      style={{ padding: '13px',
+                        background: bloqueado ? JA.SURFACE : limpio ? JA.GOLD : JA.WHITE,
+                        color: bloqueado ? JA.GREY : limpio ? JA.NAVY : JA.GREY,
+                        border: `1px solid ${bloqueado ? JA.BORDER : limpio ? JA.GOLD : JA.BORDER}`,
+                        borderRadius: '4px', fontSize: '13px',
+                        fontWeight: limpio ? 700 : 400,
+                        cursor: (exportando || bloqueado) ? 'not-allowed' : 'pointer',
+                        opacity: bloqueado ? 0.5 : 1,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Icon name="arrow-down-tray" size={16} />
+                      {exportando ? 'Generando Excel…' : bloqueado ? 'Exportación bloqueada — corrija errores críticos' : 'Descargar Excel para el Prevalidador DIAN'}
+                    </button>
+                  </>
+                )
+              })()}
             </div>
           </div>
         )}

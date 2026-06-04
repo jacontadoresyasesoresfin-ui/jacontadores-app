@@ -270,27 +270,18 @@ export class Formato1001Strategy implements IFormatoExogena<Fila1001> {
         continue
       }
 
-      // DV inválido para NIT
-      if (f.tipoDocumento === '3' && f.dv) {
-        if (!validarDvNit(f.numeroId, f.dv)) {
-          const dvCorrecto = calcularDvNit(f.numeroId)
-          excepciones.push({
-            fila: f, tipo: 'dv_incorrecto', severidad: 'media',
-            descripcion: `DV ${f.dv} del NIT ${f.numeroId} no es válido (correcto: ${dvCorrecto})`,
-            sugerencia: `Corrija el DV a ${dvCorrecto}`,
-          })
+      // DV incorrecto o faltante — auto-corregir y marcar; NO generar excepción
+      if (f.tipoDocumento === '3') {
+        const nit = (f.numeroId ?? '').replace(/\D/g, '')
+        if (nit.length >= 5) {
+          const dvCorrecto = calcularDvNit(nit)
+          if (!f.dv || !validarDvNit(nit, f.dv)) {
+            f.dv           = dvCorrecto
+            f._estadoFila  = 'corregido'
+            f._excepcionTipo = f.dv ? 'dv_incorrecto' : 'dv_faltante'
+            // Registrar en notas internas pero NO push a excepciones → ya está corregido
+          }
         }
-      }
-
-      // NIT sin DV — auto-calcular y avisar
-      if (f.tipoDocumento === '3' && !f.dv) {
-        const dvCorrecto = calcularDvNit(f.numeroId)
-        excepciones.push({
-          fila: f, tipo: 'dv_faltante', severidad: 'media',
-          descripcion: `NIT ${f.numeroId} sin dígito de verificación`,
-          sugerencia: `DV calculado: ${dvCorrecto}`,
-        })
-        f.dv = dvCorrecto
       }
 
       // Retención total (practicada + asumida) no puede superar el pago

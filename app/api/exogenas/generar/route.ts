@@ -23,6 +23,7 @@ import { RulesEngine } from '@/lib/exogenas/engine/rules-engine'
 import { FormatoRegistry } from '@/lib/exogenas/registry/formato-registry'
 import { REGLAS_DEFAULT_2025 } from '@/lib/exogenas/config/reglas-default-2025'
 import { auditarExogenas } from '@/lib/exogenas/engine/validador-experto'
+import { autocorregirDv } from '@/lib/exogenas/engine/autocorrector-dv'
 import type { ConfigExogena, FilaFormato, ResultadoTransformacion } from '@/lib/exogenas/types'
 
 export const dynamic = 'force-dynamic'
@@ -331,12 +332,22 @@ export async function POST(req: NextRequest) {
           const totalReglas = REGLAS_DEFAULT_2025.length + reglasExtra.length
           emit({ tipo: 'etapa_ok', etapa: 2, datos: { totalReglas, reglasPersonalizadas: reglasExtra.length } })
 
-          // ══ ETAPA 3: Analizar movimientos ═════════════════════════════
+          // ══ ETAPA 3: Analizar movimientos + auto-corrección de DVs ═══════
           emit({ tipo: 'etapa_inicio', etapa: 3 })
           const cuentasUnicas = new Set(asientos.map(a => a.cuentaPuc)).size
           const tercerosUnicos = new Set(asientos.map(a => a.tercero.numeroId).filter(Boolean)).size
+
+          // Auto-corrección de DVs ANTES de transformar (todos los formatos heredan DVs correctos)
+          const resultadoAutocorreccion = autocorregirDv(asientos)
+
           await new Promise(r => setTimeout(r, 120))
-          emit({ tipo: 'etapa_ok', etapa: 3, datos: { cuentasUnicas, tercerosUnicos } })
+          emit({
+            tipo: 'etapa_ok', etapa: 3,
+            datos: {
+              cuentasUnicas, tercerosUnicos,
+              dvsCorregidos: resultadoAutocorreccion.totalCorregidos,
+            },
+          })
 
           // ══ ETAPA 4: Generar formatos ═════════════════════════════════
           emit({ tipo: 'etapa_inicio', etapa: 4 })
@@ -409,6 +420,7 @@ export async function POST(req: NextRequest) {
               tarjetasExcepciones: tarjetas,
               resumenExcepciones,
               informeValidacion,
+              autoCorrecciones: resultadoAutocorreccion,
               asientosParaExportar: asientos,
               configParaExportar: config,
             },

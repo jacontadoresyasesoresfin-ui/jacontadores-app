@@ -296,6 +296,7 @@ export default function ExogenasPage() {
   const [tab, setTab] = useState<'generar' | 'configuracion'>('generar')
   const [vista, setVista] = useState<Vista>('inicio')
   const [archivo, setArchivo] = useState<File | null>(null)
+  const [archivoBalance, setArchivoBalance] = useState<File | null>(null)
   const [tipoArchivo, setTipoArchivo] = useState<'csv' | 'xlsx' | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
@@ -505,6 +506,7 @@ export default function ExogenasPage() {
 
     const fd = new FormData()
     fd.append('archivo', archivo)
+    if (archivoBalance) fd.append('balance', archivoBalance)
     fd.append('config', JSON.stringify({
       anioGravable: config.anioGravable,
       nitDeclarante: config.nitDeclarante.replace(/\D/g, ''),
@@ -799,7 +801,7 @@ export default function ExogenasPage() {
   }
 
   const reiniciar = () => {
-    setVista('inicio'); setArchivo(null); setTipoArchivo(null); setResultado(null); setError('')
+    setVista('inicio'); setArchivo(null); setTipoArchivo(null); setResultado(null); setError(''); setArchivoBalance(null)
     setEtapas(ETAPAS_INICIALES); setPorcentaje(0)
     setExcepcionesResueltas(new Map()); setIndiceExcepcion(0)
     if (fileRef.current) fileRef.current.value = ''
@@ -1113,6 +1115,39 @@ export default function ExogenasPage() {
                   Descargar CSV prueba
                 </a>
               </div>
+            </Seccion>
+
+            {/* ─── SECCIÓN 2b: Balance de Prueba (opcional) ─── */}
+            <Seccion num="" titulo="Balance de Prueba — Validación avanzada (opcional)">
+              <div style={{ fontSize: '12px', color: JA.GREY, marginBottom: '10px', lineHeight: '1.5' }}>
+                Si carga el <strong>Balance de Prueba</strong> (xlsx de Siigo), el sistema comparará los totales de cada formato
+                contra el balance real del declarante. Detecta ingresos incorrectos, IVA inconsistente y empresa equivocada.
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                padding: '10px 14px', border: `1px dashed ${archivoBalance ? JA.GREEN : JA.BORDER}`,
+                borderRadius: '2px', background: archivoBalance ? JA.GREEN_BG : JA.WHITE, transition: 'all 0.2s' }}>
+                <Icon name="document-list" size={18}
+                  style={{ color: archivoBalance ? JA.GREEN : JA.GREY, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  {archivoBalance
+                    ? <><strong style={{ color: JA.GREEN }}>{archivoBalance.name}</strong>
+                        <span style={{ fontSize: '11px', color: JA.GREEN, marginLeft: '8px' }}>
+                          ({(archivoBalance.size / 1024).toFixed(0)} KB) — Balance cargado ✓
+                        </span></>
+                    : <span style={{ fontSize: '12px', color: JA.GREY }}>
+                        Clic para cargar Balance de Prueba (xlsx Siigo) — opcional
+                      </span>
+                  }
+                </div>
+                {archivoBalance && (
+                  <button onClick={e => { e.preventDefault(); setArchivoBalance(null) }}
+                    style={{ fontSize: '11px', color: JA.RED, background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}>
+                    ✕
+                  </button>
+                )}
+                <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setArchivoBalance(f); e.target.value = '' }} />
+              </label>
             </Seccion>
 
             {/* ─── SECCIÓN 3: Formatos a generar ─── */}

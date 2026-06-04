@@ -24,6 +24,8 @@ import { FormatoRegistry } from '@/lib/exogenas/registry/formato-registry'
 import { REGLAS_DEFAULT_2025 } from '@/lib/exogenas/config/reglas-default-2025'
 import { auditarExogenas } from '@/lib/exogenas/engine/validador-experto'
 import { autocorregirDv } from '@/lib/exogenas/engine/autocorrector-dv'
+import { parsearSiigoBalance } from '@/lib/exogenas/parsers/siigo-balance-parser'
+import { extraerTotalesBalance } from '@/lib/exogenas/engine/balance-comparador'
 import type { ConfigExogena, FilaFormato, ResultadoTransformacion } from '@/lib/exogenas/types'
 
 export const dynamic = 'force-dynamic'
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest) {
   let nombreArchivo = ''
   let esXlsx = false        // true solo para el Prevalidador DIAN (hojas 1001, 1005…)
   let esSiigoXlsx = false   // true para Libro Auxiliar de Siigo en formato xlsx
+  let balanceBuffer: Buffer | null = null   // Balance de Prueba opcional
   let config: ConfigExogena = {
     anioGravable: 2025, nitDeclarante: '', razonSocial: '',
     tipoDeclarante: 'contribuyente', municipioCodigo: '11001',
@@ -85,6 +88,11 @@ export async function POST(req: NextRequest) {
         csvTexto = archivoBuffer.toString('utf-8')
         if (csvTexto.includes('')) csvTexto = archivoBuffer.toString('latin1')
       }
+
+      // Balance de Prueba opcional (campo 'balance' en el form)
+      const balanceFile = formData.get('balance') as File | null
+      if (balanceFile) balanceBuffer = Buffer.from(await balanceFile.arrayBuffer())
+
       const configStr = formData.get('config') as string | null
       if (configStr) config = { ...config, ...JSON.parse(configStr) }
     } else {
@@ -124,6 +132,14 @@ export async function POST(req: NextRequest) {
       reglasExtra.push(...mapeadas)
     }
   }
+
+  // ── Parsear Balance de Prueba (opcional) ───────────────────────────────────
+  const totalesBalance = balanceBuffer
+    ? extraerTotalesBalance(
+        parsearSiigoBalance(balanceBuffer).asientos,
+        config.nitDeclarante
+      )
+    : undefined
 
   // ── Stream ─────────────────────────────────────────────────────────────
   const encoder = new TextEncoder()
@@ -249,7 +265,7 @@ export async function POST(req: NextRequest) {
           const { tarjetas: tarjetasXlsx, resumenExcepciones: resumenXlsx } =
             await emitirEtapas45(resultadosXlsx, 0)
 
-          const informeValidacionXlsx = auditarExogenas(config, resultadosXlsx)
+          const informeValidacionXlsx = auditarExogenas(config, resultadosXlsx, undefined, totalesBalance)
 
           if (profile?.tenant_id && config.nitDeclarante) {
             await supabase.from('exogenas_procesos').insert({
@@ -385,7 +401,7 @@ export async function POST(req: NextRequest) {
           const { tarjetas, resumenExcepciones } = await emitirEtapas45(resultados, cuentasSinRegla.length)
 
           // ── ETAPA 6: Auditoría cruzada de formatos (ValidadorExperto) ────────
-          const informeValidacion = auditarExogenas(config, resultados, empresaDetectada)
+          const informeValidacion = auditarExogenas(config, resultados, empresaDetectada, totalesBalance)
 
           if (profile?.tenant_id && config.nitDeclarante) {
             await supabase.from('exogenas_procesos').insert({

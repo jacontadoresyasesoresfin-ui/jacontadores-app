@@ -16,6 +16,7 @@
 
 import type { ConfigExogena, FilaFormato, ResultadoTransformacion } from '../types'
 import { validarDvNit, calcularDvNit } from './rules-engine'
+import { type TotalesBalance, diffPct } from './balance-comparador'
 
 // ─── Tipos del Informe ────────────────────────────────────────────────────────
 
@@ -91,15 +92,17 @@ export class ValidadorExperto {
     config: ConfigExogena,
     resultados: ResultadoTransformacion<FilaFormato>[],
     empresaDetectada?: string,
+    balance?: TotalesBalance,
   ): InformeValidacion {
     this.hallazgos = []
     const porFormato = new Map(resultados.map(r => [r.formatoCodigo, r]))
 
-    // Orden de aplicación: de más crítico a informativo
+    // Orden: crítico primero
     this.validarNitDeclarante(config, empresaDetectada)
     this.validarDeclaranteNoEsClientePropio(config, porFormato)
     this.validarF1006EsIvaGenerado(porFormato)
     this.validarCoherenciaF1006vsF1007(porFormato)
+    if (balance) this.validarContraBalance(config, porFormato, balance)
     this.validarF1010SoloSocios(porFormato)
     this.validarCoherenciaIvaDescontable(porFormato)
     this.validarSaldosNegativos(porFormato)
@@ -419,6 +422,102 @@ export class ValidadorExperto {
     }
   }
 
+  // ─── Regla Balance: Comparación obligatoria contra Balance de Prueba ────────
+
+  private validarContraBalance(
+    config: ConfigExogena,
+    porFormato: Map<string, ResultadoTransformacion<FilaFormato>>,
+    bal: TotalesBalance,
+  ) {
+    const UMBRAL_CRITICO = 5    // > 5% diferencia = CRÍTICO
+    const UMBRAL_ALTO    = 2    // > 2% = ALTO
+
+    const check = (
+      etiqueta: string, codigo: string, formato: string,
+      balTotal: number, exoTotal: number,
+    ) => {
+      if (balTotal === 0 && exoTotal === 0) return
+      const pct = diffPct(balTotal, exoTotal)
+      if (pct < 0.5) {
+        this.add({
+          nivel: 'observacion', codigo: `BALANCE_${codigo}_OK`, formato,
+          titulo: `Balance ✓ ${etiqueta}: ${fmt(balTotal)} ≈ Exógena ${fmt(exoTotal)}`,
+          detalle: `Diferencia: ${pct.toFixed(2)}% — dentro del margen aceptable.`,
+          accion:  'Sin acción requerida.',
+          valorRef: Math.abs(exoTotal - balTotal),
+        })
+        return
+      }
+      const nivel: 'critico' | 'alto' | 'medio' =
+        pct > UMBRAL_CRITICO ? 'critico' :
+        pct > UMBRAL_ALTO    ? 'alto'    : 'medio'
+      this.add({
+        nivel, codigo: `BALANCE_${codigo}_DIFF`, formato,
+        titulo: `Diferencia ${etiqueta}: Balance ${fmt(balTotal)} vs Exógena ${fmt(exoTotal)} (${pct.toFixed(1)}%)`,
+        detalle: `El Balance de Prueba reporta ${fmt(balTotal)} y la exógena generada muestra ${fmt(exoTotal)}. Diferencia de ${fmt(Math.abs(exoTotal - balTotal))} (${pct.toFixed(1)}%). ${pct > UMBRAL_CRITICO ? 'Esta diferencia supera el 5% — probable error grave de mapeo o contabilidad de empresa incorrecta.' : 'Diferencia relevante que debe revisarse antes de presentar.'}`,
+        accion:  pct > UMBRAL_CRITICO
+          ? `Detenga la generación. Verifique: (1) que el Libro Auxiliar es de NIT ${config.nitDeclarante}, (2) que las cuentas PUC están correctamente mapeadas en Configuración, (3) que no faltan movimientos en el período.`
+          : `Revise las cuentas del grupo correspondiente en Siigo y confirme que el mapeo PUC es correcto para el período ${config.anioGravable}.`,
+        valorRef: Math.abs(exoTotal - balTotal),
+      })
+    }
+
+    // 1. Ingresos: Balance clase 41/42 vs F1007
+    const r1007 = porFormato.get('1007')
+    if (r1007 && bal.ingresos > 0) {
+      const exoIngresos = r1007.totales.totalNetaIngresos ?? r1007.totales.totalIngresos ?? 0
+      check('Ingresos F1007', 'INGRESOS', '1007', bal.ingresos, exoIngresos)
+    }
+
+    // 2. IVA Descontable: Balance 2408 vs F1005
+    const r1005 = porFormato.get('1005')
+    if (r1005 && bal.ivaDescontable > 0) {
+      const exoIva = r1005.totales.totalIvaDescontable ?? 0
+      check('IVA Descontable F1005', 'IVA_DESC', '1005', bal.ivaDescontable, exoIva)
+    }
+
+    // 3. CxC: Balance clase 13 vs F1008
+    const r1008 = porFormato.get('1008')
+    if (r1008 && bal.cxcSaldo > 0) {
+      const exoCxC = r1008.totales.totalSaldoCxC ?? 0
+      check('Saldo CxC F1008', 'CXC', '1008', bal.cxcSaldo, exoCxC)
+    }
+
+    // 4. CxP: Balance clase 22/23 vs F1009
+    const r1009 = porFormato.get('1009')
+    if (r1009 && bal.cxpSaldo > 0) {
+      const exoCxP = r1009.totales.totalSaldoCxP ?? 0
+      check('Saldo CxP F1009', 'CXP', '1009', bal.cxpSaldo, exoCxP)
+    }
+
+    // 5. NIT del balance vs declarante (si se detectó NIT en el balance)
+    if (bal.nitDetectado) {
+      const nitDec = config.nitDeclarante.replace(/\D/g, '')
+      const nitBal = bal.nitDetectado.replace(/\D/g, '')
+      if (nitBal && nitDec && !nitBal.includes(nitDec) && !nitDec.includes(nitBal)) {
+        this.add({
+          nivel: 'critico', codigo: 'BALANCE_NIT_DIFERENTE',
+          titulo: `El Balance pertenece a NIT ${nitBal} pero el declarante es NIT ${nitDec}`,
+          detalle: `El archivo de Balance de Prueba corresponde a una empresa diferente al declarante configurado. Los datos del balance NO son comparables con los de la exógena.`,
+          accion:  `Cargue el Balance de Prueba del NIT declarante (${nitDec}). Si la empresa declarante no tiene balance en este Siigo, verifique que está procesando la empresa correcta.`,
+          terceroId: nitBal,
+        })
+      }
+    }
+
+    // 6. Resumen comparativo siempre visible
+    this.add({
+      nivel: 'observacion', codigo: 'BALANCE_RESUMEN',
+      titulo: 'Balance de Prueba cargado — Comparación activa',
+      detalle: [
+        `Ingresos balance: ${fmt(bal.ingresos)} | IVA Descontable: ${fmt(bal.ivaDescontable)}`,
+        `Compras/Inventario: ${fmt(bal.compras)} | CxC: ${fmt(bal.cxcSaldo)} | CxP: ${fmt(bal.cxpSaldo)}`,
+        `Bancos/Inversiones: ${fmt(bal.bancosSaldo)} | Capital: ${fmt(bal.capitalSaldo)}`,
+      ].join(' ‖ '),
+      accion: 'El sistema comparó los totales del Balance contra cada formato. Revise los hallazgos específicos arriba.',
+    })
+  }
+
   // ─── Regla 8: DV de todos los terceros ───────────────────────────────────
 
   private validarDvTerceros(resultados: ResultadoTransformacion<FilaFormato>[]) {
@@ -567,6 +666,7 @@ export function auditarExogenas(
   config: ConfigExogena,
   resultados: ResultadoTransformacion<FilaFormato>[],
   empresaDetectada?: string,
+  balance?: TotalesBalance,
 ): InformeValidacion {
-  return new ValidadorExperto().validar(config, resultados, empresaDetectada)
+  return new ValidadorExperto().validar(config, resultados, empresaDetectada, balance)
 }

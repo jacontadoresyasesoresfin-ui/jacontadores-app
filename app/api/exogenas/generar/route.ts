@@ -398,6 +398,36 @@ export async function POST(req: NextRequest) {
           }
 
           const cuentasSinRegla = engine.cuentasSinRegla(asientos)
+
+          // ── Post-proceso: excluir declarante de F1007 (no puede ser su propio cliente) ────
+          if (config.nitDeclarante) {
+            const nitDec = config.nitDeclarante.replace(/\D/g, '')
+            const r1007 = resultados.find(r => r.formatoCodigo === '1007')
+            if (r1007) {
+              const filasDeclarante = r1007.filas.filter(f =>
+                String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') === nitDec
+              )
+              if (filasDeclarante.length > 0) {
+                const montoExcluido = filasDeclarante.reduce((s, f) => {
+                  const v = (f as Record<string, unknown>)
+                  return s + ((v.valorNetoIngreso as number) ?? (v.valorIngreso as number) ?? 0)
+                }, 0)
+                r1007.filas = r1007.filas.filter(f =>
+                  String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') !== nitDec
+                )
+                const estrategia1007 = FormatoRegistry.obtener('1007')
+                if (estrategia1007) r1007.totales = estrategia1007.totalizar(r1007.filas)
+                advertencias.push(
+                  `⚠️ F1007 CORREGIDO: El declarante NIT ${nitDec} fue excluido automáticamente de los ingresos ` +
+                  `(${COP.format(montoExcluido)} en ${filasDeclarante.length} fila/s). ` +
+                  `CAUSA: en Siigo las cuentas de ingreso (41xx) tienen al declarante como tercero — ` +
+                  `posible mapeo de retiros de utilidades o transacciones internas. ` +
+                  `Corrija el tercero en esas causaciones para que sea el cliente real.`
+                )
+              }
+            }
+          }
+
           const { tarjetas, resumenExcepciones } = await emitirEtapas45(resultados, cuentasSinRegla.length)
 
           // ── ETAPA 6: Auditoría cruzada de formatos (ValidadorExperto) ────────

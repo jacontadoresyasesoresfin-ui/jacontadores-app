@@ -126,9 +126,12 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
   { formatoCodigo: '1001', cuentaPucPatron: '5295%', conceptoCodigo: '5098', prioridad: 5,
     deducible: false, notas: 'Impuesto al patrimonio — no deducible' },
 
-  // ── Fallback gastos clase 5 (excluye 511x que van en F2276) ──────────
-  { formatoCodigo: '1001', cuentaPucPatron: '5%', conceptoCodigo: '5098', prioridad: 99,
-    notas: 'Otros pagos — fallback clase 5. Revisar clasificación.' },
+  // ── NOTA: NO hay catch-all '5%' → F1001 ──────────────────────────────
+  //  Un catch-all '5%' causaba que depreciaciones, amortizaciones y
+  //  provisiones (no-cash) aparecieran como "pagos a terceros" en F1001,
+  //  inflando el total de $380M a $4.137B.
+  //  Las cuentas clase 5 sin regla específica quedan como "sin clasificar"
+  //  y el contador las asigna vía ConfiguracionMagnetica.
 
   // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 1003 — Retenciones que le practicaron al declarante
@@ -293,10 +296,18 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'Otros gastos de personal — fallback. (Excluye viáticos que van a F1001)' },
 
   // ══════════════════════════════════════════════════════════════════════
-  //  FORMATO 1005 — IVA por pagar (IVA descontable por compras)
+  //  FORMATO 1005 — IVA Descontable (débito 2408 = IVA pagado en compras)
+  //  FORMATO 1006 — IVA Generado  (crédito 2408 = IVA cobrado en ventas)
+  //
+  //  Diferencia clave: débito = lo que la empresa PAGÓ al proveedor
+  //                   crédito = lo que la empresa COBRÓ al cliente
   // ══════════════════════════════════════════════════════════════════════
-  { formatoCodigo: '1005', cuentaPucPatron: '2408%', conceptoCodigo: 'iva_descontable', prioridad: 10,
-    notas: 'IVA descontable cuenta 2408' },
+  { formatoCodigo: '1005', cuentaPucPatron: '2408%', conceptoCodigo: 'iva_descontable',
+    naturaleza: 'debito', prioridad: 10,
+    notas: 'IVA descontable — movimiento DÉBITO cuenta 2408 (compras)' },
+  { formatoCodigo: '1006', cuentaPucPatron: '2408%', conceptoCodigo: 'iva_generado',
+    naturaleza: 'credito', prioridad: 10,
+    notas: 'IVA generado — movimiento CRÉDITO cuenta 2408 (ventas)' },
   { formatoCodigo: '1005', cuentaPucPatron: '2409%', conceptoCodigo: 'iva_descontable', prioridad: 10,
     notas: 'IVA por pagar en compras' },
 

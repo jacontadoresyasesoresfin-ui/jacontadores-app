@@ -69,6 +69,10 @@ const CATEGORIA_POR_CONCEPTO: Record<string, string> = {
   '9996': 'Aportes obligatorios por nómina',
   '9997': 'Impuesto descontable',
   '9998': 'Impuesto generado',
+  'iva_generado':    'IVA Generado en ventas (crédito 2408)',
+  'iva_descontable': 'IVA Descontable en compras (débito 2408)',
+  'ingreso_operacional':     'Ingresos operacionales F1007',
+  'ingreso_no_operacional':  'Ingresos no operacionales F1007',
   'proveedor': 'Saldo cuentas por pagar (proveedores)',
   'cliente':   'Saldo cuentas por Cobrar (clientes)',
   'empleado':  'Saldo cuentas empleados',
@@ -82,15 +86,6 @@ async function getTenantId(supabase: Awaited<ReturnType<typeof createClient>>, u
   return data?.tenant_id ?? null
 }
 
-// Helper: construir query filtrando por tenant (o por null si no tiene)
-function filtrarPorTenant<T>(
-  query: T & { eq: (col: string, val: unknown) => T; is: (col: string, val: null) => T },
-  tenantId: string | null
-): T {
-  return tenantId
-    ? query.eq('tenant_id', tenantId)
-    : query.is('tenant_id', null)
-}
 
 // ── GET — carga reglas propias o combinadas ───────────────────────────────────
 export async function GET(req: NextRequest) {

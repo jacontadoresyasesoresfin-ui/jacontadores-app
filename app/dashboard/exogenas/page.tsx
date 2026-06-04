@@ -309,6 +309,10 @@ export default function ExogenasPage() {
   const [excepcionesResueltas, setExcepcionesResueltas] = useState<Map<number, { accion: AccionExcepcion; datos?: string }>>(new Map())
   const [busquedaTercero, setBusquedaTercero] = useState('')
   const [mostrarBusqueda, setMostrarBusqueda] = useState(false)
+  // Cache de resultados de verificación de NIT (por NIT → resultado RUES)
+  const [nitVerifyCache, setNitVerifyCache] = useState<Map<string, { dv: string; razonSocial: string | null; ciuu: string | null; valid: boolean }>>(new Map())
+  const [nitVerifyLoading, setNitVerifyLoading] = useState<string | null>(null)
+  const [mostrarDvCorregidos, setMostrarDvCorregidos] = useState(false)
 
   const [config, setConfig] = useState<ConfigGuardada>(CONFIG_DEFECTO)
   const [dvAuto, setDvAuto] = useState('')   // DV calculado automáticamente
@@ -597,6 +601,28 @@ export default function ExogenasPage() {
       setError(e instanceof Error ? e.message : 'Error al exportar.')
     } finally { setExportando(false) }
   }, [resultado, config])
+
+  // Consulta el verificador de NIT del sistema (RUES + módulo 11) y cachea el resultado
+  const verificarNitRUES = async (nit: string) => {
+    const nitLimpio = nit.replace(/\D/g, '')
+    if (!nitLimpio || nitVerifyCache.has(nitLimpio) || nitVerifyLoading === nitLimpio) return
+    setNitVerifyLoading(nitLimpio)
+    try {
+      const res = await fetch(`/api/nit-verify?nit=${nitLimpio}`)
+      if (!res.ok) return
+      const d = await res.json() as { checkDigit?: number; razonSocial?: string | null; ciuuPrincipal?: string | null; valid?: boolean }
+      setNitVerifyCache(prev => {
+        const n = new Map(prev)
+        n.set(nitLimpio, {
+          dv:          String(d.checkDigit ?? ''),
+          razonSocial: d.razonSocial ?? null,
+          ciuu:        d.ciuuPrincipal ?? null,
+          valid:       d.valid ?? false,
+        })
+        return n
+      })
+    } catch { /* silencioso */ } finally { setNitVerifyLoading(null) }
+  }
 
   const resolverExcepcion = (accion: AccionExcepcion, datos?: string) => {
     // ── Corrección de DV: aplica el DV correcto a la fila real en filasFormatoParaExportar ──
@@ -1221,54 +1247,57 @@ export default function ExogenasPage() {
               </div>
             </div>
 
-            {/* ══ BANNER AUTO-CORRECCIONES DV ═════════════════════════════════ */}
+            {/* ══ BANNER DV COMPACTO ══════════════════════════════════════════ */}
             {resultado.autoCorrecciones && resultado.autoCorrecciones.totalCorregidos > 0 && (() => {
               const ac = resultado.autoCorrecciones!
               return (
-                <details style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '2px' }} open>
-                  <summary style={{ padding: '11px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', listStyle: 'none' }}>
-                    <span style={{ fontSize: '16px' }}>✅</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: JA.GREEN, flex: 1 }}>
-                      {ac.totalCorregidos} NIT{ac.totalCorregidos > 1 ? 's' : ''} con DV auto-corregido — {ac.totalAsientos} movimiento{ac.totalAsientos > 1 ? 's' : ''} actualizados
+                <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '2px' }}>
+                  <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px' }}>✅</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#166534' }}>
+                      {ac.totalCorregidos} DV{ac.totalCorregidos > 1 ? 's' : ''} corregido{ac.totalCorregidos > 1 ? 's' : ''} automáticamente
                     </span>
-                    <span style={{ fontSize: '11px', color: JA.GREEN, fontWeight: 600, padding: '2px 8px',
-                      background: '#BBF7D0', borderRadius: '2px' }}>
-                      Corregido automáticamente ▾
-                    </span>
-                  </summary>
-                  <div style={{ padding: '0 16px 14px' }}>
-                    <div style={{ fontSize: '11px', color: '#166534', marginBottom: '10px', paddingTop: '8px', borderTop: '1px solid #BBF7D0' }}>
-                      El sistema aplicó el DV correcto (módulo 11) antes de generar los formatos.
-                      Estos NITs <strong>no aparecerán como excepciones</strong> porque ya están corregidos en el archivo de exportación.
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', flex: 1 }}>
                       {ac.correcciones.map(c => (
-                        <div key={c.nit} style={{ background: JA.WHITE, border: '1px solid #BBF7D0',
-                          borderRadius: '2px', padding: '8px 12px', fontSize: '12px' }}>
-                          <div style={{ fontWeight: 700, color: JA.TEXT, marginBottom: '2px' }}>
-                            NIT {c.nit}
-                            <span style={{ marginLeft: '6px', padding: '1px 6px', background: JA.RED_BG,
-                              color: JA.RED, borderRadius: '2px', fontSize: '10px', fontWeight: 600,
-                              textDecoration: 'line-through' }}>-{c.dvOriginal || '?'}</span>
-                            <span style={{ marginLeft: '4px', padding: '1px 6px', background: '#D1FAE5',
-                              color: '#166534', borderRadius: '2px', fontSize: '10px', fontWeight: 700 }}>-{c.dvCorregido}</span>
-                          </div>
-                          <div style={{ color: JA.GREY, fontSize: '11px' }} title={c.nombre}>
-                            {c.nombre.length > 38 ? c.nombre.slice(0, 37) + '…' : c.nombre}
-                          </div>
-                          <div style={{ color: JA.GREY, fontSize: '10px', marginTop: '2px' }}>
-                            {c.asientosAfectados} movimiento{c.asientosAfectados > 1 ? 's' : ''} · {c.tipo === 'dv_faltante' ? 'DV faltante' : 'DV incorrecto en Siigo'}
-                          </div>
-                        </div>
+                        <span key={c.nit} style={{ fontSize: '11px', padding: '1px 7px', background: JA.WHITE,
+                          border: '1px solid #BBF7D0', borderRadius: '2px', color: '#166534', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                          {c.nit}<span style={{ color: JA.RED, textDecoration: 'line-through', margin: '0 2px' }}>-{c.dvOriginal||'?'}</span>
+                          <span style={{ color: JA.GREEN, fontWeight: 700 }}>-{c.dvCorregido}</span>
+                        </span>
                       ))}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#166534', marginTop: '10px', padding: '8px 12px',
-                      background: '#D1FAE5', borderRadius: '2px', fontStyle: 'italic' }}>
-                      💡 Para evitar esto en futuras exógenas, corrija el DV de estos terceros en Siigo:
-                      Terceros → buscar NIT → campo "Dígito de verificación".
-                    </div>
+                    <button onClick={() => setMostrarDvCorregidos(p => !p)}
+                      style={{ fontSize: '11px', color: '#166534', background: 'none', border: 'none', cursor: 'pointer', padding: '0', flexShrink: 0 }}>
+                      {mostrarDvCorregidos ? 'ocultar ▴' : 'detalle ▾'}
+                    </button>
                   </div>
-                </details>
+                  {mostrarDvCorregidos && (
+                    <div style={{ borderTop: '1px solid #BBF7D0', padding: '8px 12px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ color: '#166534', fontWeight: 700 }}>
+                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>NIT</th>
+                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>DV antes</th>
+                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>DV corregido</th>
+                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>Nombre en Siigo</th>
+                            <th style={{ textAlign: 'right', padding: '3px 6px' }}>Movs.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ac.correcciones.map((c, i) => (
+                            <tr key={c.nit} style={{ background: i % 2 === 0 ? JA.WHITE : '#F0FDF4' }}>
+                              <td style={{ padding: '3px 6px', fontFamily: 'monospace', fontWeight: 600 }}>{c.nit}</td>
+                              <td style={{ padding: '3px 6px', color: JA.RED }}>{c.dvOriginal || '—'}</td>
+                              <td style={{ padding: '3px 6px', color: JA.GREEN, fontWeight: 700 }}>{c.dvCorregido}</td>
+                              <td style={{ padding: '3px 6px', color: JA.GREY, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</td>
+                              <td style={{ padding: '3px 6px', textAlign: 'right', color: JA.GREY }}>{c.asientosAfectados}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               )
             })()}
             {/* ══ FIN BANNER DV ════════════════════════════════════════════════ */}
@@ -1694,37 +1723,36 @@ export default function ExogenasPage() {
                           </div>
                         </div>
                       )}
-                      {/* Panel especial DV: muestra NIT + DV calculado + verificación antes de confirmar */}
-                      {(tarjeta.excepcionOriginal.tipo === 'dv_incorrecto' || tarjeta.excepcionOriginal.tipo === 'dv_faltante') && tarjeta.dvSugerido && (() => {
-                        const nit = tarjeta.contexto?.terceroId as string ?? ''
-                        const dvCalc = tarjeta.dvSugerido
-                        const nitLimpio = nit.replace(/\D/g, '')
-                        // Re-verificar módulo 11 en cliente
-                        const pesos = [71,67,59,53,47,43,41,37,29,23,19,17,13,7,3]
-                        const digs = nitLimpio.split('').map(Number).reverse()
-                        let sum = 0; for (let i = 0; i < digs.length; i++) sum += digs[i] * pesos[i]
-                        const resto = sum % 11; const dvVerif = String(resto > 1 ? 11 - resto : resto)
-                        const verificado = dvCalc === dvVerif
+                      {/* Panel DV: verifica con el sistema RUES + módulo 11 */}
+                      {(tarjeta.excepcionOriginal.tipo === 'dv_incorrecto' || tarjeta.excepcionOriginal.tipo === 'dv_faltante') && (() => {
+                        const nit = (tarjeta.contexto?.terceroId as string ?? '').replace(/\D/g, '')
+                        if (!nit) return null
+                        const dvCalc = tarjeta.dvSugerido ?? ''
+                        const cached = nitVerifyCache.get(nit)
+                        const loading = nitVerifyLoading === nit
+                        // Disparar verificación si aún no está en caché
+                        if (!cached && !loading) verificarNitRUES(nit)
+                        const dvFinal = cached?.dv || dvCalc
+                        const razon   = cached?.razonSocial
+                        const ciuu    = cached?.ciuu
                         return (
-                          <div style={{ background: verificado ? '#F0FDF4' : JA.AMBER_BG,
-                            border: `1px solid ${verificado ? '#BBF7D0' : '#FDE68A'}`,
-                            borderRadius: '2px', padding: '12px 14px', marginBottom: '14px' }}>
-                            <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-                              letterSpacing: '0.05em', color: verificado ? JA.GREEN : JA.AMBER, marginBottom: '8px' }}>
-                              {verificado ? '✅ DV calculado y verificado (Módulo 11)' : '⚠️ DV calculado — verificar manualmente'}
+                          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0',
+                            borderRadius: '2px', padding: '10px 14px', marginBottom: '12px',
+                            display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            {/* NIT + DV */}
+                            <div style={{ fontFamily: 'monospace', fontSize: '14px', fontWeight: 800, color: JA.TEXT, flexShrink: 0 }}>
+                              {nit}–<span style={{ color: JA.GREEN }}>{dvFinal || '…'}</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                              <div style={{ fontSize: '13px', fontFamily: 'monospace', fontWeight: 700,
-                                color: JA.TEXT, background: JA.WHITE, padding: '4px 12px',
-                                border: `1px solid ${JA.BORDER}`, borderRadius: '2px' }}>
-                                NIT {nitLimpio} – <span style={{ color: JA.GREEN, fontSize: '15px' }}>{dvCalc}</span>
-                              </div>
-                              <div style={{ fontSize: '12px', color: verificado ? '#166534' : JA.AMBER }}>
-                                {verificado
-                                  ? `Módulo 11 confirma: ${nitLimpio} → DV = ${dvCalc}`
-                                  : 'El NIT puede tener dígitos incorrectos — corrija en Siigo'}
-                              </div>
-                            </div>
+                            {/* Fuente */}
+                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '2px', fontWeight: 700, flexShrink: 0,
+                              background: cached ? '#D1FAE5' : '#FEF3C7',
+                              color: cached ? '#166534' : JA.AMBER }}>
+                              {loading ? 'Verificando RUES…' : cached ? '✓ RUES verificado' : 'módulo 11'}
+                            </span>
+                            {/* Razón social */}
+                            {razon && <span style={{ fontSize: '12px', color: JA.TEXT, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{razon}</span>}
+                            {/* CIIU */}
+                            {ciuu && <span style={{ fontSize: '11px', color: JA.GREY, flexShrink: 0 }}>🏢 {ciuu}</span>}
                           </div>
                         )
                       })()}
@@ -1735,9 +1763,11 @@ export default function ExogenasPage() {
                             onClick={() => {
                               if (accion.tipo === 'asignar_tercero') { setMostrarBusqueda(true); return }
                               if (accion.tipo === 'corregir_dv') {
-                                // Usar dvSugerido (ya calculado por módulo 11) directamente
-                                const dv = tarjeta.dvSugerido
-                                  ?? window.prompt('Ingrese el dígito de verificación (0–9):')
+                                const nit = (tarjeta.contexto?.terceroId as string ?? '').replace(/\D/g, '')
+                                const dvRUES = nitVerifyCache.get(nit)?.dv
+                                // Priorizar DV del RUES; si no, usar el calculado por módulo 11
+                                const dv = dvRUES || tarjeta.dvSugerido
+                                  || window.prompt('Ingrese el dígito de verificación (0–9):')
                                 if (dv) resolverExcepcion(accion.tipo, dv)
                                 return
                               }
@@ -1752,9 +1782,14 @@ export default function ExogenasPage() {
                               borderRadius: '2px', background: accion.primaria ? JA.NAVY : JA.WHITE,
                               color: accion.primaria ? JA.WHITE : JA.TEXT,
                               fontSize: '13px', fontWeight: accion.primaria ? 600 : 400, cursor: 'pointer', textAlign: 'left' }}>
-                            {accion.tipo === 'corregir_dv' && tarjeta.dvSugerido
-                              ? `Aplicar DV ${tarjeta.dvSugerido} (verificado por módulo 11) ✓`
-                              : accion.etiqueta}
+                            {(() => {
+                              if (accion.tipo !== 'corregir_dv') return accion.etiqueta
+                              const nit = (tarjeta.contexto?.terceroId as string ?? '').replace(/\D/g, '')
+                              const dvRUES = nitVerifyCache.get(nit)?.dv
+                              const dvFinal = dvRUES || tarjeta.dvSugerido
+                              if (!dvFinal) return accion.etiqueta
+                              return `Aplicar DV ${dvFinal} ${dvRUES ? '(verificado RUES ✓)' : '(módulo 11 ✓)'}`
+                            })()}
                           </button>
                         ))}
                       </div>

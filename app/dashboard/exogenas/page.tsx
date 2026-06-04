@@ -62,8 +62,9 @@ interface ResultadoFinal {
     }>
   }
   informeValidacion?: {
-    puedeExportar: boolean
-    resumenTexto: string
+    puedeExportar:  boolean
+    recomendacion:  'si' | 'no' | 'corregir_primero'
+    resumenTexto:   string
     criticos:      Array<{ codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number; terceroId?: string }>
     altos:         Array<{ codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number; terceroId?: string }>
     medios:        Array<{ codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number }>
@@ -1469,25 +1470,41 @@ export default function ExogenasPage() {
               ]
               const grupos = todosGrupos.filter(g => g.items.length > 0)
 
-              return (
-                <div style={{ border: `2px solid ${inf.puedeExportar ? '#FDE68A' : '#FECACA'}`,
-                  borderRadius: '2px', overflow: 'hidden', background: JA.WHITE }}>
+              // Config visual por recomendación
+              const recoConfig = {
+                si:               { bg: JA.GREEN_BG, border: '#BBF7D0', color: JA.GREEN,  icono: '✅', label: 'GENERAR ARCHIVO' },
+                corregir_primero: { bg: JA.AMBER_BG, border: '#FDE68A', color: JA.AMBER,  icono: '⚠️', label: 'CORREGIR PRIMERO' },
+                no:               { bg: JA.RED_BG,   border: '#FECACA', color: JA.RED,    icono: '🚫', label: 'NO GENERAR' },
+              }
+              const reco = inf.recomendacion ?? (inf.puedeExportar ? 'si' : 'no')
+              const rc   = recoConfig[reco]
 
-                  {/* Cabecera del informe */}
-                  <div style={{ padding: '12px 18px', background: inf.puedeExportar ? JA.AMBER_BG : JA.RED_BG,
-                    borderBottom: `1px solid ${inf.puedeExportar ? '#FDE68A' : '#FECACA'}`,
-                    display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '18px' }}>{inf.puedeExportar ? '⚠️' : '🚫'}</span>
+              return (
+                <div style={{ border: `2px solid ${rc.border}`, borderRadius: '2px', overflow: 'hidden', background: JA.WHITE }}>
+
+                  {/* Cabecera — Recomendación prominente */}
+                  <div style={{ padding: '12px 18px', background: rc.bg,
+                    borderBottom: `1px solid ${rc.border}`,
+                    display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '20px', flexShrink: 0 }}>{rc.icono}</span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase',
-                        letterSpacing: '0.06em', color: inf.puedeExportar ? JA.AMBER : JA.RED, marginBottom: '2px' }}>
-                        Informe de Auditoría DIAN — ValidadorExperto
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase',
+                          letterSpacing: '0.07em', color: rc.color }}>
+                          Auditoría DIAN — ValidadorExperto
+                        </div>
+                        {/* Badge de recomendación */}
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 10px',
+                          background: rc.color, color: JA.WHITE, borderRadius: '2px',
+                          textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {rc.label}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: JA.TEXT }}>{inf.resumenTexto}</div>
+                      <div style={{ fontSize: '12px', color: JA.TEXT, lineHeight: '1.5' }}>{inf.resumenTexto}</div>
                     </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '70px' }}>
                       {inf.criticos.length > 0 && (
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: JA.RED }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: JA.RED }}>
                           {inf.criticos.length} CRÍTICO{inf.criticos.length > 1 ? 'S' : ''}
                         </div>
                       )}

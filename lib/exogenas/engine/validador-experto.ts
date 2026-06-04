@@ -40,6 +40,8 @@ export interface TotalFormato {
   estado:            'ok' | 'alerta' | 'critico'
 }
 
+export type RecomendacionExportar = 'si' | 'no' | 'corregir_primero'
+
 export interface InformeValidacion {
   timestamp:         string
   nitDeclarante:     string
@@ -50,6 +52,7 @@ export interface InformeValidacion {
   observaciones:     HallazgoValidacion[]
   totalesPorFormato: TotalFormato[]
   puedeExportar:     boolean
+  recomendacion:     RecomendacionExportar
   resumenTexto:      string
 }
 
@@ -103,10 +106,16 @@ export class ValidadorExperto {
     this.validarDvTerceros(resultados)
     this.validarRetencionesF1001(porFormato)
 
-    const criticos     = this.hallazgos.filter(h => h.nivel === 'critico')
-    const altos        = this.hallazgos.filter(h => h.nivel === 'alto')
-    const medios       = this.hallazgos.filter(h => h.nivel === 'medio')
+    const criticos      = this.hallazgos.filter(h => h.nivel === 'critico')
+    const altos         = this.hallazgos.filter(h => h.nivel === 'alto')
+    const medios        = this.hallazgos.filter(h => h.nivel === 'medio')
     const observaciones = this.hallazgos.filter(h => h.nivel === 'observacion')
+
+    // Recomendación de tres vías
+    const recomendacion: RecomendacionExportar =
+      criticos.length > 0 ? 'no' :
+      altos.length    > 0 ? 'corregir_primero' :
+      'si'
 
     return {
       timestamp:         new Date().toISOString(),
@@ -115,7 +124,8 @@ export class ValidadorExperto {
       criticos, altos, medios, observaciones,
       totalesPorFormato: resultados.map(r => this.construirTotalFormato(r)),
       puedeExportar:     criticos.length === 0,
-      resumenTexto:      this.construirResumenTexto(criticos, altos, medios, criticos.length === 0),
+      recomendacion,
+      resumenTexto:      this.construirResumenTexto(criticos, altos, medios, recomendacion),
     }
   }
 
@@ -530,24 +540,26 @@ export class ValidadorExperto {
   }
 
   private construirResumenTexto(
-    criticos:      HallazgoValidacion[],
-    altos:         HallazgoValidacion[],
-    medios:        HallazgoValidacion[],
-    puedeExportar: boolean,
+    criticos:       HallazgoValidacion[],
+    altos:          HallazgoValidacion[],
+    medios:         HallazgoValidacion[],
+    recomendacion:  RecomendacionExportar,
   ): string {
+    const RECO: Record<RecomendacionExportar, string> = {
+      si:              '✅ RECOMENDACIÓN: Generar archivo — datos coherentes y sin errores críticos.',
+      no:              '🚫 RECOMENDACIÓN: NO generar — existen errores críticos que la DIAN rechazará o glosará.',
+      corregir_primero:'⚠️ RECOMENDACIÓN: Corregir primero — hay hallazgos altos que pueden afectar la exactitud del informe.',
+    }
+
     if (!criticos.length && !altos.length && !medios.length)
-      return '✅ Archivo validado sin hallazgos. Puede proceder a la exportación.'
+      return RECO.si
 
     const partes: string[] = []
-    if (criticos.length) partes.push(`🔴 ${criticos.length} error(es) CRÍTICO(S) — exportación bloqueada`)
-    if (altos.length)    partes.push(`🟠 ${altos.length} hallazgo(s) ALTO(S)`)
-    if (medios.length)   partes.push(`🟡 ${medios.length} alerta(s) MEDIA(S)`)
+    if (criticos.length) partes.push(`🔴 ${criticos.length} CRÍTICO(S)`)
+    if (altos.length)    partes.push(`🟠 ${altos.length} ALTO(S)`)
+    if (medios.length)   partes.push(`🟡 ${medios.length} MEDIO(S)`)
 
-    const bloqueo = puedeExportar
-      ? 'Puede exportar, pero se recomienda revisar los hallazgos altos primero.'
-      : 'NO exportar hasta resolver los errores críticos. La DIAN puede rechazar o glosar el archivo.'
-
-    return partes.join(' | ') + '. ' + bloqueo
+    return partes.join(' · ') + ' — ' + RECO[recomendacion]
   }
 }
 

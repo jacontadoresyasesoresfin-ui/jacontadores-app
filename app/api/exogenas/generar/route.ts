@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
   const reglasExtra: typeof REGLAS_DEFAULT_2025 = []
   if (!esXlsx && profile?.tenant_id && config.usarConfiguracionPersonalizada !== false) {
-    const { data } = await supabase.from('exogenas_reglas_mapeo').select('*').eq('tenant_id', profile.tenant_id).eq('activo', true)
+    const { data } = await supabase.from('exogenas_reglas_mapeo').select('*').eq('tenant_id', profile.tenant_id).eq('activo', true).eq('anio_gravable', config.anioGravable)
     if (data) {
       // Supabase devuelve snake_case; ReglaMapeo espera camelCase
       const mapeadas = data.map((r: Record<string, unknown>) => ({

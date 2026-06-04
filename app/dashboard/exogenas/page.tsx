@@ -657,13 +657,15 @@ export default function ExogenasPage() {
 
         {/* ══════════════════════════════════════════════════════════
             TAB: CONFIGURACIÓN DE MAPEO PUC
+            Siempre montado (display none cuando inactivo) para conservar
+            los cambios sin guardar al cambiar de tab.
         ══════════════════════════════════════════════════════════ */}
-        {tab === 'configuracion' && (
+        <div style={{ display: tab === 'configuracion' ? 'block' : 'none' }}>
           <ConfiguracionMagnetica
             anioInicial={config.anioGravable}
             onVolver={() => setTab('generar')}
           />
-        )}
+        </div>
 
         {tab !== 'configuracion' && <>
 
@@ -1176,12 +1178,15 @@ export default function ExogenasPage() {
               }
 
               type NivelKey = keyof typeof nivelConfig
-              const grupos: Array<{ nivel: NivelKey; items: typeof inf.criticos }> = [
-                { nivel: 'critico',     items: inf.criticos },
-                { nivel: 'alto',        items: inf.altos },
-                { nivel: 'medio',       items: inf.medios },
-                { nivel: 'observacion', items: inf.observaciones },
-              ].filter(g => g.items.length > 0)
+              type HallazgoUI = { codigo: string; titulo: string; detalle: string; accion: string; formato?: string; valorRef?: number; terceroId?: string }
+              type GrupoAudit = { nivel: NivelKey; items: HallazgoUI[] }
+              const todosGrupos: GrupoAudit[] = [
+                { nivel: 'critico',     items: inf.criticos      as HallazgoUI[] },
+                { nivel: 'alto',        items: inf.altos         as HallazgoUI[] },
+                { nivel: 'medio',       items: inf.medios        as HallazgoUI[] },
+                { nivel: 'observacion', items: inf.observaciones as HallazgoUI[] },
+              ]
+              const grupos = todosGrupos.filter(g => g.items.length > 0)
 
               return (
                 <div style={{ border: `2px solid ${inf.puedeExportar ? '#FDE68A' : '#FECACA'}`,

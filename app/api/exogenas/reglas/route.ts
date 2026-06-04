@@ -123,6 +123,7 @@ export async function GET(req: NextRequest) {
     qPropia = qPropia.is('tenant_id', null).eq('fuente', 'usuario')
   }
 
+  if (soloMias) qPropia = qPropia.eq('anio_gravable', anio)   // filtrar por año exacto cuando carga ConfiguracionMagnetica
   if (q)       qPropia = qPropia.or(`cuenta_puc_patron.ilike.%${q}%,concepto_codigo.ilike.%${q}%,notas.ilike.%${q}%`)
   if (formato) qPropia = qPropia.eq('formato_codigo', formato)
 

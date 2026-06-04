@@ -523,7 +523,7 @@ export default function ConfiguracionMagnetica({
   // ── Cargar datos del servidor ─────────────────────────────────────────────
   useEffect(() => {
     setCargando(true)
-    fetch('/api/exogenas/reglas?soloMias=true&page=1')
+    fetch(`/api/exogenas/reglas?soloMias=true&anio=${anio}`)
       .then(r => r.json())
       .then((d: { reglas?: { id: string; cuenta_puc_patron: string; formato_codigo: string; concepto_codigo: string; categoria?: string | null; naturaleza: string | null; notas?: string | null }[]; error?: string }) => {
         if (d.error) throw new Error(d.error)

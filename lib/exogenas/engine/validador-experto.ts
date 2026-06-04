@@ -75,8 +75,6 @@ const NOMBRES_FORMATO: Record<string, string> = {
 // Conceptos que indican compras/inventarios (NO deben estar en F1006)
 const CONCEPTOS_COMPRA = new Set(['compra_bienes', 'compra_materia_prima', 'compra_servicios'])
 
-// Prefijos de cuentas de ingresos (deben ser la fuente de F1006)
-const PREFIJOS_INGRESO = ['41', '42']
 // Prefijos de cuentas que NUNCA deben estar en F1006
 const PREFIJOS_PROHIBIDOS_F1006 = ['14', '62', '72', '51', '52', '53', '24']
 
@@ -271,6 +269,19 @@ export class ValidadorExperto {
 
     const ivaGenerado  = r1006.totales.totalNetaCompras ?? r1006.totales.totalCompras ?? 0
     const ingresos     = r1007.totales.totalNetaIngresos ?? r1007.totales.totalIngresos ?? 0
+
+    // Validación obligatoria: F1007 con ingresos relevantes pero F1006 vacío
+    if (ingresos > 100_000_000 && ivaGenerado === 0) {
+      this.add({
+        nivel: 'alto', codigo: 'F1006_VACIO_CON_INGRESOS',
+        formato: '1006',
+        titulo: `INCONSISTENCIA: F1007 reporta ${fmt(ingresos)} en ingresos pero F1006 (IVA Generado) está en cero`,
+        detalle: `El Formato 1007 contiene ingresos por ${fmt(ingresos)}, pero el Formato 1006 (IVA Generado) no tiene ningún registro. Si la empresa vende bienes o servicios gravados con IVA (tarifa 5% o 19%), este formato debe reportar el IVA cobrado a sus clientes. Un F1006 en cero con ingresos relevantes en F1007 es una inconsistencia que la DIAN puede glosar.`,
+        accion: 'Verifique: (1) Si la empresa SOLO presta servicios exentos o excluidos de IVA (salud, educación, etc.), el F1006 en cero puede ser correcto — documente esta condición. (2) Si tiene ventas gravadas, configure en Siigo el mapeo de las cuentas 41xx/42xx al concepto IVA Generado (9998) en Configuración → Mapeo PUC para que aparezcan en F1006. (3) Confirme que las causaciones de ventas incluyen la cuenta 2408 en crédito (IVA cobrado al cliente).',
+        valorRef: ingresos,
+      })
+      return
+    }
 
     if (ingresos <= 0 || ivaGenerado <= 0) return
 

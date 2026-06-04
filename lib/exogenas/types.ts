@@ -189,6 +189,9 @@ export interface LineaReconciliacion {
   estado: 'ok' | 'alerta' | 'critico'
 }
 
+// ─── Informe del ValidadorExperto ────────────────────────────────────────
+export type { NivelValidacion, HallazgoValidacion, TotalFormato, InformeValidacion } from './engine/validador-experto'
+
 // ─── Parámetros para generar proceso ─────────────────────────────────────
 export interface ParametrosGeneracion {
   periodoInicio: string        // YYYY-MM-DD

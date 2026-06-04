@@ -22,6 +22,7 @@ import { humanizarExcepciones, resumirExcepciones } from '@/lib/exogenas/engine/
 import { RulesEngine } from '@/lib/exogenas/engine/rules-engine'
 import { FormatoRegistry } from '@/lib/exogenas/registry/formato-registry'
 import { REGLAS_DEFAULT_2025 } from '@/lib/exogenas/config/reglas-default-2025'
+import { auditarExogenas } from '@/lib/exogenas/engine/validador-experto'
 import type { ConfigExogena, FilaFormato, ResultadoTransformacion } from '@/lib/exogenas/types'
 
 export const dynamic = 'force-dynamic'
@@ -247,6 +248,8 @@ export async function POST(req: NextRequest) {
           const { tarjetas: tarjetasXlsx, resumenExcepciones: resumenXlsx } =
             await emitirEtapas45(resultadosXlsx, 0)
 
+          const informeValidacionXlsx = auditarExogenas(config, resultadosXlsx)
+
           if (profile?.tenant_id && config.nitDeclarante) {
             await supabase.from('exogenas_procesos').insert({
               tenant_id: profile.tenant_id, creado_por: user.id,
@@ -254,9 +257,11 @@ export async function POST(req: NextRequest) {
               periodo_inicio: new Date(`${config.anioGravable}-01-01`).toISOString(),
               periodo_fin: new Date(`${config.anioGravable}-12-31`).toISOString(),
               nit_declarante: config.nitDeclarante, tipo_declarante: config.tipoDeclarante,
-              formatos_incluidos: xlsxResult.formatosDetectados, estado: 'revision',
+              formatos_incluidos: xlsxResult.formatosDetectados,
+              estado: informeValidacionXlsx.puedeExportar ? 'revision' : 'borrador',
               total_registros: totalRegistrosXlsx,
-              total_excepciones: tarjetasXlsx.length, log_proceso: xlsxResult.advertencias,
+              total_excepciones: tarjetasXlsx.length + informeValidacionXlsx.criticos.length,
+              log_proceso: xlsxResult.advertencias,
             })
           }
 
@@ -277,6 +282,7 @@ export async function POST(req: NextRequest) {
               })),
               tarjetasExcepciones: tarjetasXlsx,
               resumenExcepciones: resumenXlsx,
+              informeValidacion: informeValidacionXlsx,
               asientosParaExportar: [],
               filasFormatoParaExportar: resultadosXlsx.map(r => ({ formatoCodigo: r.formatoCodigo, filas: r.filas })),
               configParaExportar: config,
@@ -367,6 +373,9 @@ export async function POST(req: NextRequest) {
           const cuentasSinRegla = engine.cuentasSinRegla(asientos)
           const { tarjetas, resumenExcepciones } = await emitirEtapas45(resultados, cuentasSinRegla.length)
 
+          // ── ETAPA 6: Auditoría cruzada de formatos (ValidadorExperto) ────────
+          const informeValidacion = auditarExogenas(config, resultados, empresaDetectada)
+
           if (profile?.tenant_id && config.nitDeclarante) {
             await supabase.from('exogenas_procesos').insert({
               tenant_id: profile.tenant_id, creado_por: user.id,
@@ -374,9 +383,11 @@ export async function POST(req: NextRequest) {
               periodo_inicio: new Date(`${config.anioGravable}-01-01`).toISOString(),
               periodo_fin: new Date(`${config.anioGravable}-12-31`).toISOString(),
               nit_declarante: config.nitDeclarante, tipo_declarante: config.tipoDeclarante,
-              formatos_incluidos: config.formatos, estado: 'revision',
+              formatos_incluidos: config.formatos,
+              estado: informeValidacion.puedeExportar ? 'revision' : 'borrador',
               total_registros: resultados.reduce((s, r) => s + r.totales.totalFilas, 0),
-              total_excepciones: tarjetas.length, log_proceso: advertencias,
+              total_excepciones: tarjetas.length + informeValidacion.criticos.length,
+              log_proceso: advertencias,
             })
           }
 
@@ -397,6 +408,7 @@ export async function POST(req: NextRequest) {
               })),
               tarjetasExcepciones: tarjetas,
               resumenExcepciones,
+              informeValidacion,
               asientosParaExportar: asientos,
               configParaExportar: config,
             },

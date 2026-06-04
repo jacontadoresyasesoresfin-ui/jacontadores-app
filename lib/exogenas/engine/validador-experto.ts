@@ -1,15 +1,17 @@
 /**
- * ValidadorExperto — Auditoría cruzada de exógenas antes de entrega al cliente
+ * ValidadorExperto — Auditoría cruzada de exógenas (Res. 000227/2025 + 000233/2025)
  *
- * Aplica las reglas del Contador Público DIAN (Res. 000227/2025 + 000233/2025):
- *  1. Validación del NIT declarante (módulo 11)
- *  2. Coherencia F1005 (IVA descontable) vs F1006 (compras netas): IVA ≤ 19%
- *  3. Coherencia F1007 (ingresos) vs F1006 (compras): margen implícito razonable
- *  4. F1006 contaminado con cuentas IVA o ingresos (2408x, 41x, 42x)
- *  5. Saldos negativos F1008 (CxC) → reclasificar a cta 28 Anticipos clientes
- *  6. Saldos negativos F1009 (CxP) → reclasificar a cta 13 Anticipos proveedores
- *  7. Validación DV de todos los terceros en todos los formatos
- *  8. Resumen de totales por formato
+ * Reglas en orden de prioridad:
+ *  1.  Empresa correcta: los datos deben corresponder al NIT declarante
+ *  2.  F1006 = IVA Generado (ventas/concepto 9998) — NUNCA compras/inventarios
+ *  3.  Coherencia F1006 vs F1007: IVA generado ≈ ingresos × tarifa IVA aplicable
+ *  4.  NIT declarante en F1007 como fuente de ingresos → empresa equivocada
+ *  5.  F1010 solo socios/accionistas — sin bancos ni proveedores
+ *  6.  F1005 vs F1006: IVA descontable ≤ 19% de compras
+ *  7.  Saldos negativos F1008/F1009 con reclasificación contable
+ *  8.  DV de todos los terceros (módulo 11 DIAN)
+ *  9.  Retenciones F1001 no exceden los pagos
+ *  10. NIT declarante: longitud, DV y coincidencia con CSV
  */
 
 import type { ConfigExogena, FilaFormato, ResultadoTransformacion } from '../types'
@@ -20,22 +22,22 @@ import { validarDvNit, calcularDvNit } from './rules-engine'
 export type NivelValidacion = 'critico' | 'alto' | 'medio' | 'observacion'
 
 export interface HallazgoValidacion {
-  nivel:        NivelValidacion
-  codigo:       string           // Código único del hallazgo (ej: 'NIT_DV_INCORRECTO')
-  formato?:     string           // Formato afectado si aplica
-  titulo:       string
-  detalle:      string
-  accion:       string           // Qué debe hacer el contador
-  valorRef?:    number           // Monto involucrado si aplica
-  terceroId?:   string
+  nivel:      NivelValidacion
+  codigo:     string
+  formato?:   string
+  titulo:     string
+  detalle:    string
+  accion:     string
+  valorRef?:  number
+  terceroId?: string
 }
 
 export interface TotalFormato {
-  formatoCodigo:   string
-  nombreFormato:   string
-  totalFilas:      number
+  formatoCodigo:     string
+  nombreFormato:     string
+  totalFilas:        number
   montosPrincipales: { etiqueta: string; valor: number }[]
-  estado:          'ok' | 'alerta' | 'critico'
+  estado:            'ok' | 'alerta' | 'critico'
 }
 
 export interface InformeValidacion {
@@ -47,24 +49,32 @@ export interface InformeValidacion {
   medios:            HallazgoValidacion[]
   observaciones:     HallazgoValidacion[]
   totalesPorFormato: TotalFormato[]
-  puedeExportar:     boolean     // false si hay hallazgos CRÍTICOS sin resolver
-  resumenTexto:      string      // Texto para mostrar al contador
+  puedeExportar:     boolean
+  resumenTexto:      string
 }
 
-// ─── Nombres legibles por formato ─────────────────────────────────────────────
+// ─── Constantes ───────────────────────────────────────────────────────────────
 
 const NOMBRES_FORMATO: Record<string, string> = {
   '1001': 'Pagos o abonos en cuenta y retenciones practicadas',
   '1003': 'Retenciones en la fuente practicadas al declarante',
   '1005': 'IVA Descontable (compras)',
-  '1006': 'Información de compras',
+  '1006': 'IVA Generado — Ingresos/Ventas (concepto 9998)',
   '1007': 'Ingresos recibidos',
   '1008': 'Saldos Cuentas por Cobrar (31-dic)',
   '1009': 'Saldos Cuentas por Pagar (31-dic)',
-  '1010': 'Información de terceros',
+  '1010': 'Socios, accionistas y/o asociados',
   '1012': 'Saldos cuentas bancarias e inversiones',
   '2276': 'Pagos laborales',
 }
+
+// Conceptos que indican compras/inventarios (NO deben estar en F1006)
+const CONCEPTOS_COMPRA = new Set(['compra_bienes', 'compra_materia_prima', 'compra_servicios'])
+
+// Prefijos de cuentas de ingresos (deben ser la fuente de F1006)
+const PREFIJOS_INGRESO = ['41', '42']
+// Prefijos de cuentas que NUNCA deben estar en F1006
+const PREFIJOS_PROHIBIDOS_F1006 = ['14', '62', '72', '51', '52', '53', '24']
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 const fmt = (n: number) => COP.format(Math.abs(n))
@@ -80,54 +90,32 @@ export class ValidadorExperto {
     empresaDetectada?: string,
   ): InformeValidacion {
     this.hallazgos = []
-
-    // Mapa rápido por formato
     const porFormato = new Map(resultados.map(r => [r.formatoCodigo, r]))
 
-    // ── 1. NIT Declarante ───────────────────────────────────────────────────
+    // Orden de aplicación: de más crítico a informativo
     this.validarNitDeclarante(config, empresaDetectada)
-
-    // ── 2. Coherencia F1005 vs F1006 ───────────────────────────────────────
-    this.validarCoherenciaIvaCompras(porFormato)
-
-    // ── 3. Coherencia F1006 vs F1007 ───────────────────────────────────────
-    this.validarCoherenciaComprasIngresos(porFormato)
-
-    // ── 4. Contaminación F1006 con cuentas IVA ─────────────────────────────
-    this.validarContaminacionF1006(porFormato)
-
-    // ── 5 y 6. Saldos negativos F1008 / F1009 ─────────────────────────────
+    this.validarDeclaranteNoEsClientePropio(config, porFormato)
+    this.validarF1006EsIvaGenerado(porFormato)
+    this.validarCoherenciaF1006vsF1007(porFormato)
+    this.validarF1010SoloSocios(porFormato)
+    this.validarCoherenciaIvaDescontable(porFormato)
     this.validarSaldosNegativos(porFormato)
-
-    // ── 7. DV de terceros en todos los formatos ────────────────────────────
     this.validarDvTerceros(resultados)
-
-    // ── 8. Consistencia interna F1001: retenciones ≤ pagos ─────────────────
     this.validarRetencionesF1001(porFormato)
 
-    // ── Clasificar hallazgos ───────────────────────────────────────────────
     const criticos     = this.hallazgos.filter(h => h.nivel === 'critico')
     const altos        = this.hallazgos.filter(h => h.nivel === 'alto')
     const medios       = this.hallazgos.filter(h => h.nivel === 'medio')
     const observaciones = this.hallazgos.filter(h => h.nivel === 'observacion')
 
-    const puedeExportar = criticos.length === 0
-
-    const totalesPorFormato = resultados.map(r => this.construirTotalFormato(r))
-
-    const resumenTexto = this.construirResumenTexto(criticos, altos, medios, puedeExportar)
-
     return {
       timestamp:         new Date().toISOString(),
       nitDeclarante:     config.nitDeclarante,
       anioGravable:      config.anioGravable,
-      criticos,
-      altos,
-      medios,
-      observaciones,
-      totalesPorFormato,
-      puedeExportar,
-      resumenTexto,
+      criticos, altos, medios, observaciones,
+      totalesPorFormato: resultados.map(r => this.construirTotalFormato(r)),
+      puedeExportar:     criticos.length === 0,
+      resumenTexto:      this.construirResumenTexto(criticos, altos, medios, criticos.length === 0),
     }
   }
 
@@ -141,152 +129,249 @@ export class ValidadorExperto {
         nivel: 'critico', codigo: 'NIT_DECLARANTE_VACIO',
         titulo: 'NIT del declarante no configurado',
         detalle: 'La portada del archivo exógena quedará sin NIT. La DIAN rechazará la presentación.',
-        accion: 'Configure el NIT del declarante en la sección "Datos del declarante" antes de generar.',
-      })
-      return
+        accion:  'Configure el NIT del declarante en "Datos del declarante" antes de generar.',
+      }); return
     }
 
     if (nit.length < 6 || nit.length > 10) {
       this.add({
         nivel: 'critico', codigo: 'NIT_DECLARANTE_LONGITUD',
         titulo: `NIT del declarante con longitud inválida (${nit.length} dígitos)`,
-        detalle: `NIT ingresado: ${nit}. Los NITs colombianos tienen entre 6 y 10 dígitos (sin DV).`,
-        accion: 'Verifique el NIT en el RUT de la empresa declarante.',
+        detalle: `NIT ingresado: ${nit}. Los NITs colombianos tienen entre 6 y 10 dígitos sin DV.`,
+        accion:  'Verifique el NIT en el RUT de la empresa declarante.',
         terceroId: nit,
-      })
-      return
+      }); return
     }
 
     if (config.dvDeclarante) {
-      const dvOk = validarDvNit(nit, config.dvDeclarante)
-      if (!dvOk) {
+      if (!validarDvNit(nit, config.dvDeclarante)) {
         const dvCorrecto = calcularDvNit(nit)
         this.add({
           nivel: 'critico', codigo: 'NIT_DECLARANTE_DV_INCORRECTO',
           titulo: `DV del declarante incorrecto — NIT ${nit}-${config.dvDeclarante}`,
-          detalle: `El dígito de verificación informado es ${config.dvDeclarante} pero según módulo 11 debe ser ${dvCorrecto}.`,
-          accion: `Corrija el DV del declarante a ${dvCorrecto} en la configuración.`,
+          detalle: `DV informado: ${config.dvDeclarante}, correcto según módulo 11: ${dvCorrecto}. El RUES es la fuente definitiva si hay discrepancia.`,
+          accion:  `Verifique el DV en https://app.jacontadores.com/dashboard/nit buscando ${nit}. Use el valor del cuadro "Copiar".`,
           terceroId: nit,
         })
       }
     }
 
-    // Comparar con empresa detectada del CSV si tiene NIT embebido
     if (empresaDetectada) {
       const nitEnEmpresa = empresaDetectada.replace(/\D/g, '').slice(-10)
       if (nitEnEmpresa.length >= 6 && !nitEnEmpresa.includes(nit) && !nit.includes(nitEnEmpresa)) {
         this.add({
           nivel: 'alto', codigo: 'NIT_DECLARANTE_NO_COINCIDE_CSV',
-          titulo: 'NIT declarante puede no coincidir con la empresa del archivo',
-          detalle: `El archivo CSV menciona "${empresaDetectada}" y el NIT declarante configurado es ${nit}. Verifique que está procesando la contabilidad correcta.`,
-          accion: 'Confirme que el archivo Siigo corresponde exactamente al NIT declarante. Si son empresas distintas, detenga el proceso.',
+          titulo: 'El NIT declarante puede no coincidir con la empresa del archivo',
+          detalle: `El archivo menciona "${empresaDetectada}" pero el NIT configurado es ${nit}. Si está procesando la contabilidad de otra empresa, los datos del F1001–F1007 serán de la empresa equivocada.`,
+          accion:  'Confirme que el Libro Auxiliar de Siigo corresponde exactamente al NIT declarante. Si usa Siigo multiempresa, asegúrese de exportar la empresa correcta.',
           terceroId: nit,
         })
       }
     }
   }
 
-  // ─── Regla 2: Coherencia IVA descontable (F1005) vs compras netas (F1006) ─
+  // ─── Regla 2: El NIT declarante NO debe aparecer como cliente en F1007 ────
 
-  private validarCoherenciaIvaCompras(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
-    const r1005 = porFormato.get('1005')
-    const r1006 = porFormato.get('1006')
-    if (!r1005 || !r1006) return
+  private validarDeclaranteNoEsClientePropio(
+    config: ConfigExogena,
+    porFormato: Map<string, ResultadoTransformacion<FilaFormato>>
+  ) {
+    const r1007 = porFormato.get('1007')
+    if (!r1007 || !config.nitDeclarante) return
 
-    const totalIva     = r1005.totales.totalIvaDescontable ?? 0
-    const totalCompras = r1006.totales.totalNetaCompras ?? r1006.totales.totalCompras ?? 0
+    const nitDec = config.nitDeclarante.replace(/\D/g, '')
+    const totalIngresos = r1007.totales.totalNetaIngresos ?? r1007.totales.totalIngresos ?? 0
 
-    if (totalCompras <= 0) return
+    for (const fila of r1007.filas) {
+      const nit = String(fila.numeroId ?? '').replace(/\D/g, '')
+      if (nit !== nitDec) continue
 
-    // IVA descontable no puede exceder 19% de las compras netas
-    const ivaMaxEsperado = totalCompras * 0.19
-    const ivaMinimo      = totalCompras * 0.01  // Si hay compras, debe haber algo de IVA
+      const monto = (fila.valorNetoIngreso as number | undefined)
+        ?? (fila.valorIngreso as number | undefined)
+        ?? 0
 
-    if (totalIva > ivaMaxEsperado * 1.05) {
-      const exceso = totalIva - ivaMaxEsperado
+      if (monto <= 0) continue
+
+      const pct = totalIngresos > 0 ? (monto / totalIngresos * 100).toFixed(1) : '?'
+
       this.add({
-        nivel: 'critico', codigo: 'IVA_EXCEDE_COMPRAS',
-        titulo: 'IVA descontable (F1005) supera el 19% de las compras netas (F1006)',
-        detalle: `F1005 IVA descontable: ${fmt(totalIva)} | F1006 Compras netas: ${fmt(totalCompras)} | IVA esperado máx. (19%): ${fmt(ivaMaxEsperado)} | Exceso: ${fmt(exceso)}. Esto indica que cuentas de IVA de ventas (grupo 24) o cuentas incorrectas están siendo incluidas en F1005.`,
-        accion: 'Revise el mapeo PUC: solo las subcuentas de 2408 (IVA descontable en compras) deben ir a F1005. Excluya cuentas 2408 de ventas, provisiones o ajustes.',
-        valorRef: exceso,
-      })
-    } else if (totalIva < ivaMinimo && totalCompras > 5_000_000) {
-      this.add({
-        nivel: 'medio', codigo: 'IVA_MUY_BAJO_VS_COMPRAS',
-        titulo: 'IVA descontable (F1005) es muy bajo respecto a las compras (F1006)',
-        detalle: `F1005 IVA: ${fmt(totalIva)} | F1006 Compras: ${fmt(totalCompras)} | Relación: ${((totalIva / totalCompras) * 100).toFixed(2)}%. Si todas las compras son gravadas al 19%, el IVA esperado sería ${fmt(ivaMaxEsperado)}.`,
-        accion: 'Verifique que todas las facturas de compra con IVA tienen la cuenta 2408 correctamente registrada en Siigo y que el mapeo PUC incluye las subcuentas de 2408 en F1005.',
-        valorRef: totalIva,
+        nivel: 'critico', codigo: 'DECLARANTE_COMO_CLIENTE',
+        formato: '1007',
+        titulo: `ERROR CRÍTICO: el NIT declarante ${nitDec} aparece como cliente en F1007`,
+        detalle: `El NIT declarante (${config.razonSocial || nitDec}) figura como fuente de ingresos por ${fmt(monto)} (${pct}% del total). Esto indica que está procesando datos de otra empresa — posiblemente la firma contable J&A Contadores u otra empresa del multiempresa de Siigo. Los datos del F1001–F1007 corresponden a una empresa diferente al declarante.`,
+        accion:  'DETENGA la generación. En Siigo, exporte el Libro Auxiliar exclusivamente de la empresa con NIT declarante. NO use el auxiliar de la firma contable ni de otra empresa del mismo Siigo.',
+        valorRef: monto, terceroId: nit,
       })
     }
   }
 
-  // ─── Regla 3: Coherencia F1006 (compras) vs F1007 (ingresos) ────────────
+  // ─── Regla 3: F1006 debe ser IVA Generado (ventas) — NO compras ──────────
 
-  private validarCoherenciaComprasIngresos(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
+  private validarF1006EsIvaGenerado(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
+    const r1006 = porFormato.get('1006')
+    if (!r1006 || r1006.filas.length === 0) return
+
+    // ── 3a. Detectar conceptos de compra que NO deben estar en F1006 ─────────
+    const filasConceptoCompra = r1006.filas.filter(f =>
+      CONCEPTOS_COMPRA.has(String(f.conceptoCodigo ?? ''))
+    )
+
+    if (filasConceptoCompra.length > 0) {
+      const terceros = [...new Set(filasConceptoCompra.map(f => f.numeroId as string).filter(Boolean))].slice(0, 4)
+      this.add({
+        nivel: 'critico', codigo: 'F1006_CONCEPTO_COMPRA',
+        formato: '1006',
+        titulo: `F1006 contiene conceptos de COMPRAS — debe ser IVA Generado (ventas)`,
+        detalle: `Se detectaron ${filasConceptoCompra.length} fila(s) con conceptos compra_bienes / compra_servicios / compra_materia_prima. F1006 debe construirse EXCLUSIVAMENTE desde cuentas de ingresos (41xx, 42xx) usando el concepto Siigo 9998 (IVA Generado), no desde inventarios (14x), costos (62x) ni servicios comprados (5x). Terceros afectados: ${terceros.join(', ')}.`,
+        accion:  'En Siigo: Configurar → Medios Magnéticos → asigne las cuentas 41xx/42xx al concepto 9998 para F1006. Retire del F1006 cualquier cuenta de inventarios (grupo 14), costos de ventas (grupo 6-7) o gastos (grupo 5). Si está usando el concepto 9997 para F1006, ese es el error — 9997 es IVA Descontable (compras) que va a F1005.',
+      })
+    }
+
+    // ── 3b. Detectar cuentas de origen prohibidas ─────────────────────────────
+    const cuentasProhibidas = new Set<string>()
+    for (const fila of r1006.filas) {
+      const cuentas = (fila._cuentasOrigen ?? []) as string[]
+      for (const c of cuentas) {
+        if (PREFIJOS_PROHIBIDOS_F1006.some(p => c.startsWith(p))) {
+          cuentasProhibidas.add(c.slice(0, 4))
+        }
+      }
+    }
+
+    if (cuentasProhibidas.size > 0) {
+      this.add({
+        nivel: 'critico', codigo: 'F1006_CUENTAS_PROHIBIDAS',
+        formato: '1006',
+        titulo: `F1006 toma datos de cuentas incorrectas: ${[...cuentasProhibidas].join(', ')}`,
+        detalle: `F1006 (IVA Generado) solo debe tomar cuentas 41xx o 42xx. Se detectaron cuentas de: ${[...cuentasProhibidas].map(c => c + 'xx').join(', ')} — estas corresponden a compras, inventarios, gastos o IVA descontable.`,
+        accion:  'Corrija el mapeo PUC en Configuración → Mapeo PUC: las cuentas listadas no deben apuntar a F1006. Revise especialmente que ninguna cuenta del grupo 24 (IVA) esté mapeada a F1006.',
+      })
+    }
+  }
+
+  // ─── Regla 4: Coherencia F1006 (IVA Generado) vs F1007 (Ingresos) ────────
+
+  private validarCoherenciaF1006vsF1007(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
     const r1006 = porFormato.get('1006')
     const r1007 = porFormato.get('1007')
     if (!r1006 || !r1007) return
 
-    const totalCompras  = r1006.totales.totalNetaCompras ?? r1006.totales.totalCompras ?? 0
-    const totalIngresos = r1007.totales.totalNetaIngresos ?? r1007.totales.totalIngresos ?? 0
+    const ivaGenerado  = r1006.totales.totalNetaCompras ?? r1006.totales.totalCompras ?? 0
+    const ingresos     = r1007.totales.totalNetaIngresos ?? r1007.totales.totalIngresos ?? 0
 
-    if (totalIngresos <= 0 || totalCompras <= 0) return
+    if (ingresos <= 0 || ivaGenerado <= 0) return
 
-    const margen = ((totalIngresos - totalCompras) / totalIngresos) * 100
+    const tasaImplicita = (ivaGenerado / ingresos) * 100
 
-    // Margen bruto negativo: las compras superan los ingresos → posible error de mapeo
-    if (margen < -5) {
+    // El IVA generado no puede ser mayor al 19% de los ingresos (tasa máxima)
+    if (tasaImplicita > 21) {
       this.add({
-        nivel: 'critico', codigo: 'COMPRAS_SUPERAN_INGRESOS',
-        titulo: 'Compras F1006 superan significativamente los Ingresos F1007',
-        detalle: `F1007 Ingresos netos: ${fmt(totalIngresos)} | F1006 Compras netas: ${fmt(totalCompras)} | Relación compras/ingresos: ${(totalCompras / totalIngresos * 100).toFixed(1)}%. Un margen bruto negativo implica que cuentas que NO son compras de mercancía (costos de nómina, gastos, IVA) están siendo incluidas en F1006.`,
-        accion: 'Revise el mapeo PUC de F1006. Solo deben incluirse cuentas 14xx (inventarios), 620x (costo de ventas) y excepcionalmente algunos servicios. Excluya nómina (51xx), gastos operativos (52xx), IVA (24xx) y retenciones (23xx).',
-        valorRef: totalCompras - totalIngresos,
+        nivel: 'critico', codigo: 'F1006_IVA_EXCEDE_INGRESOS',
+        formato: '1006',
+        titulo: `F1006 (IVA Generado) supera el 19% de los ingresos — monto imposible`,
+        detalle: `F1007 Ingresos netos: ${fmt(ingresos)} | F1006 IVA Generado: ${fmt(ivaGenerado)} | Tasa implícita: ${tasaImplicita.toFixed(1)}%. El IVA generado no puede superar el 19% de los ingresos gravados. Este resultado indica que F1006 está tomando montos de compras en lugar de IVA de ventas, o que hay un error grave de mapeo.`,
+        accion:  'Verifique que F1006 recibe únicamente el IVA que la empresa cobra a sus clientes (cuentas 2408 de ventas o la base de ingresos gravados). Si F1006 muestra montos similares o mayores a los ingresos, el concepto Siigo asignado es incorrecto.',
+        valorRef: ivaGenerado,
       })
-    } else if (margen < 5 && totalIngresos > 50_000_000) {
+    } else if (tasaImplicita < 0.5 && ingresos > 100_000_000) {
       this.add({
-        nivel: 'alto', codigo: 'MARGEN_BRUTO_MUY_BAJO',
-        titulo: `Margen bruto implícito muy bajo: ${margen.toFixed(1)}%`,
-        detalle: `F1007 Ingresos: ${fmt(totalIngresos)} | F1006 Compras: ${fmt(totalCompras)}. Un margen del ${margen.toFixed(1)}% es inusualmente bajo. Puede indicar que gastos generales están siendo clasificados como compras de bienes/servicios en F1006.`,
-        accion: 'Valide con el contador que este margen corresponde a la actividad real de la empresa. Si no es correcto, revise el mapeo de cuentas 5xx en F1006.',
-        valorRef: totalIngresos - totalCompras,
+        nivel: 'medio', codigo: 'F1006_IVA_MUY_BAJO',
+        formato: '1006',
+        titulo: `F1006 (IVA Generado) es muy bajo respecto a los ingresos (${tasaImplicita.toFixed(1)}%)`,
+        detalle: `F1007: ${fmt(ingresos)} | F1006: ${fmt(ivaGenerado)}. Si la empresa vende bienes/servicios gravados al 19%, el IVA esperado sería ${fmt(ingresos * 0.19)}. Un porcentaje tan bajo puede indicar que algunas ventas gravadas no están siendo incluidas en F1006.`,
+        accion:  'Confirme que todas las cuentas de ingresos gravados (41xx con IVA) están mapeadas al concepto 9998 en la Configuración Siigo. Si la empresa solo tiene ingresos exentos o excluidos, el monto bajo puede ser correcto.',
+        valorRef: ivaGenerado,
+      })
+    } else {
+      this.add({
+        nivel: 'observacion', codigo: 'F1006_F1007_COHERENTE',
+        formato: '1006/1007',
+        titulo: `F1006 coherente con F1007 — Tasa IVA implícita: ${tasaImplicita.toFixed(1)}%`,
+        detalle: `Ingresos F1007: ${fmt(ingresos)} | IVA Generado F1006: ${fmt(ivaGenerado)} | Tasa: ${tasaImplicita.toFixed(1)}%. Dentro del rango esperado (0–19%).`,
+        accion:  'Sin acción requerida.',
       })
     }
   }
 
-  // ─── Regla 4: F1006 contaminado con cuentas de IVA o ingresos ────────────
+  // ─── Regla 5: F1010 debe contener solo socios / accionistas ──────────────
 
-  private validarContaminacionF1006(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
-    const r1006 = porFormato.get('1006')
-    if (!r1006) return
+  private validarF1010SoloSocios(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
+    const r1010 = porFormato.get('1010')
+    if (!r1010 || r1010.filas.length === 0) return
 
-    const filasContaminadas = r1006.filas.filter(f => {
-      const cuentas = (f._cuentasOrigen ?? []) as string[]
-      return cuentas.some(c =>
-        c.startsWith('2408') ||   // IVA descontable — NO debe estar en compras
-        c.startsWith('41')   ||   // Ingresos operacionales
-        c.startsWith('42')   ||   // Ingresos no operacionales
-        c.startsWith('2405') ||   // IVA por pagar
-      false)
+    // Conceptos válidos para F1010
+    const conceptosValidos = new Set(['socio', 'accionista', 'cooperado', 'comunero', 'asociado'])
+
+    const filasInvalidas = r1010.filas.filter(f => {
+      const concepto = String(f.conceptoCodigo ?? '').toLowerCase()
+      return !conceptosValidos.has(concepto) && concepto !== ''
     })
 
-    if (filasContaminadas.length > 0) {
-      const nits = [...new Set(filasContaminadas.map(f => f.numeroId as string).filter(Boolean))].slice(0, 5)
+    if (filasInvalidas.length > 0) {
+      const conceptosEncontrados = [...new Set(filasInvalidas.map(f => f.conceptoCodigo as string).filter(Boolean))]
       this.add({
-        nivel: 'critico', codigo: 'F1006_CONTAMINADO',
-        titulo: `F1006 contiene cuentas incorrectas (IVA o ingresos) — ${filasContaminadas.length} fila(s) afectadas`,
-        detalle: `Se detectaron filas en F1006 originadas en cuentas 2408x (IVA), 41x o 42x (ingresos). Esto distorsiona el total de compras. NITs afectados: ${nits.join(', ')}.`,
-        accion: 'Corrija el mapeo PUC: las cuentas 2408 deben ir a F1005, las cuentas 41-42 a F1007. Ninguna cuenta de ingresos o de IVA debe aparecer en F1006.',
+        nivel: 'alto', codigo: 'F1010_CONCEPTO_INCORRECTO',
+        formato: '1010',
+        titulo: `F1010 contiene terceros que no son socios/accionistas (${conceptosEncontrados.join(', ')})`,
+        detalle: `F1010 "Socios, Accionistas y/o Asociados" solo debe reportar personas con participación en el capital social. Se encontraron ${filasInvalidas.length} fila(s) con conceptos "${conceptosEncontrados.join('", "')}". Si hay bancos, proveedores u otros terceros con saldo negativo clasificados como "proveedor", es un error de mapeo de las cuentas 22xx.`,
+        accion:  'Revise el mapeo PUC de F1010: solo deben apuntar aquí las cuentas de capital (clase 31) y aporte de socios. Las cuentas 22xx (proveedores) deben ir a F1009, no a F1010.',
+      })
+    }
+
+    // Detectar saldos negativos en F1010 (inusual — posible error)
+    const negativos = r1010.filas.filter(f => {
+      const saldo = (f.valorSaldo as number | undefined) ?? 0
+      return saldo < 0
+    })
+    if (negativos.length > 0) {
+      const totalNeg = negativos.reduce((s, f) => s + ((f.valorSaldo as number) ?? 0), 0)
+      this.add({
+        nivel: 'medio', codigo: 'F1010_SALDO_NEGATIVO',
+        formato: '1010',
+        titulo: `F1010 — ${negativos.length} socio(s) con saldo negativo (${fmt(totalNeg)})`,
+        detalle: 'Un saldo negativo en F1010 puede indicar dividendos o retiros no contabilizados correctamente, o un error de mapeo de cuentas.',
+        accion:  'Verifique los movimientos de la cuenta de capital del socio con saldo negativo. Si corresponde a anticipos de dividendos, reclasifique a una cuenta de deudores.',
+        valorRef: Math.abs(totalNeg),
       })
     }
   }
 
-  // ─── Reglas 5 y 6: Saldos negativos F1008/F1009 ──────────────────────────
+  // ─── Regla 6: Coherencia IVA Descontable (F1005) vs compras reales ────────
+
+  private validarCoherenciaIvaDescontable(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
+    const r1005 = porFormato.get('1005')
+    const r1001 = porFormato.get('1001')
+    if (!r1005) return
+
+    const totalIvaDesc = r1005.totales.totalIvaDescontable ?? 0
+    const totalPagos   = (r1001?.totales.totalPagoDeducible ?? 0) + (r1001?.totales.totalPagoNoDeducible ?? 0)
+
+    if (totalPagos > 0 && totalIvaDesc > totalPagos * 0.20) {
+      this.add({
+        nivel: 'alto', codigo: 'F1005_IVA_EXCEDE_PAGOS',
+        formato: '1005',
+        titulo: `F1005 IVA Descontable (${fmt(totalIvaDesc)}) supera el 20% de los pagos F1001`,
+        detalle: `F1001 Pagos totales: ${fmt(totalPagos)} | F1005 IVA descontable: ${fmt(totalIvaDesc)} | Relación: ${(totalIvaDesc / totalPagos * 100).toFixed(1)}%. Si todas las compras fueran gravadas al 19%, el IVA máximo esperado sería ${fmt(totalPagos * 0.19)}.`,
+        accion:  'Verifique que solo las cuentas 2408 (IVA descontable en compras) están mapeadas a F1005. Excluya IVA de ventas, ajustes o provisiones.',
+        valorRef: totalIvaDesc,
+      })
+    }
+
+    if (totalIvaDesc > 0) {
+      this.add({
+        nivel: 'observacion', codigo: 'F1005_TOTAL',
+        formato: '1005',
+        titulo: `F1005 IVA Descontable total: ${fmt(totalIvaDesc)}`,
+        detalle: 'Verifique que coincide con el saldo acumulado de la cuenta 2408 en el balance de prueba.',
+        accion:  'Cruce el total de F1005 con el movimiento débito neto de las cuentas 2408xx del período.',
+        valorRef: totalIvaDesc,
+      })
+    }
+  }
+
+  // ─── Regla 7: Saldos negativos F1008 / F1009 ─────────────────────────────
 
   private validarSaldosNegativos(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
-    // F1008 — CxC negativo → reclasificar a Anticipos clientes (cuenta 28)
     const r1008 = porFormato.get('1008')
     if (r1008) {
       const negativos = r1008.filas.filter(f => (f.valorSaldo as number) < 0)
@@ -296,29 +381,15 @@ export class ValidadorExperto {
           `${(f.razonSocial || f.numeroId) as string}: ${fmt(f.valorSaldo as number)}`
         ).join(' | ')
         this.add({
-          nivel: 'alto', codigo: 'CXC_SALDO_NEGATIVO',
-          formato: '1008',
+          nivel: 'alto', codigo: 'CXC_SALDO_NEGATIVO', formato: '1008',
           titulo: `F1008 — ${negativos.length} tercero(s) con saldo CxC negativo (${fmt(totalNeg)})`,
-          detalle: `Un saldo negativo en Cuentas por Cobrar significa que el cliente tiene un crédito a favor (pagó de más o hay una nota crédito sin aplicar). Ejemplos: ${ejemplos}.`,
-          accion: 'En Siigo, reclasifique estos saldos a la cuenta 2808 (Anticipos de clientes). Use un comprobante de egreso o nota de ajuste para mover el saldo. Esto garantiza que F1008 solo tenga saldos positivos (deudas a favor del declarante).',
+          detalle: `Un saldo negativo en Cuentas por Cobrar significa que el cliente tiene crédito a favor. Ejemplos: ${ejemplos}.`,
+          accion:  'Reclasifique en Siigo a la cuenta 2808 (Anticipos de clientes). Comprobante de egreso o nota de ajuste para mover el saldo.',
           valorRef: Math.abs(totalNeg),
-        })
-      }
-
-      const totalCxC = r1008.totales.totalSaldoCxC ?? 0
-      if (totalCxC > 0) {
-        this.add({
-          nivel: 'observacion', codigo: 'F1008_TOTAL',
-          formato: '1008',
-          titulo: `F1008 — Total CxC al 31-dic: ${fmt(totalCxC)}`,
-          detalle: `Verifique que este saldo coincide con el balance de prueba en la cuenta 13 (excepto las cuentas 1355 que van a F1003).`,
-          accion: 'Cruce el total de F1008 con el saldo en el balance de la clase 13, excluyendo 1355xx.',
-          valorRef: totalCxC,
         })
       }
     }
 
-    // F1009 — CxP negativo → reclasificar a Anticipos proveedores (cuenta 13)
     const r1009 = porFormato.get('1009')
     if (r1009) {
       const negativos = r1009.filas.filter(f => (f.valorSaldo as number) < 0)
@@ -328,33 +399,19 @@ export class ValidadorExperto {
           `${(f.razonSocial || f.numeroId) as string}: ${fmt(f.valorSaldo as number)}`
         ).join(' | ')
         this.add({
-          nivel: 'alto', codigo: 'CXP_SALDO_NEGATIVO',
-          formato: '1009',
+          nivel: 'alto', codigo: 'CXP_SALDO_NEGATIVO', formato: '1009',
           titulo: `F1009 — ${negativos.length} tercero(s) con saldo CxP negativo (${fmt(totalNeg)})`,
-          detalle: `Un saldo negativo en Cuentas por Pagar indica que se pagó de más a un proveedor, hay una nota débito pendiente de aplicar, o falta contabilizar una factura de compra. Ejemplos: ${ejemplos}.`,
-          accion: 'Reclasifique en Siigo a la cuenta 1330 o 1355 (Anticipos a proveedores). Si corresponde a un error contable, aplique la nota débito o la factura pendiente antes de presentar la información exógena.',
+          detalle: `Saldo negativo en CxP = se pagó de más o falta contabilizar una factura. Ejemplos: ${ejemplos}.`,
+          accion:  'Reclasifique en Siigo a la cuenta 1330 o 1355 (Anticipos a proveedores). Si es error, aplique la nota débito o la factura pendiente.',
           valorRef: Math.abs(totalNeg),
-        })
-      }
-
-      const totalCxP = r1009.totales.totalSaldoCxP ?? 0
-      if (totalCxP > 0) {
-        this.add({
-          nivel: 'observacion', codigo: 'F1009_TOTAL',
-          formato: '1009',
-          titulo: `F1009 — Total CxP al 31-dic: ${fmt(totalCxP)}`,
-          detalle: `Verifique que este saldo coincide con el balance de prueba en las cuentas 22 (proveedores) y 23 (retenciones).`,
-          accion: 'Cruce el total de F1009 con el saldo en el balance de las cuentas 22xx y 23xx.',
-          valorRef: totalCxP,
         })
       }
     }
   }
 
-  // ─── Regla 7: Validación DV de todos los terceros ────────────────────────
+  // ─── Regla 8: DV de todos los terceros ───────────────────────────────────
 
   private validarDvTerceros(resultados: ResultadoTransformacion<FilaFormato>[]) {
-    // Acumular NITs únicos con DV para no repetir el mismo error
     const auditados = new Map<string, { dvInformado: string; dvCorrecto: string; formatos: string[] }>()
 
     for (const r of resultados) {
@@ -362,15 +419,13 @@ export class ValidadorExperto {
         const nit = (fila.numeroId as string | undefined) ?? ''
         const dv  = (fila.dv  as string | undefined) ?? ''
         if (!nit || nit === '222222222' || nit.length < 6) continue
-        if (!dv) continue   // DV vacío → otro tipo de error, no este
+        if (!dv) continue
 
         if (auditados.has(nit)) {
           auditados.get(nit)!.formatos.push(r.formatoCodigo)
           continue
         }
-
-        const dvOk = validarDvNit(nit, dv)
-        if (!dvOk) {
+        if (!validarDvNit(nit, dv)) {
           auditados.set(nit, {
             dvInformado: dv,
             dvCorrecto:  calcularDvNit(nit),
@@ -382,16 +437,12 @@ export class ValidadorExperto {
 
     for (const [nit, info] of auditados) {
       const nivel: NivelValidacion = info.formatos.some(f => ['1001','1005','1006','1007'].includes(f))
-        ? 'alto'
-        : 'medio'
-
+        ? 'alto' : 'medio'
       this.add({
-        nivel,
-        codigo:    'DV_INCORRECTO',
-        formato:   info.formatos.join('/'),
-        titulo:    `DV incorrecto — NIT ${nit}-${info.dvInformado} (correcto: ${info.dvCorrecto})`,
-        detalle:   `El NIT ${nit} aparece en los formatos ${info.formatos.join(', ')} con DV=${info.dvInformado}. El módulo 11 indica que el DV correcto es ${info.dvCorrecto}. La DIAN rechazará las filas con DV incorrecto.`,
-        accion:    `Corrija el DV del tercero ${nit} en el maestro de terceros de Siigo: Contabilidad → Terceros → buscar NIT ${nit} → cambiar DV a ${info.dvCorrecto}.`,
+        nivel, codigo: 'DV_INCORRECTO', formato: info.formatos.join('/'),
+        titulo: `DV incorrecto (módulo 11) — NIT ${nit}-${info.dvInformado}`,
+        detalle: `NIT ${nit} en formatos ${info.formatos.join(', ')} tiene DV=${info.dvInformado}. Módulo 11 da ${info.dvCorrecto}. Verifique en el verificador RUES — el DV del RUES tiene prioridad sobre el módulo 11.`,
+        accion:  `Verifique en https://app.jacontadores.com/dashboard/nit → buscar ${nit} → use el valor del cuadro "Copiar". Corrija en Siigo: Terceros → NIT ${nit} → campo Dígito de Verificación.`,
         terceroId: nit,
       })
     }
@@ -399,56 +450,52 @@ export class ValidadorExperto {
     if (auditados.size === 0 && resultados.some(r => r.filas.length > 0)) {
       this.add({
         nivel: 'observacion', codigo: 'DV_TODOS_OK',
-        titulo: 'DV verificado — todos los NITs con dígito de verificación son válidos',
-        detalle: 'Módulo 11 aplicado a todos los terceros con DV informado. No se encontraron errores.',
+        titulo: 'DVs verificados — todos los NITs son válidos según módulo 11',
+        detalle: 'Módulo 11 aplicado a todos los terceros con DV informado. Recuerde que el RUES tiene prioridad; el sistema realiza verificación RUES en lotes automáticamente.',
         accion:  'Sin acción requerida.',
       })
     }
   }
 
-  // ─── Regla 8: Retenciones F1001 no deben exceder los pagos ───────────────
+  // ─── Regla 9: Retenciones F1001 ≤ pagos ──────────────────────────────────
 
   private validarRetencionesF1001(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
     const r1001 = porFormato.get('1001')
     if (!r1001) return
 
-    const totalPago      = (r1001.totales.totalPagoDeducible ?? 0) + (r1001.totales.totalPagoNoDeducible ?? 0)
-    const totalRete      = r1001.totales.totalRetefuente ?? 0
-    const totalReteIva   = r1001.totales.totalReteIva    ?? 0
-    const totalReteIca   = r1001.totales.totalReteIca    ?? 0
+    const totalPago    = (r1001.totales.totalPagoDeducible ?? 0) + (r1001.totales.totalPagoNoDeducible ?? 0)
+    const totalRete    = r1001.totales.totalRetefuente ?? 0
+    const totalReteIva = r1001.totales.totalReteIva    ?? 0
+    const totalReteIca = r1001.totales.totalReteIca    ?? 0
 
     if (totalPago <= 0) return
 
-    // Retefuente no puede superar el 15% del pago total (la tarifa máxima es 15%)
     if (totalRete > totalPago * 0.16) {
       this.add({
-        nivel: 'alto', codigo: 'RETEFUENTE_EXCESIVA',
-        formato: '1001',
-        titulo:  `F1001 — Retefuente (${fmt(totalRete)}) supera el 15% del total pagado (${fmt(totalPago)})`,
-        detalle: `La tasa máxima de retefuente es 15%. Relación actual: ${(totalRete / totalPago * 100).toFixed(2)}%. Esto puede indicar que la retención está siendo duplicada o que se están sumando retenciones de períodos anteriores.`,
-        accion:  'Verifique en Siigo que las cuentas de retención (2365xx) están correctamente mapeadas y que no se están tomando saldos iniciales. Sólo los movimientos del año gravable deben incluirse.',
+        nivel: 'alto', codigo: 'RETEFUENTE_EXCESIVA', formato: '1001',
+        titulo:  `F1001 — Retefuente (${fmt(totalRete)}) supera el 15% del total pagado`,
+        detalle: `Pagos: ${fmt(totalPago)} | Retefuente: ${fmt(totalRete)} | Relación: ${(totalRete / totalPago * 100).toFixed(2)}%. La tasa máxima de retefuente es 15%.`,
+        accion:  'Verifique que las cuentas 2365xx no incluyen saldos iniciales ni retenciones de períodos anteriores.',
         valorRef: totalRete,
       })
     }
 
     if (totalReteIva > 0) {
       this.add({
-        nivel: 'observacion', codigo: 'F1001_RETE_IVA_PRESENTE',
-        formato: '1001',
+        nivel: 'observacion', codigo: 'F1001_RETE_IVA', formato: '1001',
         titulo:  `F1001 — ReteIVA reportado: ${fmt(totalReteIva)}`,
-        detalle: 'Se detectó ReteIVA en los pagos. Confirme que corresponde exclusivamente a retenciones de IVA practicadas (cuenta 236701), no a IVA asumido.',
-        accion:  'Verifique que la cuenta 236701 esté correctamente separada del IVA descontable (2408).',
+        detalle: 'Confirme que corresponde a retenciones de IVA practicadas (cuenta 236701).',
+        accion:  'Verifique que la cuenta 236701 está separada del IVA descontable (2408).',
         valorRef: totalReteIva,
       })
     }
 
     if (totalReteIca > 0) {
       this.add({
-        nivel: 'observacion', codigo: 'F1001_RETE_ICA_PRESENTE',
-        formato: '1001',
+        nivel: 'observacion', codigo: 'F1001_RETE_ICA', formato: '1001',
         titulo:  `F1001 — ReteICA reportado: ${fmt(totalReteIca)}`,
-        detalle: 'Se detectó retención de ICA. Verifique que corresponde a retenciones de ICA practicadas sobre pagos de la vigencia (cuenta 236801).',
-        accion:  'Confirme que las tarjetas de ReteICA corresponden al municipio correcto según la actividad económica del tercero.',
+        detalle: 'Verifique que corresponde a retenciones de ICA del municipio de actividad (cuenta 236801).',
+        accion:  'Confirme la tarifa de ReteICA del municipio correcto según la actividad económica del tercero.',
         valorRef: totalReteIca,
       })
     }
@@ -456,26 +503,21 @@ export class ValidadorExperto {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  private add(h: HallazgoValidacion) {
-    this.hallazgos.push(h)
-  }
+  private add(h: HallazgoValidacion) { this.hallazgos.push(h) }
 
   private construirTotalFormato(r: ResultadoTransformacion<FilaFormato>): TotalFormato {
-    const nombre = NOMBRES_FORMATO[r.formatoCodigo] ?? r.formatoCodigo
+    const nombre   = NOMBRES_FORMATO[r.formatoCodigo] ?? r.formatoCodigo
     const criticos = r.excepciones.filter(e => e.severidad === 'alta').length
     const medios   = r.excepciones.filter(e => e.severidad === 'media').length
     const estado   = criticos > 0 ? 'critico' : medios > 0 ? 'alerta' : 'ok'
 
     const montosPrincipales: { etiqueta: string; valor: number }[] = []
     for (const [k, v] of Object.entries(r.totales)) {
-      if (k === 'totalFilas') continue
-      if (Math.abs(v) > 0) {
-        const etiqueta = k
-          .replace(/^total/, '')
-          .replace(/([A-Z])/g, ' $1')
-          .trim()
-        montosPrincipales.push({ etiqueta, valor: v })
-      }
+      if (k === 'totalFilas' || Math.abs(v) === 0) continue
+      montosPrincipales.push({
+        etiqueta: k.replace(/^total/, '').replace(/([A-Z])/g, ' $1').trim(),
+        valor:    v,
+      })
     }
 
     return {
@@ -488,29 +530,26 @@ export class ValidadorExperto {
   }
 
   private construirResumenTexto(
-    criticos: HallazgoValidacion[],
-    altos: HallazgoValidacion[],
-    medios: HallazgoValidacion[],
+    criticos:      HallazgoValidacion[],
+    altos:         HallazgoValidacion[],
+    medios:        HallazgoValidacion[],
     puedeExportar: boolean,
   ): string {
-    if (criticos.length === 0 && altos.length === 0 && medios.length === 0) {
+    if (!criticos.length && !altos.length && !medios.length)
       return '✅ Archivo validado sin hallazgos. Puede proceder a la exportación.'
-    }
 
     const partes: string[] = []
-    if (criticos.length > 0) partes.push(`🔴 ${criticos.length} error(es) CRÍTICO(S) que deben resolverse antes de exportar`)
-    if (altos.length > 0)    partes.push(`🟠 ${altos.length} hallazgo(s) ALTO(S) recomendados corregir`)
-    if (medios.length > 0)   partes.push(`🟡 ${medios.length} alerta(s) MEDIA(S)`)
+    if (criticos.length) partes.push(`🔴 ${criticos.length} error(es) CRÍTICO(S) — exportación bloqueada`)
+    if (altos.length)    partes.push(`🟠 ${altos.length} hallazgo(s) ALTO(S)`)
+    if (medios.length)   partes.push(`🟡 ${medios.length} alerta(s) MEDIA(S)`)
 
     const bloqueo = puedeExportar
-      ? 'El archivo PUEDE exportarse pero se recomienda revisar los hallazgos altos primero.'
-      : 'El archivo NO puede exportarse hasta resolver los errores críticos.'
+      ? 'Puede exportar, pero se recomienda revisar los hallazgos altos primero.'
+      : 'NO exportar hasta resolver los errores críticos. La DIAN puede rechazar o glosar el archivo.'
 
     return partes.join(' | ') + '. ' + bloqueo
   }
 }
-
-// ─── Función helper para usar directamente ───────────────────────────────────
 
 export function auditarExogenas(
   config: ConfigExogena,

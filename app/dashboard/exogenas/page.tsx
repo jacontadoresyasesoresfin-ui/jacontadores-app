@@ -645,13 +645,12 @@ export default function ExogenasPage() {
             }),
           }))
 
-          // Re-validar: si el DV ahora es correcto, quitar la tarjeta de excepciones
+          // Re-validar usando el algoritmo DIAN oficial (mismo que /api/nit-verify)
           const dvCorrecto = (() => {
-            const nit = nitObjetivo.replace(/\D/g, '')
-            const pesos = [71,67,59,53,47,43,41,37,29,23,19,17,13,7,3]
-            const digitos = nit.split('').map(Number).reverse()
-            let suma = 0; for (let i = 0; i < digitos.length; i++) suma += digitos[i] * pesos[i]
-            const resto = suma % 11; return String(resto > 1 ? 11 - resto : resto)
+            const M = [3,7,13,17,19,23,29,37,41,43,47,53,59,67,71]
+            const n = nitObjetivo.replace(/\D/g,'').slice(-9).padStart(9,'0')
+            const s = n.split('').reverse().reduce((a,d,i)=>a+parseInt(d)*M[i],0)
+            const r = s%11; return String(r<=1?r:11-r)
           })()
           const dvValido = dvNuevo === dvCorrecto
 

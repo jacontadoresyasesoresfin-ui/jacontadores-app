@@ -83,28 +83,26 @@ export class RulesEngine {
   }
 }
 
-/** Valida el DV de un NIT colombiano (módulo 11) */
+// Pesos oficiales DIAN (Res. 14465/2011) — dígito más a la derecha × 3, luego × 7, × 13 ...
+const DIAN_MULTIPLIERS = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71]
+
+function _dvCalc(nit: string): number {
+  const limpio = nit.replace(/\D/g, '').slice(-9).padStart(9, '0')
+  const sum = limpio.split('').reverse().reduce((acc, d, i) => acc + parseInt(d) * DIAN_MULTIPLIERS[i], 0)
+  const rem = sum % 11
+  return rem <= 1 ? rem : 11 - rem
+}
+
+/** Valida el DV de un NIT colombiano (módulo 11 DIAN oficial) */
 export function validarDvNit(nit: string, dv: string): boolean {
   const limpio = nit.replace(/\D/g, '')
   if (!limpio || limpio.length < 5) return false
-  const pesos = [71, 67, 59, 53, 47, 43, 41, 37, 29, 23, 19, 17, 13, 7, 3]
-  const digitos = limpio.split('').map(Number).reverse()
-  let suma = 0
-  for (let i = 0; i < digitos.length; i++) suma += digitos[i] * pesos[i]
-  const resto = suma % 11
-  const dvCalculado = resto > 1 ? 11 - resto : resto
-  return String(dvCalculado) === String(dv)
+  return String(_dvCalc(limpio)) === String(dv)
 }
 
-/** Calcula el DV de un NIT */
+/** Calcula el DV de un NIT (módulo 11 DIAN oficial) */
 export function calcularDvNit(nit: string): string {
-  const limpio = nit.replace(/\D/g, '')
-  const pesos = [71, 67, 59, 53, 47, 43, 41, 37, 29, 23, 19, 17, 13, 7, 3]
-  const digitos = limpio.split('').map(Number).reverse()
-  let suma = 0
-  for (let i = 0; i < digitos.length; i++) suma += digitos[i] * pesos[i]
-  const resto = suma % 11
-  return String(resto > 1 ? 11 - resto : resto)
+  return String(_dvCalc(nit))
 }
 
 /** Determina tipo de tercero desde el tipo de documento */

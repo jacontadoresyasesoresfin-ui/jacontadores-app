@@ -55,8 +55,11 @@ export class Formato1005Strategy implements IFormatoExogena<Fila1005> {
       if (!a.tercero?.numeroId) continue
       const clave = `${a.tercero.numeroId}|${regla.conceptoCodigo}`
       const fila: Fila1005 = acum.get(clave) ?? this.filaVacia(a, regla.conceptoCodigo)
-      fila.valorCompra         += a.monto
-      fila.valorIvaDescontable += a.valorIva ?? 0
+      // a.monto en cuenta 2408 ES el valor del IVA descontable
+      fila.valorIvaDescontable += a.monto
+      // Base de la compra = IVA / 0.19 (tarifa estándar 19%)
+      // Si el IVA fue al 5% esto es una aproximación, pero sin la tasa exacta en el auxiliar es lo más cercano
+      fila.valorCompra         += Math.round(a.monto / 0.19)
       if (a.documentoId) fila._documentosIds?.push(a.documentoId)
       acum.set(clave, fila)
     }

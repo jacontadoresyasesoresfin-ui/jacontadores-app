@@ -61,6 +61,8 @@ export class Formato1006Strategy implements IFormatoExogena<Fila1006> {
 
     for (const a of asientos) {
       if (a.esSaldoInicial) continue
+      // Cuentas 2408x = IVA descontable → pertenecen exclusivamente a F1005, nunca a F1006
+      if (a.cuentaPuc.startsWith('2408')) continue
       const regla = reglas.resolver(a)
       if (!regla || regla.formatoCodigo !== '1006') continue
       if (!a.tercero?.numeroId) continue

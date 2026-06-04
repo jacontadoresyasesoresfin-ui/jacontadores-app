@@ -103,7 +103,24 @@ export async function POST(req: NextRequest) {
   const reglasExtra: typeof REGLAS_DEFAULT_2025 = []
   if (!esXlsx && profile?.tenant_id && config.usarConfiguracionPersonalizada !== false) {
     const { data } = await supabase.from('exogenas_reglas_mapeo').select('*').eq('tenant_id', profile.tenant_id).eq('activo', true)
-    if (data) reglasExtra.push(...(data as typeof REGLAS_DEFAULT_2025))
+    if (data) {
+      // Supabase devuelve snake_case; ReglaMapeo espera camelCase
+      const mapeadas = data.map((r: Record<string, unknown>) => ({
+        id:                String(r.id ?? ''),
+        formatoCodigo:     String(r.formato_codigo ?? ''),
+        cuentaPucPatron:   String(r.cuenta_puc_patron ?? ''),
+        conceptoCodigo:    String(r.concepto_codigo ?? ''),
+        prioridad:         Number(r.prioridad ?? 1),
+        tipoTercero:       (r.tipo_tercero as import('@/lib/exogenas/types').TipoTercero) ?? undefined,
+        naturaleza:        (r.naturaleza as 'debito' | 'credito') ?? undefined,
+        montoMinimo:       r.monto_minimo != null ? Number(r.monto_minimo) : undefined,
+        incluyeRetencion:  r.incluye_retencion != null ? Boolean(r.incluye_retencion) : undefined,
+        deducible:         r.deducible != null ? Boolean(r.deducible) : undefined,
+        activo:            true,
+        notas:             r.notas != null ? String(r.notas) : undefined,
+      })) as typeof REGLAS_DEFAULT_2025
+      reglasExtra.push(...mapeadas)
+    }
   }
 
   // ── Stream ─────────────────────────────────────────────────────────────

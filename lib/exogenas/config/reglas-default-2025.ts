@@ -320,12 +320,13 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
   //  FORMATO 1010 — Información de terceros
   //  (se extrae de todos los formatos, no requiere cuentas PUC directas)
   // ══════════════════════════════════════════════════════════════════════
-  { formatoCodigo: '1010', cuentaPucPatron: '2%', conceptoCodigo: 'proveedor', prioridad: 10,
-    notas: 'Terceros — proveedores (cuentas por pagar)' },
-  { formatoCodigo: '1010', cuentaPucPatron: '13%', conceptoCodigo: 'cliente', prioridad: 10,
-    notas: 'Terceros — clientes (cuentas por cobrar)' },
-  { formatoCodigo: '1010', cuentaPucPatron: '5105%', conceptoCodigo: 'empleado', prioridad: 10,
-    notas: 'Terceros — empleados' },
+  // Catch-all de terceros: prioridad 99 para no pisar reglas específicas (F1005, F1009, F1008, F1001)
+  { formatoCodigo: '1010', cuentaPucPatron: '2%', conceptoCodigo: 'proveedor', prioridad: 99,
+    notas: 'Terceros — proveedores (cuentas por pagar) — catch-all clase 2' },
+  { formatoCodigo: '1010', cuentaPucPatron: '13%', conceptoCodigo: 'cliente', prioridad: 99,
+    notas: 'Terceros — clientes (cuentas por cobrar) — catch-all clase 13' },
+  { formatoCodigo: '1010', cuentaPucPatron: '5105%', conceptoCodigo: 'empleado', prioridad: 99,
+    notas: 'Terceros — empleados — catch-all 5105' },
 
   // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 1012 — Saldos en cuentas bancarias, inversiones y fondos

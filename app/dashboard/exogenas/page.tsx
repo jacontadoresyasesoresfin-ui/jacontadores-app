@@ -641,11 +641,12 @@ export default function ExogenasPage() {
         const resp = respuestas[j]
         progreso++
         if (resp.status === 'fulfilled') {
-          const d = resp.value as { digitoVerificacion?: string | number; checkDigit?: number; razonSocial?: string | null; ciuuPrincipal?: string | null }
-          const dvRUES = d.digitoVerificacion != null ? String(d.digitoVerificacion) : null
+          // digitoVerificacion = RUES (fuente oficial) con fallback a módulo 11
+          // Es el mismo valor que aparece en el botón "Copiar" del verificador NIT
+          const d = resp.value as { digitoVerificacion?: string | number; razonSocial?: string | null; ciuuPrincipal?: string | null }
+          const dvRUES = d.digitoVerificacion != null ? String(d.digitoVerificacion).trim() : null
           if (dvRUES) {
             dvRuesMap.set(nit, dvRUES)
-            // Actualizar cache de verificación individual también
             setNitVerifyCache(prev => {
               const n = new Map(prev)
               n.set(nit, { dv: dvRUES, razonSocial: d.razonSocial ?? null, ciuu: d.ciuuPrincipal ?? null, valid: true })
@@ -657,27 +658,49 @@ export default function ExogenasPage() {
       }
     }
 
-    // Aplicar DVs del RUES a todas las filas del resultado exportable
+    // Aplicar DVs del RUES a TODO: filas exportables + asientos (flujo CSV re-transforma desde asientos)
     setResultado(prev => {
-      if (!prev?.filasFormatoParaExportar) return prev
-      const filasActualizadas = prev.filasFormatoParaExportar.map(grupo => ({
+      if (!prev) return prev
+
+      const aplicarDv = (nit: string | undefined, dvActual: unknown) => {
+        const n = (nit ?? '').replace(/\D/g, '')
+        if (!n) return null
+        const dvRUES = dvRuesMap.get(n)
+        if (!dvRUES) return null
+        if (String(dvActual ?? '') === dvRUES) return null   // Ya correcto
+        actualizados++
+        return dvRUES
+      }
+
+      // 1. Actualizar filasFormatoParaExportar (flujo xlsx)
+      const filasActualizadas = (prev.filasFormatoParaExportar ?? []).map(grupo => ({
         ...grupo,
         filas: (grupo.filas as Record<string, unknown>[]).map(fila => {
-          const nit = (fila.numeroId as string | undefined)?.replace(/\D/g, '')
-          if (!nit) return fila
-          const dvRUES = dvRuesMap.get(nit)
-          if (!dvRUES) return fila
-          if (String(fila.dv ?? '') === dvRUES) return fila   // Ya correcto
-          actualizados++
-          return { ...fila, dv: dvRUES, _estadoFila: 'corregido' }
+          const dvNuevo = aplicarDv(fila.numeroId as string | undefined, fila.dv)
+          if (!dvNuevo) return fila
+          return { ...fila, dv: dvNuevo, _estadoFila: 'corregido' }
         }),
       }))
+
+      // 2. CRÍTICO: actualizar asientosParaExportar (flujo CSV — el exportar re-transforma desde aquí)
+      const asientosActualizados = (prev.asientosParaExportar as unknown[]).map(raw => {
+        const a = raw as { tercero?: { tipoDocumento?: string; numeroId?: string; dv?: string } }
+        if (a.tercero?.tipoDocumento !== '3') return raw
+        const dvNuevo = aplicarDv(a.tercero.numeroId, a.tercero.dv)
+        if (!dvNuevo) return raw
+        return { ...a, tercero: { ...a.tercero, dv: dvNuevo } }
+      })
+
       setRuesBatch({ estado: 'listo', progreso: nits.length, total: nits.length, actualizados })
-      return { ...prev, filasFormatoParaExportar: filasActualizadas }
+      return {
+        ...prev,
+        filasFormatoParaExportar: filasActualizadas,
+        asientosParaExportar:     asientosActualizados,
+      }
     })
   }
 
-  // Consulta el verificador de NIT del sistema (RUES + módulo 11) y cachea el resultado
+  // Consulta el verificador de NIT del sistema (RUES) para un NIT individual
   const verificarNitRUES = async (nit: string) => {
     const nitLimpio = nit.replace(/\D/g, '')
     if (!nitLimpio || nitVerifyCache.has(nitLimpio) || nitVerifyLoading === nitLimpio) return
@@ -685,11 +708,13 @@ export default function ExogenasPage() {
     try {
       const res = await fetch(`/api/nit-verify?nit=${nitLimpio}`)
       if (!res.ok) return
-      const d = await res.json() as { checkDigit?: number; razonSocial?: string | null; ciuuPrincipal?: string | null; valid?: boolean }
+      // digitoVerificacion = RUES (fuente primaria) con fallback módulo 11
+      const d = await res.json() as { digitoVerificacion?: string | number; razonSocial?: string | null; ciuuPrincipal?: string | null; valid?: boolean }
+      const dvRUES = d.digitoVerificacion != null ? String(d.digitoVerificacion).trim() : ''
       setNitVerifyCache(prev => {
         const n = new Map(prev)
         n.set(nitLimpio, {
-          dv:          String(d.checkDigit ?? ''),
+          dv:          dvRUES,
           razonSocial: d.razonSocial ?? null,
           ciuu:        d.ciuuPrincipal ?? null,
           valid:       d.valid ?? false,

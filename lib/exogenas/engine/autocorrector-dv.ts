@@ -1,62 +1,63 @@
 /**
- * AutocorrectorDV — Corrige automáticamente el Dígito de Verificación (DV)
- * de todos los terceros en los asientos contables ANTES de transformar los formatos.
+ * AutocorrectorDV — Maneja el Dígito de Verificación en los asientos contables.
  *
- * Flujo:
- *   1. Recorre cada AsientoContable.
- *   2. Para NITs (tipoDocumento === '3'), calcula el DV correcto (módulo 11).
- *   3. Si el DV almacenado en Siigo es incorrecto o falta, lo reemplaza.
- *   4. Registra cada corrección para mostrarla al contador.
+ * REGLA DE ORO: el DV del RUES (Registro Único Empresarial) tiene PRIORIDAD ABSOLUTA.
+ * El módulo 11 es solo un cálculo matemático; el RUES es la fuente oficial DIAN.
  *
- * Resultado: todos los formatos heredan DVs correctos y sus validar() no
- * generarán excepciones dv_incorrecto / dv_faltante para estos NITs.
+ * Lo que hace este módulo en la etapa de generación (servidor):
+ *   1. Recopila todos los NITs únicos del archivo de Siigo.
+ *   2. Para NITs con DV VACÍO → aplica módulo 11 como valor provisional.
+ *   3. Para NITs con DV EXISTENTE → NO lo toca (puede ser el del RUES).
+ *   4. Retorna la lista de NITs para que la UI haga la verificación RUES en lotes.
+ *
+ * La corrección RUES definitiva ocurre en el cliente (post-generación) usando
+ * /api/nit-verify → campo digitoVerificacion (RUES > módulo 11).
  */
 
 import type { AsientoContable } from '../types'
-import { calcularDvNit, validarDvNit } from './rules-engine'
+import { calcularDvNit } from './rules-engine'
 
 export interface AutoCorreccionDV {
   nit:          string
-  dvOriginal:   string     // DV que venía de Siigo (puede ser '' si faltaba)
-  dvCorregido:  string     // DV calculado por módulo 11
-  nombre:       string     // Nombre del tercero para mostrar al contador
-  tipo:         'dv_incorrecto' | 'dv_faltante'
+  dvOriginal:   string
+  dvCorregido:  string     // Provisional (módulo 11); el cliente lo reemplazará con RUES
+  nombre:       string
+  tipo:         'dv_faltante' | 'pendiente_rues'
   asientosAfectados: number
 }
 
 export interface ResultadoAutocorreccion {
-  correcciones:   AutoCorreccionDV[]
+  correcciones:    AutoCorreccionDV[]   // DVs faltantes completados con módulo 11
+  nitsParaRUES:    string[]             // TODOS los NITs únicos — el cliente verificará con RUES
   totalCorregidos: number
   totalAsientos:   number
 }
 
 /**
- * Corrige los DVs en el array de asientos (muta los objetos in-place).
- * Retorna el resumen de lo que se cambió.
+ * Fase servidor: solo completa DVs vacíos. NUNCA cambia DVs existentes.
+ * Devuelve la lista completa de NITs únicos para que el cliente consulte RUES.
  */
 export function autocorregirDv(asientos: AsientoContable[]): ResultadoAutocorreccion {
-  // Mapa NIT → corrección (para no duplicar entradas del mismo tercero)
-  const corrMap = new Map<string, AutoCorreccionDV>()
+  const corrMap   = new Map<string, AutoCorreccionDV>()
+  const todosNits = new Set<string>()
 
   for (const a of asientos) {
     const t = a.tercero
     if (!t || t.tipoDocumento !== '3' || !t.numeroId) continue
 
-    const nit     = t.numeroId.replace(/\D/g, '')
-    if (nit.length < 5 || nit.length > 12) continue  // NIT fuera de rango — no tocar
+    const nit = t.numeroId.replace(/\D/g, '')
+    if (nit.length < 5 || nit.length > 12) continue
 
-    const dvCorrecto = calcularDvNit(nit)
-    const dvActual   = (t.dv ?? '').trim()
+    todosNits.add(nit)
 
-    const esCorrecto = dvActual !== '' && validarDvNit(nit, dvActual)
-    if (esCorrecto) continue    // Ya está bien — no hacer nada
+    const dvActual = (t.dv ?? '').trim()
 
-    const tipo: AutoCorreccionDV['tipo'] = dvActual === '' ? 'dv_faltante' : 'dv_incorrecto'
+    // Solo actuar si el DV está completamente vacío
+    if (dvActual !== '') continue
 
-    // Aplicar corrección al objeto directamente
-    t.dv = dvCorrecto
+    const dvProvisional = calcularDvNit(nit)
+    t.dv = dvProvisional   // Provisional hasta que RUES confirme
 
-    // Registrar
     const entrada = corrMap.get(nit)
     if (entrada) {
       entrada.asientosAfectados++
@@ -65,10 +66,10 @@ export function autocorregirDv(asientos: AsientoContable[]): ResultadoAutocorrec
         ?? [t.primerApellido, t.segundoApellido, t.primerNombre, t.otrosNombres].filter(Boolean).join(' ')
       corrMap.set(nit, {
         nit,
-        dvOriginal:  dvActual,
-        dvCorregido: dvCorrecto,
+        dvOriginal:  '',
+        dvCorregido: dvProvisional,
         nombre:      nombreRaw || `NIT ${nit}`,
-        tipo,
+        tipo:        'dv_faltante',
         asientosAfectados: 1,
       })
     }
@@ -78,6 +79,7 @@ export function autocorregirDv(asientos: AsientoContable[]): ResultadoAutocorrec
 
   return {
     correcciones,
+    nitsParaRUES:    [...todosNits].sort(),
     totalCorregidos: correcciones.length,
     totalAsientos:   correcciones.reduce((s, c) => s + c.asientosAfectados, 0),
   }

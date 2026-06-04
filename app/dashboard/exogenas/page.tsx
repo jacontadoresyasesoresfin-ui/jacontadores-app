@@ -55,9 +55,10 @@ interface ResultadoFinal {
   autoCorrecciones?: {
     totalCorregidos: number
     totalAsientos:   number
+    nitsParaRUES:    string[]
     correcciones: Array<{
       nit: string; dvOriginal: string; dvCorregido: string
-      nombre: string; tipo: 'dv_incorrecto' | 'dv_faltante'; asientosAfectados: number
+      nombre: string; tipo: 'dv_faltante' | 'pendiente_rues'; asientosAfectados: number
     }>
   }
   informeValidacion?: {
@@ -313,6 +314,8 @@ export default function ExogenasPage() {
   const [nitVerifyCache, setNitVerifyCache] = useState<Map<string, { dv: string; razonSocial: string | null; ciuu: string | null; valid: boolean }>>(new Map())
   const [nitVerifyLoading, setNitVerifyLoading] = useState<string | null>(null)
   const [mostrarDvCorregidos, setMostrarDvCorregidos] = useState(false)
+  // Estado del proceso RUES en lotes
+  const [ruesBatch, setRuesBatch] = useState<{ estado: 'idle' | 'verificando' | 'listo'; progreso: number; total: number; actualizados: number }>({ estado: 'idle', progreso: 0, total: 0, actualizados: 0 })
 
   const [config, setConfig] = useState<ConfigGuardada>(CONFIG_DEFECTO)
   const [dvAuto, setDvAuto] = useState('')   // DV calculado automáticamente
@@ -469,7 +472,18 @@ export default function ExogenasPage() {
         detalle: `${totalFilas.toLocaleString('es-CO')} ${totalFilas === 1 ? 'tercero' : 'terceros'}${montoStr ? ` · ${montoStr}` : ''}${excepciones > 0 ? ` · ⚠ ${excepciones} excep.` : ''}`,
       })
     }
-    if (ev.tipo === 'fin' && d) { setResultado(d as unknown as ResultadoFinal); setVista('resumen') }
+    if (ev.tipo === 'fin' && d) {
+      const res = d as unknown as ResultadoFinal
+      setResultado(res)
+      setVista('resumen')
+      setRuesBatch({ estado: 'idle', progreso: 0, total: 0, actualizados: 0 })
+      // Lanzar verificación RUES en lotes automáticamente
+      const nits = res.autoCorrecciones?.nitsParaRUES ?? []
+      if (nits.length > 0) {
+        // Timeout mínimo para que la UI se renderice primero
+        setTimeout(() => verificarRuesBatch(nits, res), 300)
+      }
+    }
     if (ev.tipo === 'error') {
       setEtapas(prev => prev.map(e => e.estado === 'activa' ? { ...e, estado: 'error' } : e))
       setError(ev.mensaje ?? 'Error al procesar.')
@@ -601,6 +615,67 @@ export default function ExogenasPage() {
       setError(e instanceof Error ? e.message : 'Error al exportar.')
     } finally { setExportando(false) }
   }, [resultado, config])
+
+  /**
+   * Verifica todos los NITs del resultado con RUES en lotes (concurrencia 6).
+   * RUES tiene prioridad absoluta: si el DV del RUES difiere del que está en la fila,
+   * actualiza todas las filas del resultado y del exportable.
+   */
+  const verificarRuesBatch = async (nits: string[], resultadoActual: ResultadoFinal) => {
+    if (!nits.length) return
+    const CONCURRENCIA = 6
+    setRuesBatch({ estado: 'verificando', progreso: 0, total: nits.length, actualizados: 0 })
+
+    const dvRuesMap = new Map<string, string>()  // nit → dv autoritativo del RUES
+    let progreso = 0
+    let actualizados = 0
+
+    // Procesar en lotes con concurrencia controlada
+    for (let i = 0; i < nits.length; i += CONCURRENCIA) {
+      const lote = nits.slice(i, i + CONCURRENCIA)
+      const respuestas = await Promise.allSettled(
+        lote.map(nit => fetch(`/api/nit-verify?nit=${nit}`).then(r => r.json()))
+      )
+      for (let j = 0; j < lote.length; j++) {
+        const nit = lote[j]
+        const resp = respuestas[j]
+        progreso++
+        if (resp.status === 'fulfilled') {
+          const d = resp.value as { digitoVerificacion?: string | number; checkDigit?: number; razonSocial?: string | null; ciuuPrincipal?: string | null }
+          const dvRUES = d.digitoVerificacion != null ? String(d.digitoVerificacion) : null
+          if (dvRUES) {
+            dvRuesMap.set(nit, dvRUES)
+            // Actualizar cache de verificación individual también
+            setNitVerifyCache(prev => {
+              const n = new Map(prev)
+              n.set(nit, { dv: dvRUES, razonSocial: d.razonSocial ?? null, ciuu: d.ciuuPrincipal ?? null, valid: true })
+              return n
+            })
+          }
+        }
+        setRuesBatch(prev => ({ ...prev, progreso }))
+      }
+    }
+
+    // Aplicar DVs del RUES a todas las filas del resultado exportable
+    setResultado(prev => {
+      if (!prev?.filasFormatoParaExportar) return prev
+      const filasActualizadas = prev.filasFormatoParaExportar.map(grupo => ({
+        ...grupo,
+        filas: (grupo.filas as Record<string, unknown>[]).map(fila => {
+          const nit = (fila.numeroId as string | undefined)?.replace(/\D/g, '')
+          if (!nit) return fila
+          const dvRUES = dvRuesMap.get(nit)
+          if (!dvRUES) return fila
+          if (String(fila.dv ?? '') === dvRUES) return fila   // Ya correcto
+          actualizados++
+          return { ...fila, dv: dvRUES, _estadoFila: 'corregido' }
+        }),
+      }))
+      setRuesBatch({ estado: 'listo', progreso: nits.length, total: nits.length, actualizados })
+      return { ...prev, filasFormatoParaExportar: filasActualizadas }
+    })
+  }
 
   // Consulta el verificador de NIT del sistema (RUES + módulo 11) y cachea el resultado
   const verificarNitRUES = async (nit: string) => {
@@ -1246,60 +1321,89 @@ export default function ExogenasPage() {
               </div>
             </div>
 
-            {/* ══ BANNER DV COMPACTO ══════════════════════════════════════════ */}
-            {resultado.autoCorrecciones && resultado.autoCorrecciones.totalCorregidos > 0 && (() => {
-              const ac = resultado.autoCorrecciones!
+            {/* ══ BANNER RUES EN LOTES ════════════════════════════════════════ */}
+            {resultado.autoCorrecciones && (resultado.autoCorrecciones.nitsParaRUES?.length ?? 0) > 0 && (() => {
+              const total = resultado.autoCorrecciones!.nitsParaRUES?.length ?? 0
+              const { estado, progreso, actualizados } = ruesBatch
+              const pct = total > 0 ? Math.round((progreso / total) * 100) : 0
+
               return (
-                <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '2px' }}>
-                  <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '13px' }}>✅</span>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#166534' }}>
-                      {ac.totalCorregidos} DV{ac.totalCorregidos > 1 ? 's' : ''} corregido{ac.totalCorregidos > 1 ? 's' : ''} automáticamente
+                <div style={{ background: estado === 'listo' ? '#F0FDF4' : JA.BLUE_BG,
+                  border: `1px solid ${estado === 'listo' ? '#BBF7D0' : '#BFDBFE'}`, borderRadius: '2px' }}>
+
+                  {/* Línea de estado — siempre visible, compacta */}
+                  <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {estado === 'verificando' && (
+                      <span style={{ fontSize: '13px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>🔄</span>
+                    )}
+                    {estado === 'listo' && <span style={{ fontSize: '13px' }}>✅</span>}
+                    {estado === 'idle' && <span style={{ fontSize: '13px' }}>⏳</span>}
+
+                    <span style={{ fontSize: '12px', fontWeight: 700,
+                      color: estado === 'listo' ? '#166534' : JA.BLUE }}>
+                      {estado === 'verificando'
+                        ? `Verificando DVs con RUES… ${progreso}/${total} NITs (${pct}%)`
+                        : estado === 'listo'
+                          ? `RUES verificado — ${actualizados} DV${actualizados !== 1 ? 's' : ''} actualizados en el archivo · ${total} NITs consultados`
+                          : `Preparando verificación RUES (${total} NITs)…`}
                     </span>
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', flex: 1 }}>
-                      {ac.correcciones.map(c => (
-                        <span key={c.nit} style={{ fontSize: '11px', padding: '1px 7px', background: JA.WHITE,
-                          border: '1px solid #BBF7D0', borderRadius: '2px', color: '#166534', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                          {c.nit}<span style={{ color: JA.RED, textDecoration: 'line-through', margin: '0 2px' }}>-{c.dvOriginal||'?'}</span>
-                          <span style={{ color: JA.GREEN, fontWeight: 700 }}>-{c.dvCorregido}</span>
-                        </span>
-                      ))}
-                    </div>
-                    <button onClick={() => setMostrarDvCorregidos(p => !p)}
-                      style={{ fontSize: '11px', color: '#166534', background: 'none', border: 'none', cursor: 'pointer', padding: '0', flexShrink: 0 }}>
-                      {mostrarDvCorregidos ? 'ocultar ▴' : 'detalle ▾'}
-                    </button>
+
+                    {estado !== 'idle' && (
+                      <button onClick={() => setMostrarDvCorregidos(p => !p)}
+                        style={{ fontSize: '11px', color: estado === 'listo' ? '#166534' : JA.BLUE,
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '0', marginLeft: 'auto', flexShrink: 0 }}>
+                        {mostrarDvCorregidos ? 'ocultar ▴' : 'ver tabla ▾'}
+                      </button>
+                    )}
                   </div>
-                  {mostrarDvCorregidos && (
-                    <div style={{ borderTop: '1px solid #BBF7D0', padding: '8px 12px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                          <tr style={{ color: '#166534', fontWeight: 700 }}>
-                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>NIT</th>
-                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>DV antes</th>
-                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>DV corregido</th>
-                            <th style={{ textAlign: 'left', padding: '3px 6px' }}>Nombre en Siigo</th>
-                            <th style={{ textAlign: 'right', padding: '3px 6px' }}>Movs.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ac.correcciones.map((c, i) => (
-                            <tr key={c.nit} style={{ background: i % 2 === 0 ? JA.WHITE : '#F0FDF4' }}>
-                              <td style={{ padding: '3px 6px', fontFamily: 'monospace', fontWeight: 600 }}>{c.nit}</td>
-                              <td style={{ padding: '3px 6px', color: JA.RED }}>{c.dvOriginal || '—'}</td>
-                              <td style={{ padding: '3px 6px', color: JA.GREEN, fontWeight: 700 }}>{c.dvCorregido}</td>
-                              <td style={{ padding: '3px 6px', color: JA.GREY, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</td>
-                              <td style={{ padding: '3px 6px', textAlign: 'right', color: JA.GREY }}>{c.asientosAfectados}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+
+                  {/* Barra de progreso */}
+                  {estado === 'verificando' && (
+                    <div style={{ height: '3px', background: '#BFDBFE', margin: '0 14px 8px' }}>
+                      <div style={{ height: '100%', background: JA.BLUE, width: `${pct}%`, transition: 'width 0.3s' }} />
                     </div>
                   )}
+
+                  {/* Tabla detalle — solo si expandida */}
+                  {mostrarDvCorregidos && estado === 'listo' && (() => {
+                    // Construir tabla desde el cache RUES (NITs verificados)
+                    const filas = (resultado.autoCorrecciones!.nitsParaRUES ?? [])
+                      .map(nit => ({ nit, cached: nitVerifyCache.get(nit) }))
+                      .filter(({ cached }) => !!cached)
+                    if (!filas.length) return null
+                    return (
+                      <div style={{ borderTop: '1px solid #BBF7D0', padding: '0 14px 10px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginTop: '8px' }}>
+                          <thead>
+                            <tr style={{ color: '#166534', fontWeight: 700, borderBottom: '1px solid #BBF7D0' }}>
+                              <th style={{ textAlign: 'left', padding: '3px 6px' }}>NIT</th>
+                              <th style={{ textAlign: 'left', padding: '3px 6px' }}>DV RUES</th>
+                              <th style={{ textAlign: 'left', padding: '3px 6px' }}>Razón social (RUES)</th>
+                              <th style={{ textAlign: 'left', padding: '3px 6px', color: JA.GREY }}>Actividad</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filas.map(({ nit, cached }, i) => (
+                              <tr key={nit} style={{ background: i % 2 === 0 ? JA.WHITE : '#F0FDF4' }}>
+                                <td style={{ padding: '3px 6px', fontFamily: 'monospace', fontWeight: 600 }}>{nit}</td>
+                                <td style={{ padding: '3px 6px', fontWeight: 800, color: JA.GREEN }}>{cached!.dv}</td>
+                                <td style={{ padding: '3px 6px', color: JA.TEXT, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {cached!.razonSocial || <span style={{ color: JA.GREY, fontStyle: 'italic' }}>no encontrado</span>}
+                                </td>
+                                <td style={{ padding: '3px 6px', color: JA.GREY, fontSize: '10px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {cached!.ciuu || '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })()}
-            {/* ══ FIN BANNER DV ════════════════════════════════════════════════ */}
+            {/* ══ FIN BANNER RUES ══════════════════════════════════════════════ */}
 
             {/* ══ PANEL AUDITORÍA ValidadorExperto ════════════════════════════ */}
             {resultado.informeValidacion && (() => {

@@ -13,6 +13,8 @@ export interface TotalesBalance {
   ingresos:        number
   /** Movimiento débito neto cuentas 2408 (IVA descontable en compras) */
   ivaDescontable:  number
+  /** Movimiento crédito neto cuentas 2408 (IVA generado cobrado en ventas) */
+  ivaGenerado:     number
   /** Movimiento débito neto cuentas 14xx + 6205xx (compras inventarios + costo ventas) */
   compras:         number
   /** Nuevo saldo clase 13 (CxC, excluyendo 1355 que va a F1003) */
@@ -45,7 +47,8 @@ export function extraerTotalesBalance(asientos: AsientoContable[], nitDeclarante
   }
 
   let ingresos       = 0   // crédito neto 41xx/42xx
-  let ivaDescontable = 0   // débito neto 2408xx
+  let ivaDescontable = 0   // débito neto 2408xx (IVA pagado en compras)
+  let ivaGenerado    = 0   // crédito neto 2408xx (IVA cobrado en ventas)
   let compras        = 0   // débito neto 14xx + 6205xx/7205xx
   let cxcSaldo       = 0   // saldo 13xx excluyendo 1355xx
   let cxpSaldo       = 0   // saldo 22xx + 23xx + 25xx
@@ -56,7 +59,11 @@ export function extraerTotalesBalance(asientos: AsientoContable[], nitDeclarante
     if (cuenta.startsWith('41') || cuenta.startsWith('42')) {
       ingresos += Math.abs(saldo)   // ingresos siempre acumulan crédito → saldo negativo
     } else if (cuenta.startsWith('2408')) {
-      ivaDescontable += saldo > 0 ? saldo : 0
+      if (saldo > 0) {
+        ivaDescontable += saldo    // débito dominante = IVA pagado en compras
+      } else {
+        ivaGenerado += Math.abs(saldo)  // crédito dominante = IVA cobrado en ventas
+      }
     } else if (cuenta.startsWith('14') || cuenta.startsWith('6205') || cuenta.startsWith('7205')) {
       compras += saldo > 0 ? saldo : 0
     } else if (cuenta.startsWith('13') && !cuenta.startsWith('1355')) {
@@ -79,7 +86,7 @@ export function extraerTotalesBalance(asientos: AsientoContable[], nitDeclarante
     })?.tercero?.numeroId?.replace(/\D/g, '')
     ?? ''
 
-  return { ingresos, ivaDescontable, compras, cxcSaldo, cxpSaldo, capitalSaldo, bancosSaldo, nitDetectado, saldosPorCuenta: saldos }
+  return { ingresos, ivaDescontable, ivaGenerado, compras, cxcSaldo, cxpSaldo, capitalSaldo, bancosSaldo, nitDetectado, saldosPorCuenta: saldos }
 }
 
 /** Calcula la diferencia porcentual absoluta entre dos montos */

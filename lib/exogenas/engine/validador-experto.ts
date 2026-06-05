@@ -270,14 +270,14 @@ export class ValidadorExperto {
     const ivaGenerado  = r1006.totales.totalNetaCompras ?? r1006.totales.totalCompras ?? 0
     const ingresos     = r1007.totales.totalNetaIngresos ?? r1007.totales.totalIngresos ?? 0
 
-    // Validación obligatoria: F1007 con ingresos relevantes pero F1006 vacío
+    // VALIDACIÓN CRÍTICA: F1007 con ingresos relevantes pero F1006 vacío — la DIAN lo glosa
     if (ingresos > 100_000_000 && ivaGenerado === 0) {
       this.add({
-        nivel: 'alto', codigo: 'F1006_VACIO_CON_INGRESOS',
+        nivel: 'critico', codigo: 'F1006_VACIO_CON_INGRESOS',
         formato: '1006',
-        titulo: `INCONSISTENCIA: F1007 reporta ${fmt(ingresos)} en ingresos pero F1006 (IVA Generado) está en cero`,
-        detalle: `El Formato 1007 contiene ingresos por ${fmt(ingresos)}, pero el Formato 1006 (IVA Generado) no tiene ningún registro. Si la empresa vende bienes o servicios gravados con IVA (tarifa 5% o 19%), este formato debe reportar el IVA cobrado a sus clientes. Un F1006 en cero con ingresos relevantes en F1007 es una inconsistencia que la DIAN puede glosar.`,
-        accion: 'Verifique: (1) Si la empresa SOLO presta servicios exentos o excluidos de IVA (salud, educación, etc.), el F1006 en cero puede ser correcto — documente esta condición. (2) Si tiene ventas gravadas, configure en Siigo el mapeo de las cuentas 41xx/42xx al concepto IVA Generado (9998) en Configuración → Mapeo PUC para que aparezcan en F1006. (3) Confirme que las causaciones de ventas incluyen la cuenta 2408 en crédito (IVA cobrado al cliente).',
+        titulo: `ERROR CRÍTICO: F1007 reporta ${fmt(ingresos)} en ingresos y F1006 (IVA Generado) está en CERO`,
+        detalle: `El Formato 1007 contiene ingresos por ${fmt(ingresos)}, pero el Formato 1006 (IVA Generado) no tiene ningún registro. Si la empresa vende bienes o servicios gravados con IVA, este formato DEBE reportar el IVA cobrado a sus clientes. Un F1006 en cero con ingresos de esta magnitud es una inconsistencia grave que la DIAN cruza automáticamente contra la declaración de IVA — genera glosa inmediata.`,
+        accion: 'DETENGA la generación. Acción requerida: (1) Verifique en el Balance de Prueba que la cuenta 2408 tiene movimiento crédito (IVA cobrado en ventas). (2) Configure en Siigo → Configuración → Medios Magnéticos el mapeo de las cuentas de ingresos (41xx/42xx) al concepto 9998 (IVA Generado) para F1006. (3) Si la empresa SOLO tiene ventas exentas o excluidas de IVA, justifíquelo por escrito antes de exportar.',
         valorRef: ingresos,
       })
       return
@@ -480,11 +480,31 @@ export class ValidadorExperto {
       check('Ingresos F1007', 'INGRESOS', '1007', bal.ingresos, exoIngresos)
     }
 
-    // 2. IVA Descontable: Balance 2408 vs F1005
+    // 2a. IVA Descontable: Balance 2408 débito vs F1005
     const r1005 = porFormato.get('1005')
     if (r1005 && bal.ivaDescontable > 0) {
       const exoIva = r1005.totales.totalIvaDescontable ?? 0
       check('IVA Descontable F1005', 'IVA_DESC', '1005', bal.ivaDescontable, exoIva)
+    }
+
+    // 2b. IVA Generado: Balance 2408 crédito vs F1006 — crítico si Balance tiene IVA y F1006 = 0
+    const r1006b = porFormato.get('1006')
+    if (bal.ivaGenerado > 0) {
+      const exoIvaGen = r1006b
+        ? ((r1006b.totales.totalNetaCompras ?? r1006b.totales.totalCompras ?? 0))
+        : 0
+      if (exoIvaGen === 0) {
+        this.add({
+          nivel: 'critico', codigo: 'BALANCE_F1006_VACIO',
+          formato: '1006',
+          titulo: `ERROR CRÍTICO: Balance confirma IVA Generado ${fmt(bal.ivaGenerado)} pero F1006 está en cero`,
+          detalle: `El Balance de Prueba registra ${fmt(bal.ivaGenerado)} en movimiento crédito de la cuenta 2408 (IVA cobrado en ventas al cliente), pero el Formato 1006 no tiene ningún registro. Esto es una contradicción directa con el Balance — el archivo NO puede presentarse en este estado.`,
+          accion: 'DETENGA la generación. El Balance confirma que existe IVA generado. Configure el mapeo de cuentas 41xx/42xx (o 2408 crédito) al concepto IVA Generado (9998) en Configuración → Mapeo PUC, luego vuelva a generar.',
+          valorRef: bal.ivaGenerado,
+        })
+      } else {
+        check('IVA Generado F1006', 'IVA_GEN', '1006', bal.ivaGenerado, exoIvaGen)
+      }
     }
 
     // 3. CxC: Balance clase 13 vs F1008
@@ -521,7 +541,7 @@ export class ValidadorExperto {
       nivel: 'observacion', codigo: 'BALANCE_RESUMEN',
       titulo: 'Balance de Prueba cargado — Comparación activa',
       detalle: [
-        `Ingresos balance: ${fmt(bal.ingresos)} | IVA Descontable: ${fmt(bal.ivaDescontable)}`,
+        `Ingresos balance: ${fmt(bal.ingresos)} | IVA Generado (2408 crédito): ${fmt(bal.ivaGenerado)} | IVA Descontable (2408 débito): ${fmt(bal.ivaDescontable)}`,
         `Compras/Inventario: ${fmt(bal.compras)} | CxC: ${fmt(bal.cxcSaldo)} | CxP: ${fmt(bal.cxpSaldo)}`,
         `Bancos/Inversiones: ${fmt(bal.bancosSaldo)} | Capital: ${fmt(bal.capitalSaldo)}`,
       ].join(' ‖ '),

@@ -9,6 +9,7 @@ import {
     Play, Key, Globe, TestTube2, Activity
 } from 'lucide-react'
 import { useClient } from '../ClientContext'
+import { TabIvaDian } from './components/TabIvaDian'
 
 /* ─── Paleta J&A ─────────────────────────────────────────── */
 const JA = {
@@ -389,7 +390,7 @@ export default function CausacionPage() {
     const clientName = activeProfile?.company_name || 'Cliente'
     const driveUrl = activeProfile?.drive_invoices_url || ''
 
-    const [tab, setTab] = useState<'bandeja' | 'carga' | 'manual' | 'asientos' | 'drive' | 'guia' | 'config' | 'inbox' | 'reglas' | 'flujo'>('bandeja')
+    const [tab, setTab] = useState<'bandeja' | 'carga' | 'manual' | 'asientos' | 'drive' | 'guia' | 'config' | 'inbox' | 'reglas' | 'flujo' | 'iva-dian'>('bandeja')
 
     // DIAN config state
     const [dianCfg, setDianCfg] = useState<Record<string, unknown>>({
@@ -757,6 +758,7 @@ export default function CausacionPage() {
     })
 
     const TABS = [
+        { id: 'iva-dian', label: 'IVA DIAN', icon: <FileText size={14} /> },
         { id: 'bandeja', label: 'Bandeja', icon: <History size={14} /> },
         { id: 'inbox', label: 'DIAN Inbox', icon: <Inbox size={14} /> },
         { id: 'carga', label: 'Cargar PDFs', icon: <Upload size={14} /> },
@@ -1822,6 +1824,19 @@ Siigo URL directa: Si configuraste la URL de Siigo en el perfil del cliente, pue
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ─── TAB: IVA DIAN ─────────────────────────── */}
+            {tab === 'iva-dian' && (
+                <div>
+                    <div style={{ marginBottom: 16 }}>
+                        <h2 style={{ fontSize: 16, fontWeight: 700, color: JA.TEXT, margin: '0 0 4px' }}>Clasificador IVA — Archivos DIAN</h2>
+                        <p style={{ fontSize: 13, color: JA.GREY, margin: 0 }}>
+                            Sube 1 o 2 archivos .xlsx descargados del portal DIAN (2024 y/o 2025). El sistema identifica cada factura por CUFE y clasifica automáticamente las compras/ventas por tarifa de IVA.
+                        </p>
+                    </div>
+                    <TabIvaDian />
                 </div>
             )}
         </div>

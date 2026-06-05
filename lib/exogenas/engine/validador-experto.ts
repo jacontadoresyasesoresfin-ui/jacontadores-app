@@ -98,6 +98,7 @@ export class ValidadorExperto {
     // Orden: crítico primero
     this.validarNitDeclarante(config, empresaDetectada)
     this.validarDeclaranteNoEsClientePropio(config, porFormato)
+    this.validarDeclaranteNoEsSocioPropio(config, porFormato)
     this.validarF1006EsIvaGenerado(porFormato)
     this.validarCoherenciaF1006vsF1007(porFormato)
     if (balance) this.validarContraBalance(config, porFormato, balance)
@@ -216,6 +217,33 @@ export class ValidadorExperto {
     }
   }
 
+  // ─── Regla 2b: El NIT declarante NO debe aparecer como socio en F1010 ───
+
+  private validarDeclaranteNoEsSocioPropio(
+    config: ConfigExogena,
+    porFormato: Map<string, ResultadoTransformacion<FilaFormato>>
+  ) {
+    const r1010 = porFormato.get('1010')
+    if (!r1010 || !config.nitDeclarante) return
+
+    const nitDec = config.nitDeclarante.replace(/\D/g, '')
+    const filasDeclarante = r1010.filas.filter(f =>
+      String(f.numeroId ?? '').replace(/\D/g, '') === nitDec
+    )
+
+    if (filasDeclarante.length > 0) {
+      const saldo = filasDeclarante.reduce((s, f) => s + ((f.valorSaldo as number) ?? 0), 0)
+      this.add({
+        nivel: 'critico', codigo: 'DECLARANTE_COMO_SOCIO_PROPIO',
+        formato: '1010',
+        titulo: `ERROR CRÍTICO: El declarante NIT ${nitDec} aparece como socio de sí mismo en F1010`,
+        detalle: `El NIT declarante (${config.razonSocial || nitDec}) aparece en F1010 con saldo ${fmt(saldo)} como si fuera accionista de sí mismo. Para una persona natural (empresa unipersonal), el capital propio no se informa en F1010 — ese formato es para reportar socios de terceros. Además, es la misma empresa declarante, lo cual la DIAN rechaza.`,
+        accion: 'Este registro fue excluido automáticamente del archivo. En Siigo revise qué cuenta PUC del grupo 31 tiene al NIT del declarante como tercero y corrija la causación.',
+        terceroId: nitDec,
+      })
+    }
+  }
+
   // ─── Regla 3: F1006 debe ser IVA Generado (ventas) — NO compras ──────────
 
   private validarF1006EsIvaGenerado(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
@@ -319,9 +347,38 @@ export class ValidadorExperto {
 
   // ─── Regla 5: F1010 debe contener solo socios / accionistas ──────────────
 
+  // NITs de entidades del Estado que NUNCA deben aparecer como "socios"
+  private static readonly NITS_GOBIERNO = new Set([
+    '800197268',  // DIAN
+    '900167858',  // UGPP
+    '800140883',  // ICBF
+    '803014469',  // SENA
+    '899999274',  // FOSYGA/ADRES
+    '800250119',  // Ministerio de Hacienda
+    '800099860',  // Supersociedades
+  ])
+
   private validarF1010SoloSocios(porFormato: Map<string, ResultadoTransformacion<FilaFormato>>) {
     const r1010 = porFormato.get('1010')
     if (!r1010 || r1010.filas.length === 0) return
+
+    // ── 5a. Entidades del gobierno NO son socios ──────────────────────────────
+    const filasGobierno = r1010.filas.filter(f =>
+      ValidadorExperto.NITS_GOBIERNO.has(String(f.numeroId ?? '').replace(/\D/g, ''))
+    )
+    if (filasGobierno.length > 0) {
+      const nitsGob = [...new Set(filasGobierno.map(f => f.numeroId as string))].join(', ')
+      const nombres = filasGobierno.slice(0, 3).map(f =>
+        (f.razonSocial as string | undefined) || (f.numeroId as string)
+      ).join(', ')
+      this.add({
+        nivel: 'critico', codigo: 'F1010_ENTIDAD_GOBIERNO',
+        formato: '1010',
+        titulo: `ERROR CRÍTICO: Entidad(es) del Estado clasificadas como "socio" en F1010: ${nombres}`,
+        detalle: `F1010 contiene NITs de entidades gubernamentales (${nitsGob}) como socios/accionistas. Esto es un error grave de mapeo contable: esas entidades corresponden a obligaciones tributarias (cuentas 24xx, 23xx) o retenciones, NO a participaciones en capital social (clase 31). La DIAN detectará esta incoherencia automáticamente.`,
+        accion: 'Verifique en Siigo qué cuenta PUC del grupo 31 (capital y reservas) tiene a la DIAN u otras entidades del Estado como tercero. Reclasifique esa causación a la cuenta correcta (24xx para impuestos por pagar, 236540 para retenciones). Después regenere.',
+      })
+    }
 
     // Conceptos válidos para F1010
     const conceptosValidos = new Set(['socio', 'accionista', 'cooperado', 'comunero', 'asociado'])

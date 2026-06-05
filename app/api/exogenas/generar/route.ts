@@ -399,9 +399,11 @@ export async function POST(req: NextRequest) {
 
           const cuentasSinRegla = engine.cuentasSinRegla(asientos)
 
-          // ── Post-proceso: excluir declarante de F1007 (no puede ser su propio cliente) ────
+          // ── Post-proceso: excluir declarante de F1007 y F1010 ────────────────
           if (config.nitDeclarante) {
             const nitDec = config.nitDeclarante.replace(/\D/g, '')
+
+            // F1007: el declarante no puede ser su propio cliente
             const r1007 = resultados.find(r => r.formatoCodigo === '1007')
             if (r1007) {
               const filasDeclarante = r1007.filas.filter(f =>
@@ -423,6 +425,26 @@ export async function POST(req: NextRequest) {
                   `CAUSA: en Siigo las cuentas de ingreso (41xx) tienen al declarante como tercero — ` +
                   `posible mapeo de retiros de utilidades o transacciones internas. ` +
                   `Corrija el tercero en esas causaciones para que sea el cliente real.`
+                )
+              }
+            }
+
+            // F1010: el declarante no puede ser socio de sí mismo
+            const r1010 = resultados.find(r => r.formatoCodigo === '1010')
+            if (r1010) {
+              const filasDeclarante1010 = r1010.filas.filter(f =>
+                String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') === nitDec
+              )
+              if (filasDeclarante1010.length > 0) {
+                r1010.filas = r1010.filas.filter(f =>
+                  String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') !== nitDec
+                )
+                const estrategia1010 = FormatoRegistry.obtener('1010')
+                if (estrategia1010) r1010.totales = estrategia1010.totalizar(r1010.filas)
+                advertencias.push(
+                  `⚠️ F1010 CORREGIDO: El declarante NIT ${nitDec} fue excluido automáticamente de socios/accionistas. ` +
+                  `Una persona natural no puede aparecer como accionista de sí misma. ` +
+                  `Revise las causaciones en cuentas 31xx que usan el NIT del declarante como tercero.`
                 )
               }
             }

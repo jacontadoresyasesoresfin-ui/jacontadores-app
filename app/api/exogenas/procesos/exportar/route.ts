@@ -94,6 +94,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se generaron formatos. Verifique que los datos contengan registros válidos.' }, { status: 400 })
     }
 
+    // ── Post-proceso idéntico al de generar/route.ts ──────────────────────────
+    // CRÍTICO: aplicar SIEMPRE al exportar, no solo al generar
+    if (config.nitDeclarante) {
+      const nitDec = config.nitDeclarante.replace(/\D/g, '')
+
+      // F1007: el declarante no puede aparecer como su propio cliente
+      const r1007 = resultados.find(r => r.formatoCodigo === '1007')
+      if (r1007) {
+        const antes1007 = r1007.filas.length
+        r1007.filas = r1007.filas.filter(f =>
+          String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') !== nitDec
+        )
+        if (r1007.filas.length < antes1007) {
+          const est = FormatoRegistry.obtener('1007')
+          if (est) r1007.totales = est.totalizar(r1007.filas)
+        }
+      }
+
+      // F1010: el declarante no puede ser socio de sí mismo
+      const r1010 = resultados.find(r => r.formatoCodigo === '1010')
+      if (r1010) {
+        const antes1010 = r1010.filas.length
+        r1010.filas = r1010.filas.filter(f =>
+          String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') !== nitDec
+        )
+        if (r1010.filas.length < antes1010) {
+          const est = FormatoRegistry.obtener('1010')
+          if (est) r1010.totales = est.totalizar(r1010.filas)
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const generator = new ExcelGenerator()
     const buffer = generator.generarWorkbook(resultados, config, {
       incluirPortada: true,

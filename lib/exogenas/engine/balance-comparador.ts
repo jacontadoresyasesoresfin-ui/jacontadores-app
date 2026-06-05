@@ -58,12 +58,12 @@ export function extraerTotalesBalance(asientos: AsientoContable[], nitDeclarante
   for (const [cuenta, saldo] of saldos) {
     if (cuenta.startsWith('41') || cuenta.startsWith('42')) {
       ingresos += Math.abs(saldo)   // ingresos siempre acumulan crédito → saldo negativo
-    } else if (cuenta.startsWith('2408')) {
-      if (saldo > 0) {
-        ivaDescontable += saldo    // débito dominante = IVA pagado en compras
-      } else {
-        ivaGenerado += Math.abs(saldo)  // crédito dominante = IVA cobrado en ventas
-      }
+    } else if (cuenta.startsWith('240801') || cuenta.startsWith('240815') || cuenta.startsWith('240820')) {
+      // IVA Descontable: 240801xx (pagado en compras), 240815xx (servicios), 240820xx (devoluciones)
+      ivaDescontable += saldo > 0 ? saldo : 0
+    } else if (cuenta.startsWith('240805')) {
+      // IVA Generado: 240805xx (cobrado en ventas)
+      ivaGenerado += saldo < 0 ? Math.abs(saldo) : 0
     } else if (cuenta.startsWith('14') || cuenta.startsWith('6205') || cuenta.startsWith('7205')) {
       compras += saldo > 0 ? saldo : 0
     } else if (cuenta.startsWith('13') && !cuenta.startsWith('1355')) {

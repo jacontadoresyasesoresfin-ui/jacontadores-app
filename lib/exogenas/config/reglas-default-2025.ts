@@ -296,35 +296,45 @@ export const REGLAS_DEFAULT_2025: ReglaMapeo[] = [
     notas: 'Otros gastos de personal — fallback. (Excluye viáticos que van a F1001)' },
 
   // ══════════════════════════════════════════════════════════════════════
-  //  FORMATO 1005 — IVA Descontable (débito 2408 = IVA pagado en compras)
-  //  FORMATO 1006 — IVA Generado  (crédito 2408 = IVA cobrado en ventas)
+  //  FORMATO 1005 — IVA Descontable
+  //  Fuente: cuenta 240801xx (IVA pagado en compras)
+  //          Débito  → impuestoDescontable
+  //          Crédito → ivaResultanteDevoluciones (compras anuladas)
   //
-  //  Diferencia clave: débito = lo que la empresa PAGÓ al proveedor
-  //                   crédito = lo que la empresa COBRÓ al cliente
+  //  FORMATO 1006 — IVA Generado
+  //  Fuente: cuenta 240805xx (IVA cobrado en ventas)
+  //          Crédito → impuestoGenerado
+  //          Débito  → ivaRecuperadoEnDevoluciones (ajustes)
+  //
+  //  CLAVE: 240801 ≠ 240805
+  //    240801xx = IVA DESCONTABLE (compras pagadas al proveedor) → F1005
+  //    240805xx = IVA GENERADO    (ventas cobradas al cliente)    → F1006
+  //    240810xx = IVA 16% anterior/recuperado en devoluciones     → F1006
+  //    240815xx = IVA servicios descontable                       → F1005
+  //    240820xx = IVA devuelto en compras                         → F1005
   // ══════════════════════════════════════════════════════════════════════
-  { formatoCodigo: '1005', cuentaPucPatron: '2408%', conceptoCodigo: 'iva_descontable',
-    naturaleza: 'debito', prioridad: 10,
-    notas: 'IVA descontable — movimiento DÉBITO cuenta 2408 (compras)' },
-  { formatoCodigo: '1006', cuentaPucPatron: '2408%', conceptoCodigo: 'iva_generado',
-    naturaleza: 'credito', prioridad: 10,
-    notas: 'IVA generado — movimiento CRÉDITO cuenta 2408 (ventas)' },
-  { formatoCodigo: '1005', cuentaPucPatron: '2409%', conceptoCodigo: 'iva_descontable', prioridad: 10,
-    notas: 'IVA por pagar en compras' },
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  FORMATO 1006 — IVA Generado / Ventas (concepto Siigo 9998)
-  //
-  //  IMPORTANTE: F1006 debe construirse EXCLUSIVAMENTE con cuentas de
-  //  ingresos/ventas (41xx, 42xx). NUNCA con compras, inventarios ni
-  //  gastos de clase 5.
-  //
-  //  Las reglas anteriores (14%, 6205%, 5%) causaban que F1006 acumulara
-  //  compras y gastos por error → valores de billones incorrectos.
-  //
-  //  Si su empresa vende bienes/servicios gravados configure aquí las
-  //  cuentas 41xx con concepto 'iva_generado' vía ConfiguracionMagnetica.
-  // ══════════════════════════════════════════════════════════════════════
-  // (Sin reglas por defecto — el usuario configura vía mapeo PUC en Siigo concepto 9998)
+  // F1005 — IVA Descontable (240801xx)
+  { formatoCodigo: '1005', cuentaPucPatron: '240801%', conceptoCodigo: 'iva_descontable',
+    naturaleza: 'debito', prioridad: 5,
+    notas: 'IVA descontable — DÉBITO 240801xx (IVA pagado en compras al proveedor)' },
+  { formatoCodigo: '1005', cuentaPucPatron: '240801%', conceptoCodigo: 'iva_resultante_devolucion',
+    naturaleza: 'credito', prioridad: 5,
+    notas: 'IVA devuelto — CRÉDITO 240801xx (compras/ventas anuladas)' },
+  { formatoCodigo: '1005', cuentaPucPatron: '240815%', conceptoCodigo: 'iva_descontable',
+    prioridad: 5, notas: 'IVA descontable por servicios (240815xx)' },
+  { formatoCodigo: '1005', cuentaPucPatron: '240820%', conceptoCodigo: 'iva_descontable',
+    prioridad: 5, notas: 'IVA descontable por devoluciones (240820xx)' },
+  { formatoCodigo: '1005', cuentaPucPatron: '2409%', conceptoCodigo: 'iva_descontable',
+    prioridad: 10, notas: 'IVA por pagar en compras (2409xx)' },
+
+  // F1006 — IVA Generado (240805xx)
+  { formatoCodigo: '1006', cuentaPucPatron: '240805%', conceptoCodigo: 'iva_generado',
+    naturaleza: 'credito', prioridad: 5,
+    notas: 'IVA Generado — CRÉDITO 240805xx (IVA cobrado al cliente en ventas gravadas)' },
+  { formatoCodigo: '1006', cuentaPucPatron: '240810%', conceptoCodigo: 'iva_recuperado',
+    naturaleza: 'credito', prioridad: 5,
+    notas: 'IVA 16% recuperado en devoluciones de compras anuladas (240810xx)' },
 
   // ══════════════════════════════════════════════════════════════════════
   //  FORMATO 1007 — Información de ingresos / ventas

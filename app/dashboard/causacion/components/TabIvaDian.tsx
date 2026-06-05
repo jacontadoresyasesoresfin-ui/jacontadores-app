@@ -8,6 +8,7 @@ import {
 import * as XLSX from 'xlsx'
 import type { DianFactura, ClasificacionIVA } from '@/lib/causacion/dian-iva-parser'
 import type { DetalleDian, ItemDian } from '@/app/api/causacion/dian-cufe-detalle/route'
+import type { ParsePdfResult, ItemFacturaPdf } from '@/app/api/causacion/dian-iva/parse-pdf/route'
 
 /* ─── Paleta J&A ─────────────────────────────────────────────────────────── */
 const JA = {
@@ -125,6 +126,54 @@ function generarExcel(facturas: DianFactura[]) {
   XLSX.writeFile(wb, `Causacion_IVA_DIAN_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
+/* ─── Tabla de ítems reutilizable ────────────────────────────────────────── */
+function TablaItems({ items, fuente }: { items: ItemFacturaPdf[]; fuente: string }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: JA.NAVY }}>
+        {items.length} ítems extraídos
+        <span style={{ fontWeight: 400, color: JA.GREY, marginLeft: 8 }}>via {fuente}</span>
+      </div>
+      <div style={{ overflowX: 'auto', borderRadius: 6, border: `1px solid ${JA.BORDER}` }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr style={{ background: JA.NAVY }}>
+              {['#', 'Descripción', 'Cant.', 'Base', '% IVA', 'Valor IVA', 'Total'].map((h, i) => (
+                <th key={i} style={{ padding: '5px 8px', color: JA.WHITE, textAlign: i > 2 ? 'right' : 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={item.numero} style={{ background: i % 2 === 0 ? JA.WHITE : JA.BG, borderBottom: `1px solid ${JA.BORDER}` }}>
+                <td style={{ padding: '5px 8px', color: JA.GREY }}>{item.numero}</td>
+                <td style={{ padding: '5px 8px', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.descripcion}>{item.descripcion}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right' }}>{item.cantidad}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right' }}>{cop(item.base)}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'center', fontWeight: 700,
+                  color: item.porcentaje_iva >= 18 ? JA.RED : item.porcentaje_iva >= 4 ? JA.BLUE : JA.GREY }}>
+                  {item.porcentaje_iva}%
+                </td>
+                <td style={{ padding: '5px 8px', textAlign: 'right' }}>{cop(item.valor_iva)}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{cop(item.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: JA.BG, borderTop: `2px solid ${JA.BORDER}` }}>
+              <td colSpan={3} style={{ padding: '5px 8px', fontSize: 11, fontWeight: 700, color: JA.TEXT }}>TOTALES</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700 }}>{cop(items.reduce((s, x) => s + x.base, 0))}</td>
+              <td />
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700 }}>{cop(items.reduce((s, x) => s + x.valor_iva, 0))}</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700 }}>{cop(items.reduce((s, x) => s + x.total, 0))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Modal Resolver MIXTA ───────────────────────────────────────────────── */
 function ModalResolver({
   factura,
@@ -135,52 +184,87 @@ function ModalResolver({
   onAplicar: (f: DianFactura) => void
   onCerrar: () => void
 }) {
-  const [dianRes, setDianRes] = useState<DetalleDian | null>(null)
-  const [dianLoading, setDianLoading] = useState(false)
-  const [dianError, setDianError] = useState('')
+  /* ── Estado fuentes ── */
+  const [dianRes,    setDianRes]    = useState<DetalleDian | null>(null)
+  const [dianLoad,   setDianLoad]   = useState(false)
+  const [dianError,  setDianError]  = useState('')
+  const [pdfRes,     setPdfRes]     = useState<ParsePdfResult | null>(null)
+  const [pdfLoad,    setPdfLoad]    = useState(false)
+  const [pdfError,   setPdfError]   = useState('')
+  const [pdfNombre,  setPdfNombre]  = useState('')
+  const pdfInputRef = useRef<HTMLInputElement>(null)
 
+  /* ── Estado desglose editable ── */
   const [base19, setBase19] = useState(factura.base_gravada_19 || 0)
   const [iva19,  setIva19]  = useState(factura.iva_19 || 0)
   const [base5,  setBase5]  = useState(factura.base_gravada_5 || 0)
   const [iva5,   setIva5]   = useState(factura.iva_5 || 0)
 
+  /* ── Ítems activos (DIAN o PDF, lo que tenga datos) ── */
+  const itemsActivos: ItemFacturaPdf[] = pdfRes?.items.length
+    ? pdfRes.items
+    : (dianRes?.items ?? []).map(x => ({ ...x, valor_unitario: 0, descuento: 0 }))
+  const fuenteItems = pdfRes?.items.length ? 'PDF + IA' : dianRes?.ok ? 'Portal DIAN' : ''
+
+  /* ── Helpers ── */
   const esRecibida = factura.grupo.toLowerCase().includes('recib')
   const proveedor  = esRecibida ? factura.nombre_emisor : factura.nombre_receptor
   const portalUrl  = `https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=${factura.cufe}`
 
-  // Totals for validation
   const totalBase = base19 + base5
   const totalIva  = iva19  + iva5
   const diffBase  = Math.abs(totalBase - (factura.total - factura.iva_total))
   const diffIva   = Math.abs(totalIva  - factura.iva_total)
   const valid     = totalBase > 0
 
+  function llenarDesdeResumen(r: { base_19: number; iva_19: number; base_5: number; iva_5: number }) {
+    setBase19(Math.round(r.base_19)); setIva19(Math.round(r.iva_19))
+    setBase5(Math.round(r.base_5));  setIva5(Math.round(r.iva_5))
+  }
+
+  /* ── Consultar portal DIAN ── */
   async function consultarDian() {
-    setDianLoading(true); setDianError(''); setDianRes(null)
+    setDianLoad(true); setDianError(''); setDianRes(null)
     try {
       const res = await fetch(`/api/causacion/dian-cufe-detalle?cufe=${encodeURIComponent(factura.cufe)}`)
       const data: DetalleDian = await res.json()
       setDianRes(data)
-      if (data.ok && data.resumen) {
-        setBase19(Math.round(data.resumen.base_19))
-        setIva19(Math.round(data.resumen.iva_19))
-        setBase5(Math.round(data.resumen.base_5))
-        setIva5(Math.round(data.resumen.iva_5))
-      } else {
-        setDianError(data.error || 'No se obtuvieron ítems del portal DIAN.')
-      }
-    } catch {
-      setDianError('Error de red al consultar el portal DIAN.')
-    } finally {
-      setDianLoading(false)
-    }
+      if (data.ok && data.resumen) llenarDesdeResumen(data.resumen)
+      else setDianError(data.error || 'El portal DIAN no devolvió ítems.')
+    } catch { setDianError('Error de red al consultar el portal DIAN.') }
+    finally { setDianLoad(false) }
   }
 
+  /* ── Cargar y parsear PDF ── */
+  async function cargarPdf(file: File) {
+    setPdfLoad(true); setPdfError(''); setPdfRes(null); setPdfNombre(file.name)
+    try {
+      const form = new FormData()
+      form.append('files', file)
+      const res  = await fetch('/api/causacion/dian-iva/parse-pdf', { method: 'POST', body: form })
+      const data = await res.json()
+      const result: ParsePdfResult = data.results?.[0]
+      if (!result) { setPdfError('Sin respuesta del servidor'); return }
+      setPdfRes(result)
+      if (result.ok && result.resumen) llenarDesdeResumen(result.resumen)
+      else setPdfError(result.error || 'No se pudieron extraer ítems del PDF.')
+    } catch { setPdfError('Error de red al procesar el PDF.') }
+    finally { setPdfLoad(false) }
+  }
+
+  /* ── Aplicar corrección ── */
   function aplicar() {
     const claz: ClasificacionIVA =
       base19 > 0 && base5 > 0 ? 'MIXTA' :
       base19 > 0 ? 'GRAVADA_19' :
       base5  > 0 ? 'GRAVADA_5'  : 'EXCLUIDA'
+
+    const fuente = pdfRes?.ok ? 'ia' : dianRes?.ok ? 'ia' : 'regla'
+    const nota   = pdfRes?.ok
+      ? `Desglose obtenido de PDF (${pdfRes.items.length} ítems, IA) — ${pdfNombre}`
+      : dianRes?.ok
+        ? `Desglose obtenido del portal DIAN (${dianRes.items.length} ítems)`
+        : 'Corrección manual del desglose de IVA'
 
     onAplicar({
       ...factura,
@@ -188,16 +272,14 @@ function ModalResolver({
       base_gravada_19: base19, iva_19: iva19,
       base_gravada_5: base5,   iva_5: iva5,
       base_exenta: 0, base_excluida: 0,
-      fuente_clasificacion: dianRes?.ok ? 'ia' : 'regla',
-      nota_ia: dianRes?.ok
-        ? `Desglose obtenido del portal DIAN (${dianRes.items.length} ítems)`
-        : 'Corrección manual del desglose de IVA',
+      fuente_clasificacion: fuente,
+      nota_ia: nota,
     })
   }
 
   const inp = {
     border: `1px solid ${JA.BORDER}`, borderRadius: 6, padding: '6px 10px',
-    fontSize: 13, color: JA.TEXT, width: '100%', outline: 'none',
+    fontSize: 13, color: JA.TEXT, width: '100%', outline: 'none', background: JA.WHITE,
   }
 
   return (
@@ -207,11 +289,11 @@ function ModalResolver({
     }}>
       <div style={{
         background: JA.WHITE, borderRadius: 12, padding: 28,
-        width: '100%', maxWidth: 720, maxHeight: '92vh',
+        width: '100%', maxWidth: 780, maxHeight: '94vh',
         overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       }}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: JA.TEXT, margin: '0 0 2px' }}>
@@ -226,12 +308,12 @@ function ModalResolver({
           </button>
         </div>
 
-        {/* Totales del documento */}
+        {/* ── Totales referencia ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
           {[
-            { label: 'Total Factura', value: cop(factura.total) },
+            { label: 'Total Factura',    value: cop(factura.total) },
             { label: 'IVA Total (DIAN)', value: cop(factura.iva_total) },
-            { label: 'Base implícita', value: cop(factura.total - factura.iva_total) },
+            { label: 'Base implícita',   value: cop(factura.total - factura.iva_total) },
           ].map(({ label, value }) => (
             <div key={label} style={{ background: JA.BG, border: `1px solid ${JA.BORDER}`, borderRadius: 8, padding: '10px 14px' }}>
               <div style={{ fontSize: 10, color: JA.GREY, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{label}</div>
@@ -240,177 +322,148 @@ function ModalResolver({
           ))}
         </div>
 
-        {/* Consulta DIAN */}
-        <div style={{ background: JA.BLUE_LT, border: `1px solid ${JA.BLUE}`, borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: JA.BLUE, marginBottom: 10 }}>
-            Paso 1 — Consultar ítems en el portal DIAN
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {/* ── PASO 1: Obtener ítems (dos opciones en paralelo) ── */}
+        <div style={{ fontSize: 12, fontWeight: 700, color: JA.TEXT, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Paso 1 — Obtener detalle de ítems
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+
+          {/* Opción A: PDF */}
+          <div style={{ background: '#F0FDF4', border: `1px solid ${JA.GREEN}`, borderRadius: 8, padding: '14px 16px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: JA.GREEN, marginBottom: 8 }}>
+              📄 Cargar PDF de la factura
+            </div>
+            <p style={{ fontSize: 11, color: JA.GREY, margin: '0 0 10px', lineHeight: 1.4 }}>
+              Sube el PDF de la factura electrónica. Claude extrae todos los ítems y su IVA individual automáticamente.
+            </p>
+            <input ref={pdfInputRef} type="file" accept=".pdf" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) cargarPdf(f) }} />
             <button
-              onClick={consultarDian}
-              disabled={dianLoading}
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={pdfLoad}
               style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: JA.NAVY, color: JA.WHITE, border: 'none',
-                borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600,
-                cursor: dianLoading ? 'not-allowed' : 'pointer', opacity: dianLoading ? 0.7 : 1,
+                display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center',
+                background: JA.GREEN, color: JA.WHITE, border: 'none',
+                borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                cursor: pdfLoad ? 'not-allowed' : 'pointer', opacity: pdfLoad ? 0.7 : 1,
               }}
             >
-              {dianLoading
-                ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Consultando DIAN...</>
-                : <><CheckCircle2 size={13} /> Consultar automáticamente</>}
+              {pdfLoad
+                ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Procesando PDF...</>
+                : <><Upload size={13} /> Seleccionar PDF</>}
             </button>
-            <a
-              href={portalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: JA.WHITE, color: JA.BLUE, border: `1px solid ${JA.BLUE}`,
-                borderRadius: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              <ExternalLink size={13} /> Ver en portal DIAN
-            </a>
+            {pdfNombre && !pdfLoad && (
+              <div style={{ marginTop: 6, fontSize: 11, color: JA.GREY }}>📎 {pdfNombre}</div>
+            )}
+            {pdfError && (
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'flex-start', background: JA.RED_LT, borderRadius: 6, padding: '7px 10px' }}>
+                <AlertTriangle size={12} color={JA.RED} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 11, color: JA.RED }}>{pdfError}</span>
+              </div>
+            )}
+            {pdfRes?.advertencias?.map((a, i) => (
+              <div key={i} style={{ marginTop: 6, fontSize: 11, color: JA.YELLOW }}>⚠ {a}</div>
+            ))}
           </div>
 
-          {/* Error DIAN */}
-          {dianError && (
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'flex-start', background: JA.YELLOW_LT, borderRadius: 6, padding: '8px 12px' }}>
-              <AlertTriangle size={14} color={JA.YELLOW} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: 12, color: JA.YELLOW }}>{dianError}</span>
+          {/* Opción B: Portal DIAN */}
+          <div style={{ background: JA.BLUE_LT, border: `1px solid ${JA.BLUE}`, borderRadius: 8, padding: '14px 16px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: JA.BLUE, marginBottom: 8 }}>
+              🌐 Consultar portal DIAN
             </div>
-          )}
-
-          {/* Ítems DIAN si se obtuvieron */}
-          {dianRes?.ok && dianRes.items.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, color: JA.BLUE, fontWeight: 600, marginBottom: 6 }}>
-                {dianRes.items.length} ítems encontrados — valores pre-cargados en el formulario:
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                  <thead>
-                    <tr style={{ background: JA.NAVY }}>
-                      {['#', 'Descripción', 'Base', '% IVA', 'Valor IVA', 'Total'].map(h => (
-                        <th key={h} style={{ padding: '5px 8px', color: JA.WHITE, textAlign: 'left', fontWeight: 600 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dianRes.items.map((item: ItemDian) => (
-                      <tr key={item.numero} style={{ borderBottom: `1px solid ${JA.BORDER}` }}>
-                        <td style={{ padding: '5px 8px', color: JA.GREY }}>{item.numero}</td>
-                        <td style={{ padding: '5px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.descripcion}>{item.descripcion}</td>
-                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>{cop(item.base)}</td>
-                        <td style={{ padding: '5px 8px', textAlign: 'center', fontWeight: 700,
-                          color: item.porcentaje_iva === 19 ? JA.RED : item.porcentaje_iva === 5 ? JA.BLUE : JA.GREY }}>
-                          {item.porcentaje_iva}%
-                        </td>
-                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>{cop(item.valor_iva)}</td>
-                        <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{cop(item.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <p style={{ fontSize: 11, color: JA.GREY, margin: '0 0 10px', lineHeight: 1.4 }}>
+              Consulta la factura directamente en el portal DIAN usando el CUFE. Puede fallar si el portal no responde.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={consultarDian} disabled={dianLoad}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center',
+                  background: JA.NAVY, color: JA.WHITE, border: 'none',
+                  borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 600,
+                  cursor: dianLoad ? 'not-allowed' : 'pointer', opacity: dianLoad ? 0.7 : 1,
+                }}
+              >
+                {dianLoad
+                  ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Consultando...</>
+                  : <><CheckCircle2 size={13} /> Consultar automáticamente</>}
+              </button>
+              <a href={portalUrl} target="_blank" rel="noopener noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center',
+                  background: JA.WHITE, color: JA.BLUE, border: `1px solid ${JA.BLUE}`,
+                  borderRadius: 6, padding: '7px 12px', fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                }}>
+                <ExternalLink size={13} /> Ver en portal DIAN
+              </a>
             </div>
-          )}
+            {dianError && (
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'flex-start', background: JA.YELLOW_LT, borderRadius: 6, padding: '7px 10px' }}>
+                <AlertTriangle size={12} color={JA.YELLOW} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 11, color: JA.YELLOW }}>{dianError}</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Inputs manuales */}
+        {/* ── Tabla de ítems (unificada PDF o DIAN) ── */}
+        {itemsActivos.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <TablaItems items={itemsActivos} fuente={fuenteItems} />
+          </div>
+        )}
+
+        {/* ── PASO 2: Confirmar desglose ── */}
         <div style={{ background: JA.BG, border: `1px solid ${JA.BORDER}`, borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: JA.TEXT, marginBottom: 12 }}>
-            Paso 2 — Confirmar o ajustar el desglose (valores en COP)
+          <div style={{ fontSize: 12, fontWeight: 700, color: JA.TEXT, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Paso 2 — Confirmar o ajustar el desglose (COP)
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {/* IVA 19% */}
             <div style={{ background: JA.RED_LT, border: `1px solid ${JA.RED}`, borderRadius: 8, padding: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: JA.RED, marginBottom: 10, textTransform: 'uppercase' }}>IVA 19%</div>
               <label style={{ fontSize: 11, color: JA.GREY, display: 'block', marginBottom: 4 }}>Base Gravada 19%</label>
-              <input
-                type="number" value={base19 || ''} placeholder="0"
-                onChange={e => {
-                  const v = parseFloat(e.target.value) || 0
-                  setBase19(v)
-                  setIva19(Math.round(v * 0.19))
-                }}
-                style={{ ...inp, marginBottom: 8 }}
-              />
+              <input type="number" value={base19 || ''} placeholder="0"
+                onChange={e => { const v = parseFloat(e.target.value)||0; setBase19(v); setIva19(Math.round(v*0.19)) }}
+                style={{ ...inp, marginBottom: 8 }} />
               <label style={{ fontSize: 11, color: JA.GREY, display: 'block', marginBottom: 4 }}>Valor IVA 19%</label>
-              <input
-                type="number" value={iva19 || ''} placeholder="0"
-                onChange={e => setIva19(parseFloat(e.target.value) || 0)}
-                style={inp}
-              />
+              <input type="number" value={iva19 || ''} placeholder="0"
+                onChange={e => setIva19(parseFloat(e.target.value)||0)} style={inp} />
             </div>
-
-            {/* IVA 5% */}
             <div style={{ background: JA.BLUE_LT, border: `1px solid ${JA.BLUE}`, borderRadius: 8, padding: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: JA.BLUE, marginBottom: 10, textTransform: 'uppercase' }}>IVA 5%</div>
               <label style={{ fontSize: 11, color: JA.GREY, display: 'block', marginBottom: 4 }}>Base Gravada 5%</label>
-              <input
-                type="number" value={base5 || ''} placeholder="0"
-                onChange={e => {
-                  const v = parseFloat(e.target.value) || 0
-                  setBase5(v)
-                  setIva5(Math.round(v * 0.05))
-                }}
-                style={{ ...inp, marginBottom: 8 }}
-              />
+              <input type="number" value={base5 || ''} placeholder="0"
+                onChange={e => { const v = parseFloat(e.target.value)||0; setBase5(v); setIva5(Math.round(v*0.05)) }}
+                style={{ ...inp, marginBottom: 8 }} />
               <label style={{ fontSize: 11, color: JA.GREY, display: 'block', marginBottom: 4 }}>Valor IVA 5%</label>
-              <input
-                type="number" value={iva5 || ''} placeholder="0"
-                onChange={e => setIva5(parseFloat(e.target.value) || 0)}
-                style={inp}
-              />
+              <input type="number" value={iva5 || ''} placeholder="0"
+                onChange={e => setIva5(parseFloat(e.target.value)||0)} style={inp} />
             </div>
           </div>
 
-          {/* Validación */}
           {valid && (
-            <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: JA.GREY }}>
-                Base total: <strong>{cop(totalBase)}</strong>
-              </span>
-              <span style={{ fontSize: 12, color: JA.GREY }}>
-                IVA total: <strong>{cop(totalIva)}</strong>
-              </span>
-              {diffBase > 500 && (
-                <span style={{ fontSize: 12, color: JA.YELLOW, fontWeight: 600 }}>
-                  ⚠ Diferencia en base: {cop(diffBase)}
-                </span>
-              )}
-              {diffIva > 500 && (
-                <span style={{ fontSize: 12, color: JA.YELLOW, fontWeight: 600 }}>
-                  ⚠ Diferencia en IVA: {cop(diffIva)}
-                </span>
-              )}
-              {diffBase <= 500 && diffIva <= 500 && (
-                <span style={{ fontSize: 12, color: JA.GREEN, fontWeight: 600 }}>
-                  ✓ Cuadra con el total del documento
-                </span>
-              )}
+            <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: JA.GREY }}>Base: <strong>{cop(totalBase)}</strong></span>
+              <span style={{ fontSize: 12, color: JA.GREY }}>IVA: <strong>{cop(totalIva)}</strong></span>
+              {diffBase > 500 && <span style={{ fontSize: 12, color: JA.YELLOW, fontWeight: 600 }}>⚠ Dif. base: {cop(diffBase)}</span>}
+              {diffIva  > 500 && <span style={{ fontSize: 12, color: JA.YELLOW, fontWeight: 600 }}>⚠ Dif. IVA: {cop(diffIva)}</span>}
+              {diffBase <= 500 && diffIva <= 500 && <span style={{ fontSize: 12, color: JA.GREEN, fontWeight: 600 }}>✓ Cuadra con el total del documento</span>}
             </div>
           )}
         </div>
 
-        {/* Botones */}
+        {/* ── Botones ── */}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button onClick={onCerrar}
             style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${JA.BORDER}`, background: JA.WHITE, fontSize: 13, cursor: 'pointer', color: JA.GREY }}>
             Cancelar
           </button>
-          <button
-            onClick={aplicar}
-            disabled={!valid}
+          <button onClick={aplicar} disabled={!valid}
             style={{
               padding: '8px 24px', borderRadius: 6, border: 'none',
               background: valid ? JA.NAVY : JA.GREY_LT, color: JA.WHITE,
               fontSize: 13, fontWeight: 700, cursor: valid ? 'pointer' : 'not-allowed',
-            }}
-          >
+            }}>
             Aplicar corrección
           </button>
         </div>

@@ -6,6 +6,7 @@ import { RulesEngine } from '@/lib/exogenas/engine/rules-engine'
 import { FormatoRegistry } from '@/lib/exogenas/registry/formato-registry'
 import { REGLAS_DEFAULT_2025 } from '@/lib/exogenas/config/reglas-default-2025'
 import type { AsientoContable, ConfigExogena, ReglaMapeo, FilaFormato, ResultadoTransformacion } from '@/lib/exogenas/types'
+import { aplicarPostProceso } from '@/lib/exogenas/utils/post-proceso-routes'
 
 /**
  * POST /api/exogenas/procesos/exportar
@@ -94,36 +95,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se generaron formatos. Verifique que los datos contengan registros válidos.' }, { status: 400 })
     }
 
-    // ── Post-proceso idéntico al de generar/route.ts ──────────────────────────
-    // CRÍTICO: aplicar SIEMPRE al exportar, no solo al generar
+    // ── Post-proceso: correcciones de atribución F1007, F1006, F1010 ──────────
+    // CRÍTICO: aplicar SIEMPRE al exportar, idéntico al generar/route.ts
     if (config.nitDeclarante) {
-      const nitDec = config.nitDeclarante.replace(/\D/g, '')
-
-      // F1007: el declarante no puede aparecer como su propio cliente
-      const r1007 = resultados.find(r => r.formatoCodigo === '1007')
-      if (r1007) {
-        const antes1007 = r1007.filas.length
-        r1007.filas = r1007.filas.filter(f =>
-          String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') !== nitDec
-        )
-        if (r1007.filas.length < antes1007) {
-          const est = FormatoRegistry.obtener('1007')
-          if (est) r1007.totales = est.totalizar(r1007.filas)
-        }
-      }
-
-      // F1010: el declarante no puede ser socio de sí mismo
-      const r1010 = resultados.find(r => r.formatoCodigo === '1010')
-      if (r1010) {
-        const antes1010 = r1010.filas.length
-        r1010.filas = r1010.filas.filter(f =>
-          String((f as Record<string, unknown>).numeroId ?? '').replace(/\D/g, '') !== nitDec
-        )
-        if (r1010.filas.length < antes1010) {
-          const est = FormatoRegistry.obtener('1010')
-          if (est) r1010.totales = est.totalizar(r1010.filas)
-        }
-      }
+      const advertenciasExportar: string[] = []
+      aplicarPostProceso(resultados, config.nitDeclarante, advertenciasExportar)
     }
     // ─────────────────────────────────────────────────────────────────────────
 

@@ -356,11 +356,17 @@ function parsearConRegex(text: string, filename: string): ParsePdfResult | null 
 /* ══════════════════════════════════════════════════════════════════════════
    Handler POST
 ══════════════════════════════════════════════════════════════════════════ */
+export const maxDuration = 60 // seconds
+
 export async function POST(req: NextRequest) {
+  // ?batch=1 → skip IA (solo parser nativo + regex) para procesar lotes rápido
+  const batch = req.nextUrl.searchParams.get('batch') === '1'
+
   try {
     const form  = await req.formData()
     const files = form.getAll('files') as File[]
     if (!files.length) return NextResponse.json({ error: 'No se recibieron archivos PDF' }, { status: 400 })
+    if (files.length > 25) return NextResponse.json({ error: 'Máximo 25 archivos por llamada (usa lotes)' }, { status: 400 })
 
     const results: ParsePdfResult[] = []
 
@@ -392,19 +398,15 @@ export async function POST(req: NextRequest) {
       const advertencias: string[] = []
       if (pages > 8) advertencias.push(`PDF de ${pages} páginas — se analizaron las primeras 9000 caracteres`)
 
-      // Intentar parsers en cascada: DIAN nativo → IA → regex
+      // Cascada: DIAN nativo → IA (solo si no es batch) → regex
       let result: ParsePdfResult | null = parsearFormatoDIAN(text, file.name)
 
-      if (!result) {
+      if (!result && !batch) {
         const iaResult = await parsearConIA(text, file.name)
-        if (iaResult) {
-          result = { ...iaResult, archivo: file.name, advertencias }
-        }
+        if (iaResult) result = { ...iaResult, archivo: file.name, advertencias }
       }
 
-      if (!result) {
-        result = parsearConRegex(text, file.name)
-      }
+      if (!result) result = parsearConRegex(text, file.name)
 
       if (!result) {
         results.push({ ok:false, archivo:file.name, cufe:'', numero_factura:'', fecha:'', nit_emisor:'', nombre_emisor:'', nit_receptor:'', nombre_receptor:'', items:[], resumen:{base_19:0,iva_19:0,base_5:0,iva_5:0,base_cero:0,total_base:0,total_iva:0,total:0}, error:'No se encontraron ítems en el PDF. Verifica que sea una factura electrónica DIAN.', advertencias, metodo:'regex' })

@@ -488,7 +488,21 @@ export function TabIvaDian() {
   const [filtroQ, setFiltroQ] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [resolverFactura, setResolverFactura] = useState<DianFactura | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef     = useRef<HTMLInputElement>(null)
+
+  /* ── Carga masiva PDFs ── */
+  const [batchFiles,      setBatchFiles]      = useState<File[]>([])
+  const [batchDragging,   setBatchDragging]   = useState(false)
+  const [batchProcessing, setBatchProcessing] = useState(false)
+  const [batchProgress,   setBatchProgress]   = useState({ done: 0, total: 0, lote: 0, totalLotes: 0 })
+  const [batchResults,    setBatchResults]    = useState<{
+    archivo: string
+    estado: 'aplicada' | 'sin_coincidencia' | 'error'
+    numero?: string; proveedor?: string
+    base_19?: number; base_5?: number
+    error?: string
+  }[]>([])
+  const batchFileRef = useRef<HTMLInputElement>(null)
 
   /* ── Resumen dinámico (se actualiza con correcciones) ── */
   const resumen = useMemo(() => {
@@ -551,6 +565,85 @@ export function TabIvaDian() {
   function aplicarCorreccion(corregida: DianFactura) {
     setFacturas(prev => prev.map(f => f.cufe === corregida.cufe ? corregida : f))
     setResolverFactura(null)
+  }
+
+  /* ── Procesamiento masivo de PDFs ── */
+  async function procesarLotePdfs() {
+    const mixtas = facturas.filter(f => f.clasificacion === 'MIXTA')
+    if (!mixtas.length || !batchFiles.length) return
+
+    const LOTE = 20
+    const totalLotes = Math.ceil(batchFiles.length / LOTE)
+    setBatchProcessing(true)
+    setBatchProgress({ done: 0, total: batchFiles.length, lote: 0, totalLotes })
+    setBatchResults([])
+
+    const allResults: typeof batchResults = []
+    const corrections = new Map<string, DianFactura>()
+
+    for (let i = 0; i < batchFiles.length; i += LOTE) {
+      const loteNum = Math.floor(i / LOTE) + 1
+      setBatchProgress({ done: i, total: batchFiles.length, lote: loteNum, totalLotes })
+
+      const chunk = batchFiles.slice(i, i + LOTE)
+      try {
+        const form = new FormData()
+        for (const f of chunk) form.append('files', f)
+        const res  = await fetch('/api/causacion/dian-iva/parse-pdf?batch=1', { method: 'POST', body: form })
+        const data = await res.json()
+
+        for (const pdf of (data.results as ParsePdfResult[])) {
+          // Cruzar con facturas MIXTA: primero por CUFE, luego por N°+NIT
+          let matched = pdf.cufe ? mixtas.find(f => f.cufe === pdf.cufe) : undefined
+          if (!matched && pdf.numero_factura && pdf.nit_emisor) {
+            matched = mixtas.find(f => {
+              const numOk = f.folio === pdf.numero_factura ||
+                            `${f.prefijo}-${f.folio}` === pdf.numero_factura
+              const nitOk = f.nit_emisor === pdf.nit_emisor ||
+                            f.nit_receptor === pdf.nit_emisor
+              return numOk && nitOk
+            })
+          }
+
+          if (matched && pdf.ok && pdf.items.length > 0) {
+            const r = pdf.resumen
+            const claz: ClasificacionIVA =
+              r.base_19 > 0 && r.base_5 > 0 ? 'MIXTA' :
+              r.base_19 > 0 ? 'GRAVADA_19' :
+              r.base_5  > 0 ? 'GRAVADA_5'  : 'EXCLUIDA'
+
+            corrections.set(matched.cufe, {
+              ...matched,
+              clasificacion: claz,
+              base_gravada_19: r.base_19, iva_19: r.iva_19,
+              base_gravada_5:  r.base_5,  iva_5:  r.iva_5,
+              base_exenta: 0, base_excluida: 0,
+              fuente_clasificacion: pdf.metodo === 'dian_formato' ? 'preexistente' : 'ia',
+              nota_ia: `Lote PDF — ${pdf.items.length} ítems (${pdf.metodo}) — ${pdf.archivo}`,
+            })
+            allResults.push({
+              archivo: pdf.archivo, estado: 'aplicada',
+              numero: pdf.numero_factura, proveedor: pdf.nombre_emisor,
+              base_19: r.base_19, base_5: r.base_5,
+            })
+          } else if (!matched) {
+            allResults.push({ archivo: pdf.archivo, estado: 'sin_coincidencia' })
+          } else {
+            allResults.push({ archivo: pdf.archivo, estado: 'error', error: pdf.error })
+          }
+        }
+      } catch {
+        for (const f of chunk) allResults.push({ archivo: f.name, estado: 'error', error: 'Error de red' })
+      }
+    }
+
+    // Aplicar todas las correcciones de una vez
+    if (corrections.size > 0) {
+      setFacturas(prev => prev.map(f => corrections.get(f.cufe) ?? f))
+    }
+    setBatchProgress({ done: batchFiles.length, total: batchFiles.length, lote: totalLotes, totalLotes })
+    setBatchResults(allResults)
+    setBatchProcessing(false)
   }
 
   /* ── Filtros ── */
@@ -834,6 +927,152 @@ export function TabIvaDian() {
             )}
           </div>
         </>
+      )}
+
+      {/* ── Panel Carga Masiva PDFs ── */}
+      {hasResults && resumen && resumen.mixtas > 0 && (
+        <div style={{ marginTop: 24, background: '#FFFBEB', border: `2px solid ${JA.YELLOW}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <div>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: JA.YELLOW, margin: '0 0 3px' }}>
+                📦 Carga masiva de PDFs — {resumen.mixtas} factura{resumen.mixtas > 1 ? 's' : ''} mixta{resumen.mixtas > 1 ? 's' : ''} pendiente{resumen.mixtas > 1 ? 's' : ''}
+              </h4>
+              <p style={{ fontSize: 12, color: JA.GREY, margin: 0 }}>
+                Sube hasta 200 PDFs. El sistema cruza cada PDF con sus facturas mixtas por CUFE y aplica el desglose de IVA automáticamente.
+              </p>
+            </div>
+            {batchFiles.length > 0 && !batchProcessing && (
+              <button onClick={() => { setBatchFiles([]); setBatchResults([]) }}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: JA.GREY, padding: 4 }}>
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* Drop zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setBatchDragging(true) }}
+            onDragLeave={() => setBatchDragging(false)}
+            onDrop={e => {
+              e.preventDefault(); setBatchDragging(false)
+              const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.pdf')).slice(0, 200)
+              setBatchFiles(files); setBatchResults([])
+            }}
+            onClick={() => batchFileRef.current?.click()}
+            style={{
+              border: `2px dashed ${batchDragging ? JA.YELLOW : '#D97706aa'}`,
+              borderRadius: 8, padding: '18px 16px', textAlign: 'center', cursor: 'pointer',
+              background: batchDragging ? '#FEF9C3' : JA.WHITE, transition: 'all .15s', marginBottom: 12,
+            }}
+          >
+            <input
+              ref={batchFileRef} type="file" accept=".pdf" multiple hidden
+              onChange={e => {
+                const files = Array.from(e.target.files ?? []).slice(0, 200)
+                setBatchFiles(files); setBatchResults([])
+              }}
+            />
+            <Upload size={22} color={JA.YELLOW} style={{ margin: '0 auto 6px' }} />
+            {batchFiles.length === 0 ? (
+              <>
+                <p style={{ fontSize: 13, fontWeight: 600, color: JA.TEXT, margin: '0 0 2px' }}>
+                  Arrastra los PDFs de las facturas aquí o haz clic para seleccionar
+                </p>
+                <p style={{ fontSize: 11, color: JA.GREY, margin: 0 }}>Máximo 200 archivos .pdf a la vez</p>
+              </>
+            ) : (
+              <p style={{ fontSize: 13, fontWeight: 600, color: JA.TEXT, margin: 0 }}>
+                📎 {batchFiles.length} archivo{batchFiles.length > 1 ? 's' : ''} seleccionado{batchFiles.length > 1 ? 's' : ''}
+                <span style={{ fontWeight: 400, color: JA.GREY, marginLeft: 8 }}>— clic para cambiar</span>
+              </p>
+            )}
+          </div>
+
+          {/* Botón procesar */}
+          {batchFiles.length > 0 && (
+            <button
+              onClick={procesarLotePdfs}
+              disabled={batchProcessing}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+                background: batchProcessing ? JA.GREY_LT : JA.YELLOW, color: JA.WHITE, border: 'none',
+                borderRadius: 8, padding: '10px 22px', fontSize: 14, fontWeight: 700,
+                cursor: batchProcessing ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {batchProcessing
+                ? <><RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> Procesando lote {batchProgress.lote}/{batchProgress.totalLotes}…</>
+                : <><CheckCircle2 size={15} /> Procesar {batchFiles.length} PDF{batchFiles.length > 1 ? 's' : ''} y aplicar correcciones</>}
+            </button>
+          )}
+
+          {/* Barra de progreso */}
+          {batchProcessing && batchProgress.total > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: JA.GREY, marginBottom: 4 }}>
+                <span>{batchProgress.done} de {batchProgress.total} PDFs procesados</span>
+                <span>{Math.round((batchProgress.done / batchProgress.total) * 100)}%</span>
+              </div>
+              <div style={{ background: JA.BORDER, borderRadius: 99, height: 8, overflow: 'hidden' }}>
+                <div style={{
+                  background: JA.YELLOW, height: '100%', borderRadius: 99,
+                  width: `${(batchProgress.done / batchProgress.total) * 100}%`,
+                  transition: 'width .3s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Resultados del lote */}
+          {batchResults.length > 0 && (() => {
+            const aplicadas  = batchResults.filter(r => r.estado === 'aplicada').length
+            const sinCoin    = batchResults.filter(r => r.estado === 'sin_coincidencia').length
+            const errores    = batchResults.filter(r => r.estado === 'error').length
+            return (
+              <div>
+                {/* Resumen rápido */}
+                <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+                  {aplicadas > 0 && <span style={{ fontSize: 13, color: JA.GREEN, fontWeight: 700 }}>✓ {aplicadas} corregidas automáticamente</span>}
+                  {sinCoin  > 0 && <span style={{ fontSize: 13, color: JA.GREY,   fontWeight: 600 }}>⚠ {sinCoin} sin coincidencia</span>}
+                  {errores  > 0 && <span style={{ fontSize: 13, color: JA.RED,    fontWeight: 600 }}>✗ {errores} con error</span>}
+                </div>
+
+                {/* Tabla de resultados */}
+                <div style={{ maxHeight: 260, overflowY: 'auto', border: `1px solid ${JA.BORDER}`, borderRadius: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: JA.NAVY, position: 'sticky', top: 0 }}>
+                        {['Estado', 'Archivo', 'Factura', 'Proveedor', 'Base 19%', 'Base 5%'].map((h, i) => (
+                          <th key={i} style={{ padding: '6px 10px', color: JA.WHITE, textAlign: 'left', fontWeight: 600 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchResults.map((r, i) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? JA.WHITE : JA.BG, borderBottom: `1px solid ${JA.BORDER}` }}>
+                          <td style={{ padding: '5px 10px' }}>
+                            {r.estado === 'aplicada'
+                              ? <span style={{ color: JA.GREEN, fontWeight: 700 }}>✓ Aplicada</span>
+                              : r.estado === 'sin_coincidencia'
+                              ? <span style={{ color: JA.GREY }}>— Sin cruce</span>
+                              : <span style={{ color: JA.RED }}>✗ Error</span>}
+                          </td>
+                          <td style={{ padding: '5px 10px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10 }}
+                            title={r.archivo}>{r.archivo}</td>
+                          <td style={{ padding: '5px 10px' }}>{r.numero ?? '—'}</td>
+                          <td style={{ padding: '5px 10px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={r.proveedor}>{r.proveedor ?? (r.error ?? '—')}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: JA.RED }}>{r.base_19 ? cop(r.base_19) : '—'}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: JA.BLUE }}>{r.base_5  ? cop(r.base_5)  : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
       )}
 
       {/* Estado vacío */}

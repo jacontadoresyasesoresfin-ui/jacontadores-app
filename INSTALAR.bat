@@ -108,9 +108,10 @@ if exist "%INSTALL_DIR%\.git" (
 echo.
 echo [4/5] Instalando dependencias (puede tardar 2-5 minutos)...
 cd /d "%INSTALL_DIR%"
-call npm install --legacy-peer-deps
+cmd /c "npm install --legacy-peer-deps"
 if %errorlevel% neq 0 (
-    echo  ERROR al instalar dependencias.
+    echo.
+    echo  ERROR al instalar dependencias. No se pudo completar.
     pause
     exit /b 1
 )

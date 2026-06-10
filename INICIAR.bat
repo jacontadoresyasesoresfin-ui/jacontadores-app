@@ -35,5 +35,14 @@ echo.
 :: Abrir el navegador despues de 6 segundos
 start /b cmd /c "ping -n 7 127.0.0.1 >nul && start http://localhost:3000/dashboard"
 
-:: Iniciar la aplicacion
+:: Iniciar la aplicacion con reinicio automatico
+:loop
 npm run dev
+
+echo.
+echo  =======================================================
+echo   El servidor se detuvo. Reiniciando en 5 segundos...
+echo   (Cierra esta ventana si deseas apagar el sistema)
+echo  =======================================================
+ping -n 6 127.0.0.1 >nul
+goto loop

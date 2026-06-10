@@ -146,8 +146,7 @@ set "SHORTCUT=%USERPROFILE%\Desktop\J&A Contadores.bat"
 echo @echo off > "%SHORTCUT%"
 echo title J^&A Contadores >> "%SHORTCUT%"
 echo cd /d "%INSTALL_DIR%" >> "%SHORTCUT%"
-echo start "" "http://localhost:3000/dashboard" >> "%SHORTCUT%"
-echo npm run dev >> "%SHORTCUT%"
+echo call INICIAR.bat >> "%SHORTCUT%"
 echo  OK - Acceso directo creado en el Escritorio.
 
 :: ── Finalizar ────────────────────────────────────────────────────────────────

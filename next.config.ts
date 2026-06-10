@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  serverExternalPackages: ['pdf-parse', 'xlsx'],
+  serverExternalPackages: ['pdf-parse', 'xlsx', 'puppeteer-core', 'puppeteer-extra', 'puppeteer-extra-plugin-stealth'],
 };
 
 export default nextConfig;

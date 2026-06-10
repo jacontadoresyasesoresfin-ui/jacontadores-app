@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useClient } from '../ClientContext'
 import { TabIvaDian } from './components/TabIvaDian'
+import RpaBulkDownload from './components/RpaBulkDownload'
 
 /* ─── Paleta J&A ─────────────────────────────────────────── */
 const JA = {
@@ -867,6 +868,12 @@ export default function CausacionPage() {
                             </button>
                         </div>
                     )}
+
+                    <RpaBulkDownload facturas={facturas.filter(f => selected.size === 0 || selected.has(f.id!)).map(f => ({
+                        cufe: f.cufe || '',
+                        numero_factura: f.numero_factura || '',
+                        proveedor_nombre: f.nombre_tercero || ''
+                    }))} />
 
                     {/* Tabla */}
                     <div style={{ background: JA.WHITE, border: `1px solid ${JA.BORDER}`, borderRadius: 10, overflow: 'hidden' }}>

@@ -160,9 +160,17 @@ echo  1. Haz doble-clic en "J^&A Contadores" en tu Escritorio
 echo  2. Espera a que aparezca: "Ready in X.Xs"  
 echo  3. El navegador se abrira automaticamente
 echo.
-echo  Presiona cualquier tecla para iniciar la aplicacion ahora...
-pause >nul
+echo  La aplicacion se iniciara ahora. Deja esta ventana abierta.
+echo.
+pause
 
 cd /d "%INSTALL_DIR%"
 start "" "http://localhost:3000/dashboard"
 npm run dev
+
+echo.
+echo  ==============================================================
+echo   El instalador termino, puedes cerrar esta ventana.
+echo  ==============================================================
+pause
+

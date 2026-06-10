@@ -13,38 +13,72 @@ echo  Por favor NO cierres esta ventana hasta que termine.
 echo.
 pause
 
+set "RESTART_NEEDED=0"
+
 :: ── Verificar Node.js ────────────────────────────────────────────────────────
 echo.
 echo [1/5] Verificando Node.js...
 node --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  Node.js no esta instalado. Descargando...
-    echo.
-    echo  Se abrira el navegador para descargar Node.js.
-    echo  Descarga la version LTS e instalala, luego vuelve a ejecutar este archivo.
-    echo.
-    start https://nodejs.org/en/download
+if %errorlevel% equ 0 goto node_ok
+
+echo  Node.js no esta instalado.
+echo  Deseas instalar Node.js automaticamente ahora? (S/N)
+set /p "INSTALL_NODE=> "
+if /i not "%INSTALL_NODE%"=="S" (
+    echo  Debes instalar Node.js para continuar: https://nodejs.org/en/download
     pause
     exit /b 1
-) else (
-    for /f "tokens=*" %%v in ('node --version') do echo  OK - Node.js %%v encontrado
 )
+echo  Instalando Node.js LTS...
+winget install OpenJS.NodeJS.LTS -e --accept-package-agreements --accept-source-agreements
+if %errorlevel% neq 0 (
+    echo  Hubo un error. Instalalo manualmente: https://nodejs.org/
+    pause
+    exit /b 1
+)
+set "RESTART_NEEDED=1"
+echo  OK - Node.js instalado.
+
+:node_ok
+for /f "tokens=*" %%v in ('node --version 2^>nul') do echo  OK - Node.js %%v encontrado
 
 :: ── Verificar Git ────────────────────────────────────────────────────────────
 echo.
 echo [2/5] Verificando Git...
 git --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  Git no esta instalado. Descargando...
-    echo.
-    echo  Se abrira el navegador para descargar Git.
-    echo  Instalalo con las opciones por defecto, luego vuelve a ejecutar este archivo.
-    echo.
-    start https://git-scm.com/download/win
+if %errorlevel% equ 0 goto git_ok
+
+echo  Git no esta instalado.
+echo  Deseas instalar Git automaticamente ahora? (S/N)
+set /p "INSTALL_GIT=> "
+if /i not "%INSTALL_GIT%"=="S" (
+    echo  Debes instalar Git para continuar: https://git-scm.com/download/win
     pause
     exit /b 1
-) else (
-    for /f "tokens=*" %%v in ('git --version') do echo  OK - %%v encontrado
+)
+echo  Instalando Git...
+winget install Git.Git -e --accept-package-agreements --accept-source-agreements
+if %errorlevel% neq 0 (
+    echo  Hubo un error. Instalalo manualmente: https://git-scm.com/download/win
+    pause
+    exit /b 1
+)
+set "RESTART_NEEDED=1"
+echo  OK - Git instalado.
+
+:git_ok
+for /f "tokens=*" %%v in ('git --version 2^>nul') do echo  OK - %%v encontrado
+
+if "%RESTART_NEEDED%"=="1" (
+    echo.
+    echo  ==============================================================
+    echo  IMPORTANTE: Se instalaron nuevos programas en tu sistema.
+    echo  Para que Windows los reconozca, CIERRA ESTA VENTANA y vuelve
+    echo  a hacer doble clic en "INSTALAR.bat" para continuar.
+    echo  ==============================================================
+    echo.
+    pause
+    exit /b 0
 )
 
 :: ── Elegir carpeta de instalacion ────────────────────────────────────────────

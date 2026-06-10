@@ -19,7 +19,7 @@ for /f %%i in ('git rev-list HEAD..origin/main --count 2^>nul') do set UPDATES=%
 if "%UPDATES%" == "" set UPDATES=0
 
 if %UPDATES% gtr 0 (
-    echo  Hay %UPDATES% actualizacion(es) disponible(s). Actualizando...
+    echo  Hay %UPDATES% actualizaciones disponibles. Actualizando...
     git pull origin main >nul 2>&1
     npm install --legacy-peer-deps --silent >nul 2>&1
     echo  Aplicacion actualizada.

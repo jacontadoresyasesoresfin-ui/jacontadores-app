@@ -126,6 +126,298 @@ function generarExcel(facturas: DianFactura[]) {
   XLSX.writeFile(wb, `Causacion_IVA_DIAN_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
+/* ─── Siigo export — formato 70 columnas ─────────────────────────────────── */
+
+/*
+ * MAPA DE COLUMNAS SIIGO (índice 0–69)
+ * ────────────────────────────────────────────
+ *  0  TIPO DE COMPROBANTE          (Ej. 'G')
+ *  1  CÓDIGO COMPROBANTE           (Ej. 1)
+ *  2  NÚMERO DE DOCUMENTO          (consecutivo por factura)
+ *  3  CUENTA CONTABLE
+ *  4  DÉBITO O CRÉDITO             ('D' | 'C')
+ *  5  VALOR DE LA SECUENCIA
+ *  6  AÑO DEL DOCUMENTO
+ *  7  MES DEL DOCUMENTO
+ *  8  DÍA DEL DOCUMENTO
+ *  9  CÓDIGO DEL VENDEDOR
+ * 10  CÓDIGO DE LA CIUDAD
+ * 11  CÓDIGO DE LA ZONA
+ * 12  SECUENCIA                    (contador dentro del comprobante)
+ * 13  CENTRO DE COSTO
+ * 14  SUBCENTRO DE COSTO
+ * 15  NIT
+ * 16  SUCURSAL
+ * 17  DESCRIPCIÓN DE LA SECUENCIA
+ * 18  NÚMERO DE CHEQUE
+ * 19  COMPROBANTE ANULADO          ('N')
+ * 20..58  Campos raramente usados   → 0 / vacío
+ * 59  PORCENTAJE DEL IVA
+ * 60  VALOR DE IVA
+ * 61  BASE DE RETENCIÓN
+ * 62  BASE PARA RETEIVA
+ * 63  SECUENCIA GRAVADA O EXENTA   ('G' | 'N' | '')
+ * 64..69  Resto                    → 0 / vacío
+ */
+
+/* Cuentas contables por defecto — patrón real extraído del modelo del cliente */
+const SIIGO_CUENTAS = {
+  /* ── COMPRAS (recibidas) ── */
+  COMPRA_BASE_19:  '1435020100',  // Inventario / mercancía gravada 19%
+  COMPRA_IVA_19:   '2408010100',  // IVA descontable 19%
+  COMPRA_BASE_5:   '1435030100',  // Inventario gravado 5%
+  COMPRA_IVA_5:    '2408010200',  // IVA descontable 5%
+  COMPRA_EXENTA:   '1435020100',  // Misma cuenta base (tarifa 0)
+  COMPRA_EXCLUIDA: '1435020100',  // Misma cuenta base (sin IVA)
+  COMPRA_CONTRA:   '1105050000',  // Caja / Bancos (contrapartida crédito)
+  /* ── VENTAS (emitidas) ── */
+  VENTA_INGRESO:   '4135950300',  // Ingresos operacionales
+  VENTA_IVA_19:    '2408050100',  // IVA generado 19%
+  VENTA_IVA_5:     '2408050200',  // IVA generado 5%
+  VENTA_CONTRA:    '1105050000',  // Caja / Bancos (contrapartida débito)
+} as const
+
+/** Parsea la fecha de emisión DIAN y devuelve { año, mes, dia } numéricos */
+function parseFechaSiigo(fechaStr: string): { año: number; mes: number; dia: number } {
+  // La DIAN puede dar formatos como "2026-01-02", "02/01/2026", "2026/01/02 …"
+  const iso = fechaStr.match(/(\d{4})[\-/](\d{1,2})[\-/](\d{1,2})/)
+  if (iso) return { año: +iso[1], mes: +iso[2], dia: +iso[3] }
+  const dmy = fechaStr.match(/(\d{1,2})[\-/](\d{1,2})[\-/](\d{4})/)
+  if (dmy) return { año: +dmy[3], mes: +dmy[2], dia: +dmy[1] }
+  return { año: new Date().getFullYear(), mes: 1, dia: 1 }
+}
+
+/** Construye una fila vacía de 70 columnas con defaults Siigo */
+function filaSiigoVacia(): (string | number)[] {
+  const r: (string | number)[] = new Array(70).fill(0)
+  r[0] = ''    // tipo comprobante
+  r[4] = ''    // D/C
+  r[17] = ''   // descripción
+  r[19] = 'N'  // no anulado
+  r[27] = ''   // factura electrónica
+  r[29] = ''   // prefijo order ref
+  r[30] = ''   // consecutivo order ref
+  r[31] = ''   // prefijo orden entrega
+  r[32] = ''   // numero orden entrega
+  r[36] = ''   // ingresos terceros
+  r[37] = ''   // fecha actualización
+  r[38] = ''   // hora actualización
+  r[39] = ''   // prefijo OE2
+  r[40] = ''   // numero OE2
+  r[44] = ''   // prefijo OE3
+  r[45] = ''   // numero OE3
+  r[49] = ''   // prefijo OE4
+  r[50] = ''   // numero OE4
+  r[54] = ''   // prefijo OE5
+  r[55] = ''   // numero OE5
+  r[61] = ''   // base retención
+  r[63] = ''   // gravada/exenta
+  r[64] = ''   // % AIU
+  r[65] = ''   // base IVA AIU
+  r[68] = ''   // datos establecimiento
+  return r
+}
+
+/** Genera las secuencias (filas Siigo) para una sola factura */
+function facturaASecuenciasSiigo(
+  f: DianFactura,
+  numDocumento: number,
+  tipoComprobante: string,
+  codComprobante: number,
+): (string | number)[][] {
+  const recv = f.grupo.toLowerCase().includes('recib')
+  const { año, mes, dia } = parseFechaSiigo(f.fecha_emision)
+  const nit = recv ? f.nit_emisor : f.nit_receptor
+  const proveedor = recv ? f.nombre_emisor : f.nombre_receptor
+  const numFactura = f.prefijo ? `${f.prefijo}-${f.folio}` : f.folio
+  const desc = recv
+    ? `COMPRA FACT ${numFactura} ${proveedor}`.substring(0, 50)
+    : `VENTA FACT ${numFactura} ${proveedor}`.substring(0, 50)
+
+  const filas: (string | number)[][] = []
+  let seq = 0
+
+  /** Agrega una secuencia (fila) al comprobante */
+  function addSeq(
+    cuenta: string,
+    dc: 'D' | 'C',
+    valor: number,
+    nitSeq: string | number,
+    opts?: { pctIva?: number; valorIva?: number; baseRet?: number; gravExenta?: string },
+  ) {
+    if (valor <= 0) return
+    seq++
+    const r = filaSiigoVacia()
+    r[0]  = tipoComprobante     // TIPO COMPROBANTE
+    r[1]  = codComprobante      // CÓDIGO COMPROBANTE
+    r[2]  = numDocumento        // NÚMERO DE DOCUMENTO
+    r[3]  = cuenta              // CUENTA CONTABLE
+    r[4]  = dc                  // DÉBITO O CRÉDITO
+    r[5]  = Math.round(valor)   // VALOR
+    r[6]  = año                 // AÑO
+    r[7]  = mes                 // MES
+    r[8]  = dia                 // DÍA
+    r[9]  = 1                   // COD VENDEDOR
+    r[10] = 0                   // COD CIUDAD
+    r[11] = 0                   // COD ZONA
+    r[12] = seq                 // SECUENCIA
+    r[13] = 1                   // CENTRO COSTO
+    r[14] = 1                   // SUBCENTRO
+    r[15] = nitSeq              // NIT
+    r[16] = 0                   // SUCURSAL
+    r[17] = desc                // DESCRIPCIÓN
+    r[18] = 0                   // N° CHEQUE
+    r[19] = 'N'                 // ANULADO
+    r[59] = opts?.pctIva  ?? 0  // % IVA
+    r[60] = opts?.valorIva ?? 0 // VALOR IVA
+    r[61] = opts?.baseRet != null ? opts.baseRet : ''  // BASE RETENCIÓN
+    r[62] = 0                   // BASE RETEIVA
+    r[63] = opts?.gravExenta ?? '' // GRAVADA O EXENTA
+    filas.push(r)
+  }
+
+  if (recv) {
+    /* ═══ COMPRAS ═══ */
+    // Base gravada 19% → Débito
+    addSeq(SIIGO_CUENTAS.COMPRA_BASE_19, 'D', f.base_gravada_19, nit)
+    // IVA descontable 19% → Débito
+    addSeq(SIIGO_CUENTAS.COMPRA_IVA_19,  'D', f.iva_19, nit)
+    // Base gravada 5% → Débito
+    addSeq(SIIGO_CUENTAS.COMPRA_BASE_5,  'D', f.base_gravada_5, nit)
+    // IVA descontable 5% → Débito
+    addSeq(SIIGO_CUENTAS.COMPRA_IVA_5,   'D', f.iva_5, nit)
+    // Base exenta → Débito (misma cuenta base, sin IVA)
+    addSeq(SIIGO_CUENTAS.COMPRA_EXENTA,  'D', f.base_exenta, nit)
+    // Base excluida → Débito
+    addSeq(SIIGO_CUENTAS.COMPRA_EXCLUIDA,'D', f.base_excluida, nit)
+    // Contrapartida: Total → Crédito (Caja / Bancos / CxP)
+    addSeq(SIIGO_CUENTAS.COMPRA_CONTRA,  'C', f.total, 0)
+  } else {
+    /* ═══ VENTAS ═══ */
+    // Ingresos por base gravada 19% → Crédito
+    addSeq(SIIGO_CUENTAS.VENTA_INGRESO,  'C', f.base_gravada_19, nit, { gravExenta: 'N' })
+    // IVA generado 19% → Crédito
+    addSeq(SIIGO_CUENTAS.VENTA_IVA_19,   'C', f.iva_19, nit, { gravExenta: 'N' })
+    // Ingresos por base gravada 5% → Crédito
+    addSeq(SIIGO_CUENTAS.VENTA_INGRESO,  'C', f.base_gravada_5, nit, { gravExenta: 'N' })
+    // IVA generado 5% → Crédito
+    addSeq(SIIGO_CUENTAS.VENTA_IVA_5,    'C', f.iva_5, nit, { gravExenta: 'N' })
+    // Base exenta → Crédito
+    if (f.base_exenta > 0) addSeq(SIIGO_CUENTAS.VENTA_INGRESO, 'C', f.base_exenta, nit, { gravExenta: 'N' })
+    // Base excluida → Crédito
+    if (f.base_excluida > 0) addSeq(SIIGO_CUENTAS.VENTA_INGRESO, 'C', f.base_excluida, nit, { gravExenta: 'N' })
+    // Contrapartida: Total → Débito (Caja / Clientes)
+    addSeq(SIIGO_CUENTAS.VENTA_CONTRA,   'D', f.total, 0, { gravExenta: 'N' })
+  }
+
+  return filas
+}
+
+/** Genera el archivo .xlsx en formato de importación Siigo con las 4 filas de encabezado + filas de datos */
+function generarExcelSiigo(facturas: DianFactura[]) {
+  if (!facturas.length) return
+
+  const SIIGO_HEADERS = [
+    'TIPO DE COMPROBANTE (OBLIGATORIO)', 'CÓDIGO COMPROBANTE  (OBLIGATORIO)',
+    'NÚMERO DE DOCUMENTO', 'CUENTA CONTABLE   (OBLIGATORIO)',
+    'DÉBITO O CRÉDITO (OBLIGATORIO)', 'VALOR DE LA SECUENCIA   (OBLIGATORIO)',
+    'AÑO DEL DOCUMENTO', 'MES DEL DOCUMENTO', 'DÍA DEL DOCUMENTO',
+    'CÓDIGO DEL VENDEDOR', 'CÓDIGO DE LA CIUDAD', 'CÓDIGO DE LA ZONA',
+    'SECUENCIA', 'CENTRO DE COSTO', 'SUBCENTRO DE COSTO',
+    'NIT', 'SUCURSAL', 'DESCRIPCIÓN DE LA SECUENCIA',
+    'NÚMERO DE CHEQUE', 'COMPROBANTE ANULADO',
+    'CÓDIGO DEL MOTIVO DE DEVOLUCIÓN', 'FORMA DE PAGO',
+    'VALOR DEL CARGO 1 DE LA SECUENCIA', 'VALOR DEL CARGO 2 DE LA SECUENCIA',
+    'VALOR DEL DESCUENTO 1 DE LA SECUENCIA', 'VALOR DEL DESCUENTO 2 DE LA SECUENCIA',
+    'VALOR DEL DESCUENTO 3 DE LA SECUENCIA',
+    'FACTURA ELECTRÓNICA A DEBITAR/ACREDITAR',
+    'NÚMERO DE FACTURA ELECTRÓNICA A DEBITAR/ACREDITAR',
+    'PREFIJO DE ORDER REFERENCE', 'CONSECUTIVO DE ORDER REFERENCE',
+    'PREFIJO ORDEN DE ENTREGA', 'NUMERO ORDEN DE ENTREGA',
+    'AÑO FECHA DE ORDEN DE ENTREGA', 'MES FECHA DE ORDEN DE ENTREGA',
+    'DÍA FECHA DE ORDEN DE ENTREGA', 'INGRESOS PARA TERCEROS',
+    'FECHA ACTUALIZACIÓN DEL DOCUMENTO', 'HORA DE ACTUALIZACIÓN DEL DOCUMENTO',
+    'PREFIJO ORDEN DE ENTR+D6EGA2', 'NUMERO ORDEN DE ENTREGA2',
+    'AÑO FECHA DE ORDEN DE ENTREGA2', 'MES FECHA DE ORDEN DE ENTREGA2',
+    'DÍA FECHA DE ORDEN DE ENTREGA2',
+    'PREFIJO ORDEN DE ENTREGA3', 'NUMERO ORDEN DE ENTREGA3',
+    'AÑO FECHA DE ORDEN DE ENTREGA3', 'MES FECHA DE ORDEN DE ENTREGA3',
+    'DÍA FECHA DE ORDEN DE ENTREGA3',
+    'PREFIJO ORDEN DE ENTREGA4', 'NUMERO ORDEN DE ENTREGA4',
+    'AÑO FECHA DE ORDEN DE ENTREGA4', 'MES FECHA DE ORDEN DE ENTREGA4',
+    'DÍA FECHA DE ORDEN DE ENTREGA4',
+    'PREFIJO ORDEN DE ENTREGA5', 'NUMERO ORDEN DE ENTREGA5',
+    'AÑO FECHA DE ORDEN DE ENTREGA5', 'MES FECHA DE ORDEN DE ENTREGA5',
+    'DÍA FECHA DE ORDEN DE ENTREGA5',
+    'PORCENTAJE DEL IVA DE LA SECUENCIA', 'VALOR DE IVA DE LA SECUENCIA',
+    'BASE DE RETENCIÓN', 'BASE PARA CUENTAS MARCADAS COMO RETEIVA',
+    'SECUENCIA GRAVADA O EXCENTA', 'PORCENTAJE AIU',
+    'BASE IVA AIU', 'VALOR TOTAL IMPOCONSUMO DE LA SECUENCIA',
+    'CONCEPTO FACTURACION EN BLOQUE',
+    'DATOS ESTABLEC. (L=LOCAL O=OFICINA)', 'NÚMERO ESTABLECIMIENTO',
+  ]
+
+  // Obtener rango de fechas para el título
+  const fechas = facturas.map(f => parseFechaSiigo(f.fecha_emision))
+  const minMes = Math.min(...fechas.map(d => d.mes))
+  const maxMes = Math.max(...fechas.map(d => d.mes))
+  const minAño = Math.min(...fechas.map(d => d.año))
+  const maxAño = Math.max(...fechas.map(d => d.año))
+  const MESES = ['', 'ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
+
+  // 4 filas de encabezado (como el modelo Siigo original)
+  const titulo: (string | number)[] = new Array(70).fill('')
+  titulo[0] = 'MODELO PARA LA IMPORTACION DE MOVIMIENTO CONTABLE'
+  const rango: (string | number)[] = new Array(70).fill('')
+  rango[0] = `De :  ${MESES[minMes]}  1/${minAño}   A :  ${MESES[maxMes]} 31/${maxAño}`
+  const vacia: (string | number)[] = new Array(70).fill('')
+
+  const dataRows: (string | number)[][] = []
+  let numDoc = 1 // Consecutivo de documento
+
+  // Ordenar facturas por fecha para que los comprobantes salgan cronológicamente
+  const sorted = [...facturas].sort((a, b) => a.fecha_emision.localeCompare(b.fecha_emision))
+
+  for (const f of sorted) {
+    const seqs = facturaASecuenciasSiigo(f, numDoc, 'G', 1)
+    if (seqs.length > 0) {
+      dataRows.push(...seqs)
+      numDoc++
+    }
+  }
+
+  if (dataRows.length === 0) return
+
+  const wb = XLSX.utils.book_new()
+  const allRows = [titulo, vacia, rango, vacia, SIIGO_HEADERS, ...dataRows]
+  const ws = XLSX.utils.aoa_to_sheet(allRows)
+
+  // Ajustar ancho de columnas clave para legibilidad
+  ws['!cols'] = [
+    { wch: 8 },   // 0: tipo comprobante
+    { wch: 6 },   // 1: cod comprobante
+    { wch: 8 },   // 2: n° documento
+    { wch: 14 },  // 3: cuenta contable
+    { wch: 4 },   // 4: D/C
+    { wch: 14 },  // 5: valor
+    { wch: 6 },   // 6: año
+    { wch: 4 },   // 7: mes
+    { wch: 4 },   // 8: dia
+    { wch: 6 },   // 9: cod vendedor
+    { wch: 6 },   // 10: cod ciudad
+    { wch: 6 },   // 11: cod zona
+    { wch: 6 },   // 12: secuencia
+    { wch: 6 },   // 13: CC
+    { wch: 6 },   // 14: subCC
+    { wch: 14 },  // 15: NIT
+    { wch: 6 },   // 16: sucursal
+    { wch: 50 },  // 17: descripción
+  ]
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Hoja1')
+  XLSX.writeFile(wb, `Carga_Siigo_IVA_${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
 /* ─── Tabla de ítems reutilizable ────────────────────────────────────────── */
 function TablaItems({ items, fuente }: { items: ItemFacturaPdf[]; fuente: string }) {
   return (
@@ -784,6 +1076,10 @@ export function TabIvaDian() {
             <button onClick={() => generarExcel(facturas)}
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: JA.GREEN, color: JA.WHITE, border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               <Download size={14} /> Descargar Excel
+            </button>
+            <button onClick={() => generarExcelSiigo(facturas)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: JA.NAVY, color: JA.WHITE, border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              <FileSpreadsheet size={14} /> Descargar Carga Siigo
             </button>
           </div>
 
